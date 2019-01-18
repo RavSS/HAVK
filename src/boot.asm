@@ -71,8 +71,8 @@ _start:
 	; stack since (pushed 0 bytes so far) and the alignment is thus
 	; preserved and the call is well defined.
         ; note, that if you are building on Windows, C functions may have "_" prefix in assembly: _kernel_main
-	extern kernel_main
-	call kernel_main
+	extern kernel
+	call kernel
  
 	; If the system has nothing more to do, put the computer into an
 	; infinite loop. To do that:
@@ -85,6 +85,7 @@ _start:
 	; 3) Jump to the hlt instruction if it ever wakes up due to a
 	;    non-maskable interrupt occurring or due to system management mode.
 	cli
-.hang:	hlt
+.hang:
+	hlt
 	jmp .hang
 .end:
