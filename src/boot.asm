@@ -2,8 +2,6 @@
 MAGIC EQU 0x1BADB002
 FLAGS EQU ((1 << 0) | (1 << 1))
 CHECKSUM EQU -(MAGIC + FLAGS)
-
-; Constants for the kernel addresses.
 KERNEL EQU 0xC0100000
 VIRADDR_START EQU (KERNEL - 0x00100000)
 
@@ -33,9 +31,18 @@ entry:
 	; Here is where features should be enabled and initialized, like
 	; ISA extensions, paging, floating point, GDT loading,
 	; exceptions, C++ global constructors, etc. before kernel entry.
+	; Most of those will be handled in the "_init" section of the 
+	; code before the kernel's C code is finally called.
 
-	; TODO: Get the address of the multiboot header so I can determine
-	; the RAM on the current system for obvious reasons a la mapping.
+	; The magic number is put in the EAX register by GRUB, and it most
+	; certainly will be clobbered by initialization functions etc. before
+	; the kernel function is called. I am going to be lazy and use the VGA
+	; memory to store the magic number, along with the multiboot data
+	; address (just in case EBX gets clobbered too). The address will be
+	; mapped when I setup paging, it will be at the end of the kernel page.
+	ADD EBX, VIRADDR_START ; Add the virtual address base for later access.
+	MOV [0x3FFFF8], EBX ; Multiboot information.
+	MOV [0x3FFFFC], EAX ; Magic number.
 
 	.initialize_the_kernel:
 		EXTERN _init
@@ -46,16 +53,22 @@ entry:
 
 	; The kernel is linked, so now we call it to enter the kernel.
 	.enter_the_kernel:
-		EXTERN page_directory
-		MOV DWORD [page_directory], 0x0 ; Remove identity mapping.
+		EXTERN page_directory_boot
+		MOV DWORD [page_directory_boot], 0x0 ; Remove identity mapping.
 
 		; Do a TLB flush. I can also use `INVLPG`, but that depends on
 		; the current system's ISA. It's not a part of e.g. i386's ISA,
-		; but does exist on the i686 ISA.
+		; but does exist on i686's ISA.
 		MOV ECX, CR3
 		MOV CR3, ECX
 
 		MOV ESP, stack_top ; Set the stack up.
+
+		; Multiboot information and magic boot number pushed to the
+		; stack. Remember that the identity mapping is removed, so I
+		; can't access the VGA memory buffer address directly anymore.
+		PUSH DWORD [0xC03FFFFC] ; Magic number.
+		PUSH DWORD [0xC03FFFF8] ; Multiboot information.
 
 		EXTERN kernel
 		CALL kernel
@@ -69,7 +82,7 @@ entry:
 		; so I'll keep the infinite loop from the example
 		; using the halt instruction.
 
-		CLI ; Disable interrupts. Currently not enabled anyway.
+		CLI ; Disable interrupts.
 	.halt:
 		HLT ; Wait for the next interrupt, which won't come; thus, halt.
 		JMP .halt ; Jump back to halt if an interrupt does occur.

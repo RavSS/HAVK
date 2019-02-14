@@ -2,8 +2,9 @@
 #define TERMINAL_H
 
 #include <havk.h>
-#include <havk/string.h>
+#include <havk/io.h>
 
+/* Obviously assumes paging has been set up. */
 #define VGA_MEMORY_ADDRESS 0xC00B8000
 
 #define VGA_COLOUR_BLACK 0
@@ -47,10 +48,10 @@ extern enum TERMINAL_COLOUR TERMINAL_FOREGROUND;
 extern enum TERMINAL_COLOUR TERMINAL_BACKGROUND;
 
 /* x = character, y = foreground, z = background. */
-#define VGA_COLOUR(x, y, z) (x | (y | z << 4) << 8)
+#define VGA_COLOUR(x, y, z) ((x) | ((y) | (z) << 4) << 8)
 
 /* x = X-axis (width), y = Y-axis (height). */
-#define VGA_POSITION(x, y) (y * VGA_WIDTH_MAX + x)
+#define VGA_POSITION(x, y) ((y) * (VGA_WIDTH_MAX) + (x))
 
 #define VGA_WIDTH_MAX 80
 #define VGA_HEIGHT_MAX 25
@@ -69,16 +70,46 @@ void vga_print(const char_ht character, uint8_t foreground_colour,
 void vga_clear(uint8_t width, uint8_t height, char_ht character,
 	uint8_t foreground_colour, uint8_t background_colour);
 
-/* As of now, this is just a `puts()`. `printf()` will come later. */
+/* Similiar to `puts()`. Prints a string and that's it. */
 size_t print(const char_ht *string);
 
+/* Just a line-shortening macro for printing a single character. */
+#define printc(x) vga_print((x), TERMINAL_FOREGROUND, TERMINAL_BACKGROUND)
+
+/* Shifts to a specific position. If either of the values are above the
+/  maximum for their respective axis, then false is returned as an error. */
+bool shift(uint8_t width, uint8_t height);
+
+/* Scrolls down one line. Needs more features and options. */
+void vga_scroll(void);
+
+/* Clears the entire buffer with the preselected colours. */
 #define clear() vga_clear(VGA_WIDTH_MAX + 1, VGA_HEIGHT_MAX + 1, 0x0,\
 	TERMINAL_FOREGROUND, TERMINAL_BACKGROUND)
 
-#define clear_line(y) vga_clear(VGA_WIDTH_MAX + 1, y, 0x0,\
+/* Clears an entire line completely. */
+#define clear_line(y) vga_clear(VGA_WIDTH_MAX + 1, (y), 0x0,\
 	TERMINAL_FOREGROUND, TERMINAL_BACKGROUND)
 
-#define clear_column(x) vga_clear(x, VGA_HEIGHT_MAX + 1, 0x0,\
+/* Clears an entire column completely. */
+#define clear_column(x) vga_clear((x), VGA_HEIGHT_MAX + 1, 0x0,\
 	TERMINAL_FOREGROUND, TERMINAL_BACKGROUND)
+
+/* https://wiki.osdev.org/Text_Mode_Cursor */
+/* Removes the cursor from the screen via hardware access. */
+#define cursor_remove() do\
+{\
+	out_byte(0x0A, 0x3D4);\
+	out_byte(0x20, 0x3D5);\
+} while (0)
+
+/* Moves the cursor to anywhere on the screen via hardware access. */
+#define cursor_move(x, y) do\
+{\
+	out_byte(0x0F, 0x3D4);\
+	out_byte((VGA_POSITION((x), (y)) & 0xFF), 0x3D5);\
+	out_byte(0x0E, 0x3D4);\
+	out_byte(((VGA_POSITION((x), (y)) >> 8) & 0xFF), 0x3D5);\
+} while (0)
 
 #endif
