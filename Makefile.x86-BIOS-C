@@ -1,0 +1,137 @@
+NAME:=HAVK
+TARGET:=x86-BIOS-C
+
+BUILDDIR:=./build/$(TARGET)/
+SRCDIR=./src/$(TARGET)/
+
+COMDIR:=./com/
+CCDIR:=$(COMDIR)/i686-elf/bin/
+CC:=$(CCDIR)i686-elf-gcc
+LD=$(CCDIR)i686-elf-ld
+AS=nasm
+
+INCLUDEDIR:=$(SRCDIR)include/
+GRUBDIR=$(SRCDIR)grub/
+
+# Enabling optimization forces inline functions no matter what,
+# which mess with the stack protector (-fstack-protector-all).
+OPT=-O0 -fno-inline
+WARN=-Wall -Wextra -pedantic
+LIB=-lgcc
+DEF=-D VERSION=\"$(VERSION)\" -D TARGET=\"$(TARGET)\"
+STD=-std=c99 -masm=intel -m32
+CFLAGS=$(WARN) $(DEF) $(STD) $(LIB) $(OPT) -I $(INCLUDEDIR)
+
+# Special linking for the custom bootloader. Bootloader
+# is loaded at 0x7C00, so that's where the bootloader
+# itself expects to begin.
+BOOTFLAGS=-nostdlib -m elf_i386 -Ttext=0x7C00 --nmagic
+QEMUFLAGS=-m 1337 -monitor stdio -s -d guest_errors
+
+ASMFILE:=$(SRCDIR)%.asm
+ASMFILES:=$(wildcard $(SRCDIR)*.asm)
+
+CFILE:=$(SRCDIR)havk/%.c
+CFILES:=$(wildcard $(SRCDIR)havk/*.c)
+
+OBJFILE:=$(BUILDDIR)%.o
+
+# System V ABI stuff.
+CRTPREV=$(BUILDDIR)crti.o $(shell $(CC) $(LIB) -print-file-name=crtbegin.o)
+CRTPOST=$(shell $(CC) $(LIB) -print-file-name=crtend.o) $(BUILDDIR)crtn.o
+
+# Just specifying '-lgcc' doesn't work for some reason.
+# This is needed so I can get access to stuff like 64-bit types
+# on a 32-bit kernel e.g. `int64_t`. It of course must be linked.
+LIBGCC=$(shell $(CC) $(LIB) -m32 -print-libgcc-file-name)
+
+IMAGEFILE=$(BUILDDIR)$(NAME).img
+GRUBFILE=$(BUILDDIR)$(NAME)_grub.iso
+BOCHSFILE=$(BUILDDIR)$(NAME)_bochs.img
+LINKEDFILE=$(BUILDDIR)$(NAME).elf
+BINARYFILE=$(BUILDDIR)$(NAME).bin
+
+# Link "boot.o" first or there will be confusion when failing to boot.
+# Link "libgcc.a" at the end of the kernel objects as the kernel will
+# depend on its functions.
+LINKFILES=\
+$(CRTPREV) \
+$(BUILDDIR)boot.o \
+$(patsubst $(SRCDIR)havk/%.c, $(BUILDDIR)%.o, $(CFILES)) \
+$(LIBGCC) \
+$(CRTPOST)\
+
+define echo
+@echo -e "\033[4;96m__________$1\033[0m"
+endef
+
+.DEFAULT_GOAL: all
+.PHONY: all
+all: $(GRUBFILE)
+	$(call echo, "BOOTABLE IMAGE MOVED TO ./HAVK32.iso") &&\
+	mv $(GRUBFILE) ./HAVK32.iso
+
+# The stage 1 bootloader must be assembled seperately from everything else.
+# ELF file is kept so I can load the symbols into GDB for stub debugging.
+$(BUILDDIR)bootloader.bin: $(SRCDIR)bootloader.asm
+	$(call echo, "ASSEMBLING '$^'") &&\
+	$(AS) -f elf32 -F dwarf $< -o $(BUILDDIR)bootloader.o $(DEF) &&\
+	$(LD) $(BOOTFLAGS) -o $(BUILDDIR)bootloader.elf $(BUILDDIR)bootloader.o &&\
+	objcopy -O binary $(BUILDDIR)bootloader.elf $@
+
+$(OBJFILE): $(ASMFILE)
+	$(call echo, "ASSEMBLING '$^'") &&\
+	$(AS) -f elf32 $< -o $@
+
+# New options allows usage of special interrupt handling functions.
+$(BUILDDIR)interrupts.o: $(SRCDIR)havk/interrupts.c
+	$(call echo, "COMPILING '$^'") &&\
+	$(CC) -ffreestanding -mno-80387 -mgeneral-regs-only $(CFLAGS) -c $< -o $@
+
+$(OBJFILE): $(CFILE)
+	$(call echo, "COMPILING '$^'") &&\
+	$(CC) -ffreestanding $(CFLAGS) -c $< -o $@
+
+$(LINKEDFILE): $(LINKFILES)
+	$(call echo, "LINKING EVERYTHING TO '$@'") &&\
+	$(CC) -nostdlib -ffreestanding $(LIB) $(WARN) -T $(SRCDIR)linker.ld $^ -o $@
+
+$(IMAGEFILE): $(BUILDDIR)bootloader.bin $(LINKEDFILE)
+	$(call echo, "MERGING BINARIES TO '$@'") &&\
+	objcopy -O binary $(LINKEDFILE) $(BINARYFILE) &&\
+	cat $< $(BINARYFILE) > $@
+
+$(GRUBFILE): $(LINKEDFILE)
+	$(call echo, "CREATING BOOTABLE GRUB IMAGE AT '$@'") &&\
+	mv $< $(GRUBDIR)boot/$(NAME).bin &&\
+	grub-mkrescue -o $(GRUBFILE) $(GRUBDIR)
+
+# So far, this assumes the disk is under the size of 5 MiB, so the CHS
+# values of the disk are 10/16/63 respectively. Once the kernel gets bigger,
+# this will need to be reconfigured. The file created by `bximage` is only
+# intended for debugging purposes alone.
+$(BOCHSFILE): $(IMAGEFILE)
+	bximage -hd -mode=flat -size=5 -q $@
+	dd if=$< of=$@ bs=512 conv=notrunc
+
+# These fake recipes are intended for debugging; thus, they are only
+# accessible from this Makefile directly.
+.PHONY: qemu-grub
+qemu-grub: $(GRUBFILE)
+	qemu-system-i386 -hda $< $(QEMUFLAGS)
+
+.PHONY: qemu-kernel
+qemu-kernel: $(LINKEDFILE)
+	qemu-system-i386 -boot d -kernel $< $(QEMUFLAGS)
+
+.PHONY: qemu-custom-bootloader
+qemu-custom-bootloader: $(IMAGEFILE)
+	qemu-system-i386 -hda $< $(QEMUFLAGS)
+
+.PHONY: qemu-gdb
+qemu-gdb: $(IMAGEFILE)
+	-gdb -ex "file $<" -ex "target remote localhost:1234"
+
+.PHONY: bochs
+bochs: $(BOCHSFILE)
+	bochs -f $(SRCDIR)bochsrc_havk.txt
