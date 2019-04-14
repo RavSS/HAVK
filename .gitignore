@@ -1,0 +1,14 @@
+/*
+!.gitignore
+
+!src
+!src/x86-BIOS-C
+!src/x86_64-UEFI-Ada
+!src/x86-BIOS-C/grub/boot
+src/x86-BIOS-C/grub/boot/*.bin
+!src/x86-BIOS-C/grub/boot/grub/grub.cfg
+
+!Makefile
+!Makefile.*
+!README.md
+!CHANGELOG.md

@@ -1,7 +1,31 @@
 ## Changelog for the HAVK operating system
-## Version - ISO 8601 Date
+## Version - ISO 8601 Date (UTC+13:00)
 
-## 0.04-00 - 2019-04-07
+## 00-05-00 - 2019-04-14
+### Overall Changes
+- A "video map" along with a memory map is now passed to the Ada program.
+- The framebuffer is controllable through Ada, meaning that graphics
+can technically be drawn; however, graphics programming is not my speciality.
+- Setting the video mode is possible through the UEFI application, a future
+addition may be to grant the user an option to set the resolution etc.
+- Instead of using the GNAT FSF compiler, the GNAT GPL (Community) version
+will be used instead. It simplifies installation and comes with extra tools.
+- HAVK is now GPLv3 licensed due to the GNAT compiler change.
+- The build system has been refactored yet again. The old x86-BIOS-C version
+has been moved into a seperate branch, and now a single Makefile builds
+the x86_64-UEFI-Ada version of HAVK. The tool `gprbuild` is now used for
+building the Ada portion. Originally, I decided against it, but it seems
+to be more coherent to use than GNU Make and it comes with GNAT Community.
+- The run-time system (RTS) is changed to the provided zero footprint profile
+that comes with GNAT Community.
+- I have decided against using exception handlers, as I would like HAVK to
+not rely upon them at all. The configuration file has been updated to reflect
+that. A last chance handler nearly changes all x86-64 registers to a
+mnemonic value for quick lazy error detection in QEMU's monitor console.
+- The style guide for Ada is still being decided, but I've gone with all
+uppercase for keywords, mixed-case for variables, and lowercase for types.
+
+## 00-04-00 - 2019-04-07
 ### Platform Shift
 - HAVK will now target x86-64. For the sake of security, it will
 utilize Ada as its programming language for critical safety over C. 
@@ -35,7 +59,7 @@ has been depreciated. The last thing that was being worked on was a frame
 allocator for the memory manager. A language translation from C to Ada
 is now the next goal for the kernel as it is now.
 
-## 0.03-00 - 2019-02-15
+## 00-03-00 - 2019-02-15
 ### Overall Changes
 - GDT (with TSS) set up, Ring 3 entrance is technically possible.
 - IDT set up (with PIC remappings to avoid clashes).
@@ -50,17 +74,17 @@ Only Scan code set 2 support only as of now.
 - Redid "README.md".
 - Makefile tweaks. Bochs RC file included.
 
-## 0.02-00 - 2019-01-23
+## 00-02-00 - 2019-01-23
 ### Overall Changes
 - Enabled paging.
 - Further developed terminal operations and features.
 - Much better and complex Makefile, more coherent build system overall.
 
-## 0.01-00 - 2019-01-18
+## 00-01-00 - 2019-01-18
 ### Overall Changes
 - Completely redid terminal functions.
 - Restructured build directory and Makefile.
 
-## 0.00-00 - 2019-01-18
+## 00-00-00 - 2019-01-18
 ### Initialized
 - Based on OSDev Wiki's basic i386 bare-bones example with my Makefile.
