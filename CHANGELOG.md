@@ -1,5 +1,32 @@
-## Changelog for the HAVK operating system
-## Version - ISO 8601 Date (UTC+13:00)
+# Changelog for the HAVK operating system
+#### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date UTC +13:00 )
+
+## 00-06-00 - 2019-05-05
+### Overall Changes
+- A working terminal is now present, it is buffered, and it must be redrawn
+every time it is modified or updated. Several configuration values exist
+for the terminal, but they are currently hardcoded into the source.
+- Several procedures for drawing objects onto the framebuffer have been
+created. For now, a freeform line procedure does not exist, but drawing lines
+horizontally and vertically, along with drawing boxes, has been added.
+- Exception handlers are enabled again, as I am now utilizing the constraint
+errors to silently exit a procedure if it has overstepped a boundary.
+I should probably change that to not rely upon the exception.
+- Support for both RGB and BGR pixel colour orders are implemented.
+- A rushed 8x8 bitmap font has been created and is directly integrated into
+the ELF executable. I decided against a bigger font size due to space.
+- Style checks for the Ada source files are now enabled. Check the GPR
+file for more information on the style switches. One notable change
+is the shift from 8 character wide tabs to 3 spaces for indentation.
+- It is now possible to control the release configuration of the kernel.
+"Final" indicates an optimized kernel with no debug symbols, whereas "Debug"
+is the opposite of that.
+- GCC is now being passed options to check the stack during
+run-time and during compilation.
+- The build system no longer requires superuser/root privileges, and is
+entirely done using GNU Parted (`parted`), GNU Mtools (`mmd`, `mcopy`),
+`dd`, and `mkfs.fat`. The size of the filesystem and EFI partition is
+controlled through the Makefile.
 
 ## 00-05-00 - 2019-04-14
 ### Overall Changes
