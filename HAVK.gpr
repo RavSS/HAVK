@@ -1,115 +1,207 @@
 PROJECT HAVK IS
-	FOR Languages USE("Ada");
-	FOR Source_Dirs USE("./src/", "./src/havk/", "./src/include/");
-	FOR Object_Dir USE "./build/";
-	FOR Exec_Dir USE "./";
-	FOR Main USE("havk.adb");
+   FOR Default_Language USE "Ada";
+   FOR Languages USE("Ada");
+   FOR Source_Dirs USE("./src/", "./src/havk/", "./src/include/");
+   FOR Object_Dir USE "./build/";
+   FOR Exec_Dir USE "./";
+   FOR Main USE("havk.adb");
 
-	-- TODO: Figure out if ASM files compiled with NASM can be
-	-- integrated into this project build. Most likely they can.
-	-- TODO: Add release and debug options.
+   -- TODO: Figure out if ASM files assembled with NASM can be
+   -- integrated into this project build. Most likely they can.
 
-	-- This can be set to a custom ZFP RTS like I did before, but the one
-	-- provided by AdaCore with GNAT GPL seems to be less of a hassle.
-	-- The pre-defined exceptions also seem to work with it.
-	FOR Runtime("Ada") USE "zfp";
+   TYPE Kernel_Type IS("Final", "Debug");
+   Build : Kernel_Type := EXTERNAL("Build");
 
-	-- Note that none of the arguments are allowed to have spaces, or
-	-- else they somehow become corrupted when passed to the
-	-- programs used for compilation.
+   -- This can be set to a custom ZFP RTS like I did before, but the one
+   -- provided by AdaCore with GNAT GPL seems to be less of a hassle.
+   -- The pre-defined exceptions also seem to work with it.
+   FOR Runtime("Ada") USE "zfp";
 
-	PACKAGE Builder IS --	gprbuild
-		FOR Default_Switches("Ada") USE(
-			-- May as well use the latest version of
-			-- Ada, as there is no harm in it.
-			"-gnat2012",
-			-- TODO: Configure the style settings later.
-			"-gnatyN",
-			-- Enable all warnings by default.
-			"-gnatwa",
-			-- Disable exception propagation warnings.
-			"-gnatw.X",
-			-- No standard library since HAVK is a
-			-- freestanding program without `-ffreestanding`.
-			"-nostdlib",
-			-- No standard include paths.
-			"-nostdinc",
-			-- Zero optimization by default. Makes reading
-			-- `objdump -d` a little easier for me personally.
-			"-O0",
-			-- Maximum debug information (stabs or DWARF?).
-			"-g3",
-			-- Debug information for GDB specifically.
-			"-ggdb");
+   -- Note that none of the arguments are allowed to have spaces, or
+   -- else they somehow become corrupted when passed to the
+   -- programs used for compilation. I don't think GPR allows spaces.
 
-		-- Add my Ada configuration file and apply it everywhere.
-		FOR Global_Configuration_Pragmas USE "./src/havk.adc";
+   PACKAGE Builder IS -- `gprbuild`
+      Ada_Basic_Switches := (
+         -- May as well use the latest version of Ada, there is no harm in it.
+         "-gnat2012",
+         -- Disable the style enforcement and configure it later.
+         "-gnatyN",
+         -- Enable all warnings by default.
+         "-gnatwa",
+         -- Disable exception propagation warnings.
+         "-gnatw.X",
+         -- No standard library since HAVK is a freestanding program
+         -- without "-ffreestanding".
+         "-nostdlib",
+         -- No standard include paths.
+         "-nostdinc",
+         -- TODO: This option checks for arithmetic overflow and constraint
+         -- errors, but there's three types of it and I can't tell which
+         -- one is the best and/or safest. By default, GNAT uses
+         -- "STRICT mode", which is mode one. Do research on the other ones.
+         "-gnato1");
 
-		-- Just a default output. The Makefile should
-		-- control it, so this is only a fallback.
-		FOR Executable("havk.adb") USE "HAVK.elf";
-		FOR Executable_Suffix USE ".elf";
-	END Builder;
+      Ada_Style_Switches := (
+         -- Indentation of 3 spaces. I would have really liked to stick to
+         -- tabs with 8 character width, but it doesn't seem to
+         -- suit Ada at a column length of around 80.
+         "-gnaty3",
+         -- Array length attributes e.g. "range" must indicate the
+         -- dimension if the array is multidimensional. By default, Ada
+         -- automatically assumes it for singular-dimension arrays, but
+         -- it's better to be more terse.
+         "-gnatyA",
+         -- No blank spaces after semi-colon statement terminations.
+         -- Your editor should really handle this.
+         "-gnatyb",
+         -- A comment must have a single space after the dashes.
+         "-gnatyC",
+         -- No CRLF line terminators, only LF.
+         "-gnatyd",
+         -- No vertical tabs, although I don't even know how you would use
+         -- them in a source file.
+         "-gnatyf",
+         -- Disable horizontal tabs as we're just using spaces.
+         "-gnatyh",
+         -- "THEN" must appear on the same line as "IF" or on a line below
+         -- it with a condition above it.
+         "-gnatyi",
+         -- Set a 79th column limit and then enable it. Same as "-gnatym".
+         "-gnatyM79",
+         -- Pragmas must be mixed case, aside from "SPARK_Mode".
+         "-gnatyp",
+         -- All references to identifiers must have the same casing as
+         -- the one the identifier was declared with.
+         "-gnatyr",
+         -- Nothing must come after "THEN" or "ELSE" on the same line.
+         "-gnatyS",
+         -- Ada subprograms must have specifications.
+         "-gnatys",
+         -- Check for unnecessary parentheses, as they are not required.
+         "-gnatyx");
 
-	PACKAGE Compiler IS --	x86_64-pc-linux-gnu-gcc
-		FOR Default_Switches("Ada") USE(
-			-- Stack protector fully enabled, because why not.
-			"-fstack-protector-all",
-			-- The x86-64 red zone will be a problem when
-			-- handling interrupts in the future, so just
-			-- disable it. Search OSDev for more, I found
-			-- it noticed as an issue due to the System V ABI
-			-- so I thought I would get rid of it since it
-			-- seems to be useless for me right now.
-			"-mno-red-zone",
-			-- Allows me to place the kernel anywhere. I can
-			-- also specify "large" instead of "kernel", so I'm
-			-- not sure there is a difference.
-			"-mcmodel=kernel",
-			-- No MMX instructions.
-			"-mno-mmx",
-			-- No SSE instructions.
-			"-mno-sse",
-			-- No SSE2 instructions.
-			"-mno-sse2",
-			-- Intel syntax for inline x86-64 assembly, since
-			-- I like it more and it's less messy.
-			"-masm=intel",
-			-- Explicitly mention x86-64, just to be sure.
-			"-march=x86-64",
-			-- Optimize code for no particular x86-64 architecture.
-			"-mtune=generic");
-	END Compiler;
+      Ada_Final_Switches := (
+         -- Reasonable optimization level for the final version.
+         "-O2",
+         -- No debug information at all for obvious reasons.
+         "-g0",
+         -- Default validity checks. Specified by default regardless.
+         "-gnatVd",
+         -- Speed up compilation by not generating some references in
+         -- the "ali" files. Also saves a little space.
+         "-gnatx");
 
-	PACKAGE Binder IS --	gnatbind
-		FOR Default_Switches("Ada") USE(
-			-- Static GNAT run-time.
-			"-static",
-			-- Imply that there is no "main" section.
-			-- The assembly entry function will handle its role.
-			-- Then rename "adainit" to "havk_init".
-			"-Lhavk_");
-	END Binder;
+      Ada_Debug_Switches := (
+         -- Zero optimization by default. Makes reading `objdump -d` a little
+         -- easier for me personally when debugging. Change it if the
+         -- final optimization breaks something and you also need the
+         -- symbols for debugging.
+         "-O0",
+         -- Maximum debug information (stabs or DWARF?).
+         "-g3",
+         -- Debug information for GDB specifically.
+         "-ggdb",
+         -- All validity checks for debugging.
+         "-gnatVa");
 
-	PACKAGE Linker IS --	gnatlink
-		FOR Default_Switches("Ada") USE(
-			-- Remove any unused dead code and data from the
-			-- kernel file, just to make it smaller.
-			"-Wl,--gc-sections",
-			-- Static GNAT run-time.
-			"-static",
-			-- No standard library initialization
-			-- e.g. constructors.
-			"-nostartfiles",
-			-- The custom linker script to be used which
-			-- defines the entry point to the assembly
-			-- file turned object.
-			"-T../src/linker.ld",
-			-- Include the GCC library.
-			"-lgcc",
-			-- The UEFI `AllocatePages()` function allocates
-			-- pages of size 4 KiB. Match it here just
-			-- in case. Should also save some pages.
-			"-zmax-page-size=0x1000");
-	END Linker;
+      CASE Build IS
+         WHEN "Final" =>
+            FOR Default_Switches("Ada") USE
+               Ada_Basic_Switches &
+               Ada_Style_Switches &
+               Ada_Final_Switches;
+         WHEN "Debug" =>
+            FOR Default_Switches("Ada") USE
+               Ada_Basic_Switches &
+               Ada_Style_Switches &
+               Ada_Debug_Switches;
+      END CASE;
+
+      -- Add my Ada configuration file and apply it everywhere.
+      FOR Global_Configuration_Pragmas USE "./src/havk.adc";
+
+      -- Just a default output. The Makefile should control it, so this
+      -- is only a fallback.
+      FOR Executable("havk.adb") USE "HAVK.elf";
+      FOR Executable_Suffix USE ".elf";
+   END Builder;
+
+   PACKAGE Compiler IS -- `gcc` / `x86_64-pc-linux-gnu-gcc`
+      FOR Default_Switches("Ada") USE(
+         -- Stack protector fully enabled, because why not.
+         "-fstack-protector-all",
+         -- Add some extra instructions that check if we've gone
+         -- over the stack space limit. Usually that just causes an
+         -- intense crash like a general page-fault for example.
+         -- I believe this "enables" the "STORAGE_ERROR" exception to
+         -- be caught or raised, so that means the last chance handler
+         -- might be called instead of the general page-fault by the CPU.
+         "-fstack-check",
+         -- Create a "su" file with information about stack usage (SU).
+         -- Useful for checking if a function exceeds the stack space
+         -- I've allocated in the entry assembly file.
+         "-fstack-usage",
+         -- The x86-64 red zone will be a problem when handling interrupts
+         -- in the future, so just disable it. Search OSDev for more,
+         -- I found it noticed as an issue due to the System V ABI so I
+         -- thought I would get rid of it since it seems to be useless
+         -- for me right now.
+         "-mno-red-zone",
+         -- Allows me to place the kernel anywhere. I can also specify
+         -- "large" instead of "kernel". Not sure if there is a difference.
+         "-mcmodel=kernel",
+         -- No MMX instructions.
+         "-mno-mmx",
+         -- No SSE instructions.
+         "-mno-sse",
+         -- No SSE2 instructions.
+         "-mno-sse2",
+         -- Intel syntax for inline x86-64 assembly, since I like it more
+         -- and it's less messy.
+         "-masm=intel",
+         -- Explicitly mention x86-64, just to be sure.
+         "-march=x86-64",
+         -- Optimize code for no particular CPU family.
+         "-mtune=generic");
+   END Compiler;
+
+   PACKAGE Binder IS -- `gnatbind`
+      FOR Default_Switches("Ada") USE(
+         -- Static GNAT run-time.
+         "-static",
+         -- State and imply that there is no "main" section. The assembly
+         -- entry function will handle its role. Then rename "adainit" to
+         -- "ada_havk_init". This is to ensure that the kernel was compiled
+         -- with this project file's switches.
+         "-n", "-Lada_havk_",
+         -- Check if the source files actually exist and are findable,
+         -- otherwise, raise an error.
+         "-s",
+         -- TODO: Set the "storage size" or "default task stack size value".
+         -- Is this referring to the available stack space? I've just set it
+         -- to 16 KiB, which is what I've allocated in the entry assembly
+         -- file. Figure this out for sure, please.
+         "-d16384");
+   END Binder;
+
+   PACKAGE Linker IS -- `gnatlink`
+      FOR Default_Switches("Ada") USE(
+         -- Remove any unused dead code and data from the kernel file,
+         -- just to make it smaller.
+         "-Wl,--gc-sections",
+         -- Static GNAT run-time.
+         "-static",
+         -- No standard library initialization e.g. constructors.
+         "-nostartfiles",
+         -- The custom linker script to be used which defines the entry
+         -- point to the assembly file turned object.
+         "-T../src/linker.ld",
+         -- Include the GCC library.
+         "-lgcc",
+         -- The UEFI `AllocatePages()` function allocates pages of size 4 KiB.
+         -- Match it here just in case. Should also save some pages. It is
+         -- also the page size I will use later on, I believe.
+         "-zmax-page-size=0x1000");
+   END Linker;
 END HAVK;

@@ -1,32 +1,44 @@
 WITH System;
-WITH Interfaces;
-
-USE Interfaces;
+WITH HAVK_Kernel;
 
 PACKAGE HAVK_Kernel.UEFI
 IS
-	TYPE UEFI_Arguments IS RECORD
-		Graphics_Mode_Current : unsigned_32;
-		Graphics_Mode_Max : unsigned_32;
-		Framebuffer_Address : System.address;
-		Framebuffer_Size : unsigned_64;
-		Horizontal_Resolution : unsigned_32;
-		Vertical_Resolution : unsigned_32;
-		Pixels_Per_Scanline : unsigned_32;
+   -- See the UEFI specifications for more about the types of pixel
+   -- formats and bitmasks.
+   TYPE Pixel_Formats IS(
+      RGB,     -- PixelRedGreenBlueReserved8BitPerColor.
+      BGR,     -- PixelBlueGreenRedReserved8BitPerColor.
+      Bitmask, -- PixelBitMask.
+      BLT,     -- PixelBltOnly (no framebuffer access = failure).
+      Max);    -- PixelFormatMax (should never get this from boot).
 
-		-- These two below aren't properly "defined".
-		Pixel_Format : unsigned_32;
-		Pixel_Bitmask : unsigned_32;
+   TYPE Pixel_Bitmasks IS RECORD
+      Red : u32;
+      Green : u32;
+      Blue : u32;
+      Reserved : u32;
+   END RECORD WITH Convention => C;
 
-		-- Memory map needs to be defined in a separate record.
-		Memory_Map_Address : System.address;
+   TYPE UEFI_Arguments IS RECORD
+      Graphics_Mode_Current : u32;
+      Graphics_Mode_Max : u32;
+      Framebuffer_Address : System.Address;
+      Framebuffer_Size : u64;
+      Horizontal_Resolution : u32;
+      Vertical_Resolution : u32;
+      Pixels_Per_Scanline : u32;
+      Pixel_Format : Pixel_Formats;
+      Pixel_Bitmask : Pixel_Bitmasks;
 
-		Memory_Map_Key : unsigned_64;
-		Memory_Map_Size : unsigned_64;
-		Memory_Map_Descriptor_Size : unsigned_64;
-		Memory_Map_Descriptor_Version : unsigned_32;
-	END RECORD WITH Convention => C;
+      -- TODO: Memory map needs to be defined in a separate record.
+      Memory_Map_Address : System.Address;
 
-	-- A pointer is passed by the UEFI bootloader.
-	TYPE Access_UEFI_Arguments IS ACCESS UEFI_Arguments;
+      Memory_Map_Key : u64;
+      Memory_Map_Size : u64;
+      Memory_Map_Descriptor_Size : u64;
+      Memory_Map_Descriptor_Version : u32;
+   END RECORD WITH Convention => C;
+
+   -- A pointer is passed by the UEFI bootloader.
+   TYPE Access_UEFI_Arguments IS ACCESS UEFI_Arguments;
 END HAVK_Kernel.UEFI;

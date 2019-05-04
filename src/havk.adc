@@ -1,14 +1,14 @@
-PRAGMA Discard_Names;
-PRAGMA SPARK_Mode(Off);
-PRAGMA Restrictions(No_Exception_Handlers);
 PRAGMA Restrictions(No_Enumeration_Maps);
-PRAGMA Restrictions(No_Finalization);
-PRAGMA Restrictions(No_Tasking);
 PRAGMA Restrictions(No_Protected_Types);
 PRAGMA Restrictions(No_Delay);
-PRAGMA Restrictions(No_Implicit_Dynamic_Code);
 PRAGMA Restrictions(No_Secondary_Stack);
 PRAGMA Restrictions(No_Recursion);
 PRAGMA Restrictions(No_Allocators);
 PRAGMA Restrictions(No_Dispatch);
+
+-- These are automatically set by the supplied ZFP.
+PRAGMA Discard_Names;
+PRAGMA Restrictions(No_Finalization);
+PRAGMA Restrictions(No_Tasking);
+PRAGMA Restrictions(No_Implicit_Dynamic_Code);
 

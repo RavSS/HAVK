@@ -124,7 +124,8 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 
 	Print(L"NOW BOOTING HAVK %s\r\n", VERSION);
 
-	EFI_GUID simple_file_system_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
+	EFI_GUID simple_file_system_guid
+		= EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
 
 	// Get the simple file system handle.
 	EFI_HANDLE *handles = NULL;
@@ -281,11 +282,13 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	UEFI(root_dir->Close, 1,
 		root_dir);
 
-	Print(L"HAVK ENTRY POSITION: 0x%X\r\n", havk_file_header.entry_address);
+	Print(L"HAVK ENTRY POSITION: 0x%X\r\n",
+		havk_file_header.entry_address);
 
 	// Now to get the framebuffer. GOP is the new version of UGP, so
 	// I guess I will use that instead.
-	EFI_GUID graphics_output_protocol_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+	EFI_GUID graphics_output_protocol_guid
+		= EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
 
 	// Get the graphics output protocol handle. Get rid of the previously
 	// found handles for the simple file system protocol.
@@ -302,7 +305,7 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 
 	if (!handles_found)
 	{
-		Print(L"UNAVAILABLE TO FIND A GRAPHICS OUTPUT PROTOCOL HANDLE\r\n");
+		Print(L"UNABLE TO FIND A GRAPHICS OUTPUT PROTOCOL HANDLE\r\n");
 		Print(L"FAILED TO BOOT HAVK\r\n");
 		Pause();
 	}

@@ -14,39 +14,47 @@ stacks: ; 16 KiB stacks as of now.
 	; to mess around with GNAT to enable it by first removing the
 	; restriction and then specifying its fixed size and location?
 	; I think this has to be set up by "s-secsta.adb" and "s-secsta.ads"?
+	; According to the GCC documents, the secondary stack is "carved"
+	; out of the "primary task stack" for bare metal targets, so
+	; this may not be necessary.
 	;.secondary_base:
 		;RESB 16384
 	;.secondary_top:
 
+ALIGN 4 ; 4 byte alignment from here on out.
 GLOBAL arguments
 arguments: ; Store the UEFI arguments pointer here.
 	RESQ 1
 
 SECTION .text
-ALIGN 4 ; 4 byte alignment from here out.
 GLOBAL entry:function (entry.exit - entry)
 entry:
 	; To avoid any clobbering, I'm saving the UEFI application's passed
-	; arguments and parameters to specific locations in memory.
+	; arguments/parameters pointer to a specific location in memory.
+	; The pointer was passed in the way of the x86-64 System V ABI.
 	MOV [arguments], RDI
 
 	MOV RSP, stacks.primary_top ; Set up the stack as per usual.
-	MOV RBP, RSP ; Set the base pointer.
-	; The "main" section places the name of the Ada program onto the stack,
-	; but that seems pointless for our current bare metal environment.
+
+	; The GNAT (Ada specification?) generated "main" section places the
+	; name of the Ada program onto the stack, but that seems pointless
+	; for our current bare metal environment. I have commanded gnatbind
+	; to remove it, and am just doing the "main" section's job myself.
+
+	MOV RBP, RSP ; Set the base pointer to the start/base of the stack.
 
 	; Now initialize the Ada program and the environment it expects.
-	EXTERN havk_init
-	CALL havk_init
+	EXTERN ada_havk_init
+	CALL ada_havk_init
 
 	; Enter HAVK.
 	EXTERN _ada_havk
 	CALL _ada_havk
 
-	; HAVK should never exit like this, this should never be reached.
+	; HAVK should never exit like this, so this should never be reached.
+	; It should handle a shutdown properly.
 
-	.exit: ; Endless loop. Never "RET" to the UEFI application.
+	.exit: ; Endless loop.
 		CLI
 		HLT
 		JMP .exit
-		RET ; Unreachable. Just here for clarity.
