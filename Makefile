@@ -2,14 +2,14 @@
 ######################### HAVK - An Operating System. #########################
 ###############################################################################
 NAME:=HAVK
-VERSION=00.06-00
+VERSION=00-07-00
 BUILD?=Final
 
 GNAT_DIR:=./com/gnatgpl/bin/
 BUILD_DIR:=./build/
 SRC_DIR:=./src/
 
-ifneq ($(notdir $(shell pwd)), $(NAME))
+ifeq ("$(wildcard $(SRC_DIR))", "")
 $(error Only run the Makefile from the root directory of HAVK's source 'HAVK')
 endif
 
@@ -19,6 +19,8 @@ endif
 export PATH:=$(PATH):$(shell pwd)/$(GNAT_DIR)
 
 # Disable the useless built-in implicit rules here. Speeds up `make` by a lot.
+# Try making the kernel without this below line via `make -dB`, and then
+# compare it with the line present in this file. Quite the difference.
 MAKEFLAGS+=--no-builtin-rules --no-builtin-variables
 
 # A normal x86-64 targeting GCC seems to be able to compile
@@ -32,7 +34,7 @@ CC:=x86_64-pc-linux-gnu-gcc
 LD:=ld
 AS:=nasm
 
-HAVK_PROJECT:=$(NAME).gpr
+HAVK_PROJECT:=$(SRC_DIR)$(NAME).gpr
 HAVK_KERNEL_ENTRY:=$(BUILD_DIR)entry.o
 HAVK_BOOTLOADER:=$(BUILD_DIR)$(NAME).efi
 HAVK_KERNEL:=$(BUILD_DIR)$(NAME).elf
@@ -47,14 +49,23 @@ EFI_CRT0=$(SRC_DIR)crt0-efi-x86_64.o
 EFI_LINK=$(SRC_DIR)elf_x86_64_efi.lds
 
 EFI_C_STD=-std=c11
-EFI_C_WARN=-Wall
+EFI_C_WARN=-Wall -Wextra
 EFI_C_OPT=-nostdlib -fpic -fno-stack-protector -fno-strict-aliasing \
-	-fno-builtin -fshort-wchar -mno-red-zone -O3 -g0
+	-fno-builtin -fshort-wchar -mno-red-zone
 EFI_C_INC=-I $(EFI_DIR) -I $(EFI_DIR)x86_64 -I $(EFI_DIR)protocol
 EFI_C_LIB=-l efi -l gnuefi
-EFI_C_DEF=-D EFI_FUNCTION_WRAPPER -D VERSION=L\"$(VERSION)\"
+EFI_C_DEF=-D EFI_FUNCTION_WRAPPER -D HAVK_VERSION=L\"$(VERSION)\"
 EFI_C_FLAGS=$(EFI_C_STD) $(EFI_C_WARN) $(EFI_C_OPT) $(EFI_C_INC) \
 	$(EFI_C_LIB) $(EFI_C_DEF)
+
+# Note that I create two EFI files, but one still has the debug symbols kept
+# in it. For better analyzing, it's wise to use the same optimization level
+# for both of the bootloader application's files.
+ifeq ("$(BUILD)", "Debug")
+EFI_C_OPT+= -O0 -ggdb3
+else
+EFI_C_OPT+= -O1 -g0
+endif
 
 EFI_LD_OPT=-nostdlib -Bsymbolic -shared -no-undefined -znocombreloc
 EFI_LD_INC=-L $(LIB_DIR) -T $(EFI_LINK)
@@ -63,7 +74,8 @@ EFI_LD_FLAGS=$(EFI_LD_OPT) $(EFI_LD_INC) $(EFI_CRT0)
 
 GDB_REMOTE_DEBUG_PORT=40404
 QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) \
-	-d guest_errors -m 1024 -cpu qemu64 -net none
+	-d guest_errors -m 1024 -cpu qemu64 -net none -no-reboot \
+	-no-shutdown -d int
 
 EFI_NAME=boot
 EFI_C_FILE=$(SRC_DIR)$(EFI_NAME).c
@@ -78,13 +90,18 @@ FAT_SIZE=16
 IMAGE_BLOCK_SIZE=512
 IMAGE_SECTORS=6000
 
-# The bootable EFI system partition's sector details.
+# The bootable EFI system partition's sector details. I store the kernel
+# in there as well, because why not.
 ESP_SECTOR_START=50
 ESP_SECTOR_END=5000
 ESP_SECTOR_SIZE=4950
 
-# Enable/uncomment this when debugging.
-FORCE_RECOMPILE=-f -we
+# Force recompilation when debugging and consider all warnings as errors.
+ifeq ("$(BUILD)", "Debug")
+GPR_FLAGS=-f -we
+else
+GPR_FLAGS=-q
+endif
 
 define echo
 @echo -e "\033[4;96m          $1\033[0m"
@@ -95,16 +112,21 @@ endef
 all: $(HAVK_IMAGE)
 
 $(BUILD_DIR):
-	if [ ! -d "$@" ]; then mkdir $@; fi
+	@if [ ! -d "$@" ]; then mkdir $@; fi
 
 $(EFI_O_FILE): $(EFI_C_FILE) | $(BUILD_DIR)
-	$(call echo, "BUILDING BOOTLOADER TO $(HAVK_BOOTLOADER)") && \
+	$(call echo, "BUILDING BOOTLOADER TO $(HAVK_BOOTLOADER)")
+
 	$(CC) $(EFI_C_FLAGS) -c $< -o $@
 
 $(EFI_SO_FILE): $(EFI_O_FILE)
+	$(call echo, "LINKING EFI BOOTLOADER APPLICATION")
+
 	$(LD) $(EFI_LD_FLAGS) $< -o $@ $(EFI_LD_LIB)
 
 $(HAVK_BOOTLOADER): $(EFI_SO_FILE)
+	$(call echo, "FIXING GNU-EFI UTILIZING BOOTLOADER")
+
 	objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
 		-j .rel -j .rela -j .reloc  -j .debug_info -j .debug_abbrev \
 		-j .debug_loc -j .debug_aranges -j .debug_line \
@@ -115,14 +137,11 @@ $(HAVK_BOOTLOADER): $(EFI_SO_FILE)
 		-j .rel -j .rela -j .reloc --target=efi-app-x86_64 \
 		$< $@
 
-$(HAVK_KERNEL_ENTRY): $(SRC_DIR)entry.asm
-	$(AS) -f elf64 -F dwarf $< -o $@
+$(HAVK_KERNEL): #$(HAVK_KERNEL_ENTRY) | $(BUILD_DIR)
+	$(call echo, "BUILDING THE HAVK PROJECT TO $@")
 
-$(HAVK_KERNEL): $(HAVK_KERNEL_ENTRY)
-	$(call echo, "BUILDING HAVK TO $@")
-
-	gprbuild -P $(HAVK_PROJECT) -d -j$(shell nproc --all) -s \
-		$(FORCE_RECOMPILE) -XBuild=$(BUILD) -o $@
+	gprbuild -P $(HAVK_PROJECT) -XBuild=$(BUILD) \
+		$(GPR_FLAGS) -d -j$(shell nproc --all) -s -o ./../$@
 
 $(HAVK_PARTITION): $(HAVK_BOOTLOADER) $(HAVK_KERNEL)
 	$(call echo, "CREATING EFI SYSTEM PARTITION")
@@ -138,7 +157,7 @@ $(HAVK_PARTITION): $(HAVK_BOOTLOADER) $(HAVK_KERNEL)
 	mcopy -i $@ $(HAVK_KERNEL) ::/$(NAME)/$(NAME).elf
 
 $(HAVK_IMAGE): $(HAVK_PARTITION)
-	$(call echo, "CREATING IMAGE TO $@")
+	$(call echo, "CREATING IMAGE AT $@")
 
 	dd if=/dev/zero of=$@ bs=$(IMAGE_BLOCK_SIZE) count=$(IMAGE_SECTORS)
 
@@ -170,10 +189,13 @@ qemu: $(HAVK_IMAGE)
 
 .PHONY: gdb
 gdb:
-	-gdb $(HAVK_KERNEL) \
+	-@gdb $(HAVK_KERNEL) \
 		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \
 		-ex "continue"
 
 .PHONY: clean
 clean: $(BUILD_DIR)
+	$(call echo, "CLEANING BUILD DIRECTORY $<")
+
+	gprclean -P $(HAVK_PROJECT) -XBuild=$(BUILD)
 	rm -vr $<

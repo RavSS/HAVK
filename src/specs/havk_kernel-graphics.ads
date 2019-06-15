@@ -5,17 +5,21 @@ USE
    HAVK_Kernel,
    HAVK_Kernel.UEFI;
 
-PACKAGE HAVK_Kernel.Graphics
+PACKAGE HAVK_Kernel.Graphics WITH
+   SPARK_Mode
 IS
-   SUBTYPE framebuffer IS u32s;
+   TYPE pixel IS MOD 2 ** 32;
+   TYPE framebuffer IS ARRAY(num RANGE <>) OF pixel;
+   FOR  framebuffer'component_size USE 32;
+   FOR  framebuffer'alignment      USE  4;
 
    -- Global variables so I don't need to keep passing them everywhere.
    -- Bare minimum values as default for screen properties.
    -- Will (must) be changed by the kernel startup.
-   Screen_Width : u32 := 400;
-   Screen_Height : u32 := 200;
-   Pixel_Size : u32 := 1;
-   Pixel_Format : Pixel_Formats := Max;
+   Screen_Width  :           num := 400;
+   Screen_Height :           num := 200;
+   Pixel_Size    :           num :=   1;
+   Pixel_Format  : pixel_formats := Max;
 
    -- All drawing procedures ignore the constraint error and just
    -- silently return. It does not matter to the stability of
@@ -24,50 +28,44 @@ IS
    -- Creates a pixel by taking in RGB values which are then shifted
    -- and OR'd into a single value according to the pixel format.
    FUNCTION Create_Pixel(
-      Red : IN u8;
+      Red   : IN u8;
       Green : IN u8;
-      Blue : IN u8)
-   RETURN u32;
+      Blue  : IN u8)
+   RETURN pixel;
 
    -- Turns a screen resolution position into a framebuffer position.
    FUNCTION Calculate_Pixel(
-      Width : IN u32;
-      Height : IN u32)
-   RETURN u64;
+      Width  : IN num;
+      Height : IN num)
+   RETURN num;
 
    -- Fills the entire framebuffer with a colour. Can be used for
    -- clearing out the framebuffer fast.
    PROCEDURE Draw_Fill(
-      Buffer : IN OUT framebuffer;
-      Pixel_Start : IN u64;
-      Pixel_End : IN u64;
-      Pixel_Colour : IN u32);
-
-   -- Simply draws a pixel on the screen.
-   PROCEDURE Draw_Pixel(
-      Buffer : IN OUT framebuffer;
-      Pixel : IN u64;
-      Pixel_Colour : IN u32);
+      Buffer       : IN OUT framebuffer;
+      Pixel_Start  : IN num;
+      Pixel_End    : IN num;
+      Pixel_Colour : IN pixel);
 
    -- Draws a horizontal line with a specific line size.
    PROCEDURE Draw_Horizontal_Line(
-      Buffer : IN OUT framebuffer;
-      Pixel_Start : IN u64;
-      Pixel_Colour : IN u32;
-      Line_Size : IN u64);
+      Buffer       : IN OUT framebuffer;
+      Pixel_Start  : IN num;
+      Pixel_Colour : IN pixel;
+      Line_Size    : IN num);
 
    -- Draws a vertical line with a specific line size.
    PROCEDURE Draw_Vertical_Line(
-      Buffer : IN OUT framebuffer;
-      Pixel_Start : IN u64;
-      Pixel_Colour : IN u32;
-      Line_Size : IN u64);
+      Buffer       : IN OUT framebuffer;
+      Pixel_Start  : IN num;
+      Pixel_Colour : IN pixel;
+      Line_Size    : IN num);
 
    -- Draws a box with a box width and box height in pixel size.
    PROCEDURE Draw_Box(
-      Buffer : IN OUT framebuffer;
-      Pixel_Start : IN u64;
-      Pixel_Colour : IN u32;
-      Box_Width : IN u32;
-      Box_Height : IN u32);
+      Buffer       : IN OUT framebuffer;
+      Pixel_Start  : IN num;
+      Pixel_Colour : IN pixel;
+      Box_Width    : IN num;
+      Box_Height   : IN num);
 END HAVK_Kernel.Graphics;

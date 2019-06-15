@@ -4,47 +4,46 @@ STARTUP(entry.o)
 
 /* Aside from changing output format, the script
 /  has not been changed much from the bare bones
-/  example. Except the code address locations to
-/  change in the future. */
+/  example. I have removed some segments, they
+/  did not seem like they were used. */
+
+__stack_size = 65535;
 
 SECTIONS
 {
-	. = 0x00100000;
+	/* I've moved the kernel position up by
+	/  2 MiB so hopefully it doesn't collide
+	/  with some system reserved memory, which
+	/  tends to be the case on real hardware.
+	/  I technically could relocate the kernel
+	/  during the ELF loading, but this seems
+	/  much easier and less error prone. */
+	. = 0x00300000;
+	kernel_base = .;
 
 	.text ALIGN(4K) :
 	{
-		code = .;
-		_code = .;
-		__code = .;
+		section_text = .;
 		*(.text)
-		*(.rodata)
 	}
 
 	.rodata ALIGN(4K) :
 	{
+		section_rodata = .;
 		*(.rodata)
 	}
 
 	.data ALIGN(4K) :
 	{
-		data = .;
-		_data = .;
-		__data = .;
+		section_data = .;
 		*(.data)
 	}
 
 	.bss ALIGN(4K) :
 	{
-		sbss = .;
-		bss = .;
-		_bss = .;
-		__bss = .;
+		section_bss = .;
 		*(COMMON)
 		*(.bss)
-		ebss = .;
 	}
-
-	end = .;
-	_end = .;
-	__end = .;
 }
+

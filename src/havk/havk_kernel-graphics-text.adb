@@ -1,51 +1,53 @@
 WITH
    HAVK_Kernel.Font,
-   HAVK_Kernel.Bitwise;
+   HAVK_Kernel.Intrinsics;
 USE
    HAVK_Kernel.Font,
-   HAVK_Kernel.Bitwise;
+   HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Graphics.Text IS
    PROCEDURE Draw_Character(
-      Buffer : IN OUT framebuffer;
-      Pixel_Start : IN u64;
-      Pixel_Colour : IN u32;
-      ASCII : IN character)
+      Buffer            : IN OUT framebuffer;
+      Pixel_Start       : IN num;
+      Foreground_Colour : IN pixel;
+      Background_Colour : IN pixel;
+      ASCII             : IN character)
    IS
-      I : CONSTANT u8 := character'pos(ASCII);
-      Pixel_Location : u64;
-      X_Line : u8;
+      I : CONSTANT num  := character'pos(ASCII);
+      Pixel_Location    : num;
+      X_Line            : num;
    BEGIN
-      FOR Y IN u8 RANGE 0 .. Framefont_Height - 1 LOOP
+      FOR Y IN num RANGE 0 .. Framefont_Height - 1 LOOP
          X_Line := Framefont(I, Y);
 
          -- Move down a scanline if Y is more than 0.
-         Pixel_Location := Pixel_Start + (u64(Y) * u64(Screen_Width));
+         Pixel_Location := Pixel_Start + Y * Screen_Width;
 
-         FOR X IN REVERSE u8 RANGE 0 .. Framefont_Width - 1 LOOP
+         -- Reverse the loop due to how I've stored the font data.
+         -- Check "HAVK_Kernel.Font" for bit order information.
+         FOR X IN REVERSE num RANGE 0 .. Framefont_Width - 1 LOOP
             -- Move to the next pixel by incrementing
             -- the pixel location.
-            Pixel_Location := Pixel_Location + u64(Pixel_Size);
+            Pixel_Location := Pixel_Location + Pixel_Size;
 
-            IF Bt(u64(X_Line), X) THEN
-               Buffer(Pixel_Location) := Pixel_Colour;
+            IF BT(X_Line, X) THEN
+               Buffer(Pixel_Location) := Foreground_Colour;
+            ELSE
+               Buffer(Pixel_Location) := Background_Colour;
             END IF;
          END LOOP;
 
       END LOOP;
    END Draw_Character;
 
-   PROCEDURE Shift_Lines(
-      Current_Textbox : IN OUT textbox;
-      Shifts : IN u32)
+   PROCEDURE Shift_Line(
+      Current_Textbox : IN OUT textbox)
    IS
    BEGIN
-      FOR I IN u32 RANGE 1 .. Shifts LOOP
-         FOR Y IN Current_Textbox.Data'range(1) LOOP
-            EXIT WHEN Y = Current_Textbox.Data'last(1);
-            FOR X IN Current_Textbox.Data'range(2) LOOP
-               Current_Textbox.Data(Y, X) := Current_Textbox.Data(Y + 1, X);
-            END LOOP;
+      FOR Y IN Current_Textbox.Data'range(1) LOOP
+         EXIT WHEN Y = Current_Textbox.Data'last(1);
+         FOR X IN Current_Textbox.Data'range(2) LOOP
+            Current_Textbox.Data(Y, X) := Current_Textbox.Data(Y + 1, X);
          END LOOP;
       END LOOP;
 
@@ -53,27 +55,27 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
          Current_Textbox.Data(Current_Textbox.Data'last(1), X) :=
             character'val(0);
       END LOOP;
-   END Shift_Lines;
+   END Shift_Line;
 
    PROCEDURE Update_Cursor(
       Current_Textbox : IN OUT textbox)
    IS
    BEGIN
-      IF Current_Textbox.Current_X_Index > Current_Textbox.Data'last(2) THEN
+      IF Current_Textbox.Current_X_Index >  Current_Textbox.Data'last(2) THEN
          Current_Textbox.Current_X_Index := Current_Textbox.Data'first(2);
          Current_Textbox.Current_Y_Index :=
             Current_Textbox.Current_Y_Index + 1;
       END IF;
 
       IF Current_Textbox.Current_Y_Index > Current_Textbox.Data'last(1) THEN
-         Shift_Lines(Current_Textbox, 1);
+         Shift_Line(Current_Textbox);
          Current_Textbox.Current_Y_Index := Current_Textbox.Data'last(1);
       END IF;
    END Update_Cursor;
 
    PROCEDURE Print(
       Current_Textbox : IN OUT textbox;
-      Message : IN str)
+      Message         : IN str)
    IS
    BEGIN
       FOR I IN Message'range LOOP
@@ -98,39 +100,50 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
    END Next_Line;
 
    PROCEDURE Draw_Textbox(
-      Buffer : IN OUT framebuffer;
+      Buffer          : IN OUT framebuffer;
       Current_Textbox : IN textbox;
-      Pixel_Start : IN u64)
+      Pixel_Start     : IN num)
    IS
-      Current_Pixel : u64 := Pixel_Start;
-
-      Row_Separation : CONSTANT u64 := u64(Current_Textbox.Line_Separation) +
-         u64(Framefont_Height);
-
-      Next_Row : CONSTANT u64 := u64(Screen_Width * Pixel_Size) *
+      Current_Pixel   : num := Pixel_Start;
+      Row_Separation  : CONSTANT num := Current_Textbox.Line_Separation +
+         Framefont_Height;
+      Next_Row        : CONSTANT num := Screen_Width * Pixel_Size *
          Row_Separation;
-
-      Next_Column : CONSTANT u64 := u64(Framefont_Width) +
-         u64(Current_Textbox.Kerning);
+      Next_Column     : CONSTANT num := Framefont_Width +
+         Current_Textbox.Kerning;
    BEGIN
       FOR Y IN Current_Textbox.Data'range(1) LOOP
          FOR X IN Current_Textbox.Data'range(2) LOOP
             -- Don't even bother going over something that is not visible,
             -- like for example a new-line or a null character. The drawable
             -- ASCII characters start at 33, from the exclamation mark.
-            -- This should grant a performance increase.
-            IF character'pos(Current_Textbox.Data(Y, X)) > 32 THEN
+            -- This should grant a performance increase. Do still draw
+            -- spaces (32) though, or else there would be a gap between
+            -- words if the user wanted to fill in the background too.
+            IF character'pos(Current_Textbox.Data(Y, X)) > 31 THEN
                Draw_Character(
                   Buffer,
                   Current_Pixel,
                   Current_Textbox.Foreground_Colour,
+                  Current_Textbox.Background_Colour,
                   Current_Textbox.Data(Y, X));
             END IF;
 
             Current_Pixel := Current_Pixel + Next_Column;
          END LOOP;
 
-         Current_Pixel := Pixel_Start + u64(Y) * Next_Row;
+         Current_Pixel := Pixel_Start + Y * Next_Row;
       END LOOP;
    END Draw_Textbox;
+
+   PROCEDURE Clear_Textbox(
+      Current_Textbox : IN OUT textbox)
+   IS
+   BEGIN
+      FOR Y IN Current_Textbox.Data'range(1) LOOP
+         FOR X IN Current_Textbox.Data'range(2) LOOP
+            Current_Textbox.Data(Y, X) := character'val(0);
+         END LOOP;
+      END LOOP;
+   END Clear_Textbox;
 END HAVK_Kernel.Graphics.Text;

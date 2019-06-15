@@ -5,9 +5,9 @@ BITS 64 ; Already in long mode thanks to UEFI.
 SECTION .bss
 ; System V ABI for x86-64 dictates that stacks grow downwards.
 ALIGN 16 ; 16 byte alignment.
-stacks: ; 16 KiB stacks as of now.
+stacks: ; 64 KiB stack.
 	.primary_base:
-		RESB 16384
+		RESB 65535
 	.primary_top:
 
 	; TODO: The secondary stack is currently disabled. I believe I have
@@ -21,18 +21,18 @@ stacks: ; 16 KiB stacks as of now.
 		;RESB 16384
 	;.secondary_top:
 
-ALIGN 4 ; 4 byte alignment from here on out.
-GLOBAL arguments
-arguments: ; Store the UEFI arguments pointer here.
+GLOBAL bootloader
+bootloader: ; Store the UEFI bootloader arguments pointer here.
 	RESQ 1
 
 SECTION .text
+ALIGN 4 ; 4 byte alignment from here on out.
 GLOBAL entry:function (entry.exit - entry)
 entry:
 	; To avoid any clobbering, I'm saving the UEFI application's passed
 	; arguments/parameters pointer to a specific location in memory.
 	; The pointer was passed in the way of the x86-64 System V ABI.
-	MOV [arguments], RDI
+	MOV [bootloader], RDI
 
 	MOV RSP, stacks.primary_top ; Set up the stack as per usual.
 

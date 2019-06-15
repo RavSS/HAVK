@@ -5,6 +5,10 @@ PRAGMA Restrictions(No_Secondary_Stack);
 PRAGMA Restrictions(No_Recursion);
 PRAGMA Restrictions(No_Allocators);
 PRAGMA Restrictions(No_Dispatch);
+PRAGMA Restrictions(No_Implicit_Heap_Allocations);
+PRAGMA Restrictions(No_Implicit_Conditionals);
+
+PRAGMA Restrictions(No_Implicit_Loops);
 
 -- These are automatically set by the supplied ZFP.
 PRAGMA Discard_Names;
