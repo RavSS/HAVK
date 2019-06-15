@@ -6,12 +6,12 @@ USE
 PACKAGE HAVK_Kernel.Font
 IS
    -- Fonts encompass both ASCII and EASCII.
-   TYPE font IS ARRAY(u8 RANGE 0 .. 255, u8 RANGE 0 .. 7) OF u8;
+   TYPE font IS ARRAY(num RANGE 0 .. 255, num RANGE 0 .. 7) OF num;
 
    -- Going to go with a 8x8 size. Most significant bit is on the left.
    -- Because of left MSB, the loop to draw a line must be reversed.
-   Framefont_Width : CONSTANT u8 := u8'size;
-   Framefont_Height : CONSTANT u8 := font'length(2);
+   Framefont_Width  : CONSTANT num := 8;
+   Framefont_Height : CONSTANT num := 8;
 
    -- TODO: Create the lowercase alphabet, numbers, and symbols.
    -- A generic font I created for now. No fanciness.

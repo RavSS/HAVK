@@ -5,8 +5,8 @@
 set -e
 
 # This points to the source location for GNAT GPL.
-GNAT_SRC=http://mirrors.cdn.adacore.com/art/5b0d7bffa3f5d709751e3e04
-GNAT_SHA1=10360eb85955d40f340f672441e8415cb0877fcc
+GNAT_SRC=http://mirrors.cdn.adacore.com/art/5cdffc5409dcd015aaf82626
+GNAT_SHA1=0cd3e2a668332613b522d9612ffa27ef3eb0815b
 GNAT_BIN=gnat-community.bin
 GNAT_CHECKSUM_LINE="$GNAT_SHA1 *./ext/$GNAT_BIN"
 GNAT_DIR=com/gnatgpl
