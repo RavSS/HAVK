@@ -98,9 +98,9 @@ ESP_SECTOR_SIZE=4950
 
 # Force recompilation when debugging and consider all warnings as errors.
 ifeq ("$(BUILD)", "Debug")
-GPR_FLAGS=-f -we
+GPR_FLAGS=-f -we -k
 else
-GPR_FLAGS=-q
+GPR_FLAGS=-f -q
 endif
 
 define echo
@@ -192,6 +192,11 @@ gdb:
 	-@gdb $(HAVK_KERNEL) \
 		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \
 		-ex "continue"
+
+.PHONY: prove
+prove: $(BUILD_DIR)
+	gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) -j 0 -k \
+		--assumptions --pedantic --level=4
 
 .PHONY: clean
 clean: $(BUILD_DIR)

@@ -5,11 +5,10 @@ USE
    HAVK_Kernel,
    HAVK_Kernel.UEFI;
 
-PACKAGE HAVK_Kernel.Graphics WITH
-   SPARK_Mode
+PACKAGE HAVK_Kernel.Graphics
 IS
-   TYPE pixel IS MOD 2 ** 32;
-   TYPE framebuffer IS ARRAY(num RANGE <>) OF pixel;
+   TYPE       pixel IS MOD 2 ** 32;
+   TYPE framebuffer IS ARRAY(num RANGE <>) OF ALIASED pixel;
    FOR  framebuffer'component_size USE 32;
    FOR  framebuffer'alignment      USE  4;
 

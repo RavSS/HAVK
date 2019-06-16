@@ -29,16 +29,38 @@ PACKAGE HAVK_Kernel IS
    TYPE  s16 IS RANGE -(2 ** 15) .. +(2 ** 15 - 1);
    TYPE   s8 IS RANGE -(2 **  7) .. +(2 **  7 - 1);
 
-   -- Generic arrays.
-   TYPE u64s IS ARRAY(num RANGE <>) OF u64;
-   TYPE u32s IS ARRAY(num RANGE <>) OF u32;
-   TYPE u16s IS ARRAY(num RANGE <>) OF u16;
-   TYPE  u8s IS ARRAY(num RANGE <>) OF  u8;
+   -- Generic arrays. These will often be used to reference memory (aliased).
+   TYPE u64s IS ARRAY(num RANGE <>) OF ALIASED u64;
+   TYPE u32s IS ARRAY(num RANGE <>) OF ALIASED u32;
+   TYPE u16s IS ARRAY(num RANGE <>) OF ALIASED u16;
+   TYPE  u8s IS ARRAY(num RANGE <>) OF ALIASED u8;
 
-   TYPE s64s IS ARRAY(num RANGE <>) OF s64;
-   TYPE s32s IS ARRAY(num RANGE <>) OF s32;
-   TYPE s16s IS ARRAY(num RANGE <>) OF s16;
-   TYPE  s8s IS ARRAY(num RANGE <>) OF  s8;
+   TYPE s64s IS ARRAY(num RANGE <>) OF ALIASED s64;
+   TYPE s32s IS ARRAY(num RANGE <>) OF ALIASED s32;
+   TYPE s16s IS ARRAY(num RANGE <>) OF ALIASED s16;
+   TYPE  s8s IS ARRAY(num RANGE <>) OF ALIASED s8;
+
+   -- Size configurations for those types.
+   FOR u64'size USE 64;
+   FOR u32'size USE 32;
+   FOR u16'size USE 16;
+   FOR  u8'size USE 8;
+
+   FOR s64'size USE 64;
+   FOR s32'size USE 32;
+   FOR s16'size USE 16;
+   FOR  s8'size USE 8;
+
+   -- Now the array component sizes.
+   FOR u64s'component_size USE 64;
+   FOR u32s'component_size USE 32;
+   FOR u16s'component_size USE 16;
+   FOR  u8s'component_size USE  8;
+
+   FOR s64s'component_size USE 64;
+   FOR s32s'component_size USE 32;
+   FOR s16s'component_size USE 16;
+   FOR  s8s'component_size USE  8;
 
    TYPE  str IS ARRAY(num RANGE <>) OF character;
 
@@ -46,4 +68,41 @@ PACKAGE HAVK_Kernel IS
    FUNCTION Address_To_num IS NEW Ada.Unchecked_Conversion(
       Source => System.Address,
       Target => num);
+
+   -- Ada (or rather GNAT) seems to expect some bare minimum C library
+   -- functions available like `memcpy()` and `memset()` etc. The linker
+   -- raises an error when there's a reference to their symbols, but because
+   -- I don't have them, they're undefined. That's why these are here.
+   FUNCTION Memory_Copy(
+      Destination : IN System.Address;
+      Source      : IN System.Address;
+      Copy_Size   : IN num)
+   RETURN System.Address
+   WITH
+      Export        => true,
+      Convention    => C,
+      External_Name => "memcpy",
+      Pre           => Copy_Size > 0;
+
+   FUNCTION Memory_Set(
+      Destination : IN System.Address;
+      Set_Value   : IN u8;
+      Set_Size    : IN num)
+   RETURN System.Address
+   WITH
+      Export        => true,
+      Convention    => C,
+      External_Name => "memset",
+      Pre           => Set_Size > 0;
+
+   FUNCTION Memory_Move(
+      Destination : IN System.Address;
+      Source      : IN System.Address;
+      Move_Size   : IN num)
+   RETURN System.Address
+   WITH
+      Export        => true,
+      Convention    => C,
+      External_Name => "memmove",
+      Pre           => Move_Size > 0;
 END HAVK_Kernel;

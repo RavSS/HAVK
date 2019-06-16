@@ -1,6 +1,22 @@
 # Changelog for the HAVK operating system
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date UTC +13:00 )
 
+### Current Tasks - 2019-06-17
+- Create a secondary stack for easy number to string conversion and so
+tagged records are finally available, which is how OOP classes works in Ada.
+- Begin to further flesh out interrupt handler routines, primarily for
+keyboard input at the current moment.
+- Start parsing the memory map provided by the UEFI bootloader and begin
+manipulating the page directory for memory management purposes.
+- Make the UEFI bootloader offer the SFS protocol handle choice more
+more intuitively so the user does not have to guess the handle blindly.
+
+## UPCOMING - 2019-??-??
+### Overall Changes
+- C style memory manipulation functions like `memcpy()` have been created
+inside of Ada. Higher levels of optimization are further possible.
+- Framefont now supports digits/numbers, meaning they are now printable.
+
 ## 00-07-00 - 2019-06-16
 ### Overall Changes
 - HAVK can boot on a bare metal machine and can inaccurately count seconds.

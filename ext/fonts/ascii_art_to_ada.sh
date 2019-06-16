@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-if [ "$1" = "-h" -o "$1" = "--help" ]; then
+if [ "$1" = "-h" -o "$1" = "--help" -o -z "$1" ]; then
 	echo "./ascii_art_to_ada.sh <file containing bitmap font character>"
 	echo -e "\nThis script converts 8x8 ASCII art of a character"
 	echo -e "to an array index initialization for HAVK in Ada.\n"
