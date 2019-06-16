@@ -26,12 +26,11 @@ IS
 
    -- Access the framebuffer that we can hopefully manipulate.
    Screen : -- 4 bytes make up a pixel, so 32 bit pixels.
-      framebuffer(0 .. SHR(Bootloader.Framebuffer_Size - 1, 2))
+      ALIASED framebuffer(0 .. SHR(Bootloader.Framebuffer_Size - 1, 2))
    WITH
-      Import                => true,
-      Convention            => Ada,
-      Volatile              => false, -- TODO: Make `memcpy()` etc.
-      Address               => Bootloader.Framebuffer_Address;
+      Import     => true,
+      Convention => Ada,
+      Address    => Bootloader.Framebuffer_Address;
 
    -- As an early test, I'll draw a grid to the screen.
    Box_Size    : CONSTANT num := 20;
@@ -79,7 +78,7 @@ BEGIN
    -- Prepare the descriptor tables.
    Prepare_GDT;
    Prepare_IDT;
-   Asm("STI;", Volatile => True); -- Enable interrupts.
+   Asm("STI;", Volatile => true); -- Enable interrupts.
 
    Clear_Textbox(Terminal); -- Set to all null characters.
    Terminal.Background_Colour := Create_Pixel(0, 0, 0);
@@ -95,11 +94,14 @@ BEGIN
       Terminal,
       Terminal_Start);
 
+   Print(Terminal, "DIGIT TEST 1234567890");
+   Next_Line(Terminal);
+
    Print(Terminal, "INACCURATE SECONDS COUNT: ");
    Next_Line(Terminal);
 
    LOOP -- Endless loop showcasing interrupts.
-      Asm("HLT;", Volatile => True);
+      Asm("HLT;", Volatile => true);
 
       -- This will count seconds, but if I remember correctly it depends on
       -- the timer's frequency, which I have not retrieved from the UEFI

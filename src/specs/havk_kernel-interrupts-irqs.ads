@@ -4,7 +4,7 @@ IS
       Stack_Frame : IN access_interrupt);
    PRAGMA Machine_Attribute(ISR_32_Handler, "interrupt");
 
-   PROCEDURE ISR_33_Handler(
+   PROCEDURE ISR_33_Handler( -- Keyboard.
       Stack_Frame : IN access_interrupt);
    PRAGMA Machine_Attribute(ISR_33_Handler, "interrupt");
 
