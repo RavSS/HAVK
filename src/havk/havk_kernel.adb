@@ -59,10 +59,7 @@ PACKAGE BODY HAVK_Kernel IS
          Address    => Source;
 
       -- No overlap optimizations for now, double copies is quite slow.
-      Temporary_Buffer     : ALIASED u8s(0 .. Move_Size)
-      WITH
-         Import     => true,
-         Convention => C;
+      Temporary_Buffer     : ALIASED u8s(0 .. Move_Size);
    BEGIN
       FOR Copy IN Source_Location'range LOOP
          Temporary_Buffer(Copy)     := Source_Location(Copy);

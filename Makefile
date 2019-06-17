@@ -193,10 +193,11 @@ gdb:
 		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \
 		-ex "continue"
 
-.PHONY: prove
-prove: $(BUILD_DIR)
-	gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) -j 0 -k \
+.PHONY: proof
+proof: $(BUILD_DIR)
+	-gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) -j 0 -k \
 		--assumptions --pedantic --level=4
+	-@rm -r $(SRC_DIR)gnatprove $(SRC_DIR)build	
 
 .PHONY: clean
 clean: $(BUILD_DIR)

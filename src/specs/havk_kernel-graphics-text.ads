@@ -45,7 +45,7 @@ PACKAGE HAVK_Kernel.Graphics.Text IS
 
    PROCEDURE Print(
       Current_Textbox   : IN OUT textbox;
-      Message           : IN str);
+      Message           : IN string);
 
    PROCEDURE Next_Line(
       Current_Textbox   : IN OUT textbox);
