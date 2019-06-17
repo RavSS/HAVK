@@ -62,8 +62,6 @@ PACKAGE HAVK_Kernel IS
    FOR s16s'component_size USE 16;
    FOR  s8s'component_size USE  8;
 
-   TYPE  str IS ARRAY(num RANGE <>) OF character;
-
    -- This is for converting "System.Address" to "num."
    FUNCTION Address_To_num IS NEW Ada.Unchecked_Conversion(
       Source => System.Address,

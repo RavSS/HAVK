@@ -48,7 +48,7 @@ IS
    Terminal : textbox((Bootloader.Horizontal_Resolution - Terminal_Border) /
       10, (Bootloader.Vertical_Resolution - Terminal_Border) / 11);
 
-   Welcome : CONSTANT str := "WELCOME TO HAVK";
+   Welcome : CONSTANT string := "WELCOME TO HAVK";
 BEGIN
    -- Set up the graphics package variables.
    Screen_Width  := Bootloader.Horizontal_Resolution;
@@ -85,7 +85,6 @@ BEGIN
    Terminal.Foreground_Colour := Create_Pixel(255, 55, 0);
 
    Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - Welcome'length / 2;
-
    Print(Terminal, Welcome);
    Next_Line(Terminal);
 
@@ -94,7 +93,9 @@ BEGIN
       Terminal,
       Terminal_Start);
 
-   Print(Terminal, "DIGIT TEST 1234567890");
+   Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - 37 / 2;
+   Print(Terminal, "ABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890");
+   Next_Line(Terminal);
    Next_Line(Terminal);
 
    Print(Terminal, "INACCURATE SECONDS COUNT: ");

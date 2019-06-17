@@ -122,21 +122,21 @@ IS
    -- It also doesn't mention 64-bit redefines and 0x4 to 0x7 gates becoming
    -- unusable in long mode as of 2019-05-18. Maybe update the wiki-page?
    TYPE IDT_gate_type IS(          -- Types of IDT gates:
-   -- Call_16_Bit,                 -- 80286 16-Bit      Call Gate   (Illegal).
-   -- Task_32_Bit,                 -- 80386 32 Bit      Task Gate   (Illegal).
-   -- Interrupt_16_Bit,            -- 80286 16-Bit Interrupt Gate   (Illegal).
-   -- Trap_16_Bit,                 -- 80286 16-Bit      Trap Gate   (Illegal).
-      Call_64_Bit,                 -- 80386 32-Bit      Call Gate (Redefined).
-      Interrupt_64_Bit,            -- 80386 32-Bit Interrupt Gate (Redefined).
-      Trap_64_Bit);                -- 80386 32-Bit      Trap Gate (Redefined).
+   -- call_16_bit,                 -- 80286 16-Bit      Call Gate   (Illegal).
+   -- task_32_bit,                 -- 80386 32 Bit      Task Gate   (Illegal).
+   -- interrupt_16_bit,            -- 80286 16-Bit Interrupt Gate   (Illegal).
+   -- trap_16_bit,                 -- 80286 16-Bit      Trap Gate   (Illegal).
+      call_64_bit,                 -- 80386 32-Bit      Call Gate (Redefined).
+      interrupt_64_bit,            -- 80386 32-Bit Interrupt Gate (Redefined).
+      trap_64_bit);                -- 80386 32-Bit      Trap Gate (Redefined).
    FOR IDT_gate_type USE(          -- Commonly a 64-bit interrupt is utilized.
-   -- Call_16_Bit         =>  4,   -- 0b0100, 0x4,  4,   Illegal in Long Mode.
-   -- Task_32_Bit         =>  5,   -- 0b0101, 0x5,  5,   Illegal in Long Mode.
-   -- Interrupt_16_Bit    =>  6,   -- 0b0110, 0x6,  6,   Illegal in Long Mode.
-   -- Trap_16_Bit         =>  7,   -- 0b0111, 0x7,  7,   Illegal in Long Mode.
-      Call_64_Bit         => 12,   -- 0b1100, 0xC, 12, Redefined in Long Mode.
-      Interrupt_64_Bit    => 14,   -- 0b1110, 0xE, 14, Redefined in Long Mode.
-      Trap_64_Bit         => 15);  -- 0b1111, 0xF, 15, Redefined in Long Mode.
+   -- call_16_bit         =>  4,   -- 0b0100, 0x4,  4,   Illegal in Long Mode.
+   -- task_32_bit         =>  5,   -- 0b0101, 0x5,  5,   Illegal in Long Mode.
+   -- interrupt_16_bit    =>  6,   -- 0b0110, 0x6,  6,   Illegal in Long Mode.
+   -- trap_16_bit         =>  7,   -- 0b0111, 0x7,  7,   Illegal in Long Mode.
+      call_64_bit         => 12,   -- 0b1100, 0xC, 12, Redefined in Long Mode.
+      interrupt_64_bit    => 14,   -- 0b1110, 0xE, 14, Redefined in Long Mode.
+      trap_64_bit         => 15);  -- 0b1111, 0xF, 15, Redefined in Long Mode.
    FOR IDT_gate_type'size USE 4;   --             4 bits define the gate type.
 
    TYPE IDT_attributes     IS RECORD
@@ -280,7 +280,7 @@ IS
 
    -- Increase this later on if need be.
    TYPE IDT_gates IS ARRAY(num RANGE 0 .. 47) OF IDT_gate;
-   FOR IDT_gates'component_size USE 128;
+   FOR  IDT_gates'component_size USE 128;
    PRAGMA Pack(IDT_gates);
 
    PROCEDURE Prepare_GDT;

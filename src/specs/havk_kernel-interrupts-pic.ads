@@ -5,22 +5,22 @@
 -- https://wiki.osdev.org/8259_PIC
 
 PACKAGE HAVK_Kernel.Interrupts.PIC IS
-   PIC_Master_Command   : CONSTANT num := 16#20#;
-   PIC_Master_Data      : CONSTANT num := 16#21#;
-   PIC_Slave_Command    : CONSTANT num := 16#A0#;
-   PIC_Slave_Data       : CONSTANT num := 16#A1#;
-   PIC_Interrupt_End    : CONSTANT num := PIC_Master_Command;
-   PIC_Request_Register : CONSTANT num := 16#0A#;
-   PIC_Service_Register : CONSTANT num := 16#0B#;
+   Master_Command   : CONSTANT num := 16#20#;
+   Master_Data      : CONSTANT num := 16#21#;
+   Slave_Command    : CONSTANT num := 16#A0#;
+   Slave_Data       : CONSTANT num := 16#A1#;
+   Interrupt_End    : CONSTANT num := Master_Command;
+   Request_Register : CONSTANT num := 16#0A#;
+   Service_Register : CONSTANT num := 16#0B#;
 
-   PROCEDURE PIC_Remap;
+   PROCEDURE Remap;
 
    -- Sends an End Of Interrupt to both PICs regardless if the slave PIC was
    -- utilized. This is put into a NASM routine for higher performance,
    -- as I doubt GCC will inline a similiar native Ada procedure.
-   PROCEDURE PIC_EOI
+   PROCEDURE End_Of_Interrupt
    WITH
-      Import        => True,
+      Import        => true,
       Convention    => C,
       External_Name => "pic_eoi";
 END HAVK_Kernel.Interrupts.PIC;

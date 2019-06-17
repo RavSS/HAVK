@@ -6,7 +6,6 @@ WITH
 USE
    HAVK_Kernel.Interrupts.Exceptions,
    HAVK_Kernel.Interrupts.IRQs,
-   HAVK_Kernel.Interrupts.PIC,
    System.Machine_Code;
 
 PACKAGE BODY HAVK_Kernel.Interrupts IS
@@ -69,61 +68,61 @@ PACKAGE BODY HAVK_Kernel.Interrupts IS
       );
    BEGIN
       -- Remap the interrupt vector so no interrupts overlap etc.
-      PIC_Remap;
+      PIC.Remap;
 
       -- First setup the CPU exceptions.
-      Setup_Interrupt( 0,  ISR_0_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt( 1,  ISR_1_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt( 2,  ISR_2_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt( 3,  ISR_3_Handler'address,      Trap_64_Bit, 0);
-      Setup_Interrupt( 4,  ISR_4_Handler'address,      Trap_64_Bit, 0);
-      Setup_Interrupt( 5,  ISR_5_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt( 6,  ISR_6_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt( 7,  ISR_7_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt( 8,  ISR_8_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt( 9,  ISR_9_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(10, ISR_10_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(11, ISR_11_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(12, ISR_12_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(13, ISR_13_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(14, ISR_14_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(15, ISR_15_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(16, ISR_16_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(17, ISR_17_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(18, ISR_18_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(19, ISR_19_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(20, ISR_20_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(21, ISR_21_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(22, ISR_22_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(23, ISR_23_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(24, ISR_24_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(25, ISR_25_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(26, ISR_26_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(27, ISR_27_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(28, ISR_28_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(29, ISR_29_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(30, ISR_30_Handler'address, Interrupt_64_Bit, 0);
-      Setup_Interrupt(31, ISR_31_Handler'address, Interrupt_64_Bit, 0);
+      Setup_Interrupt( 0,  ISR_0_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt( 1,  ISR_1_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt( 2,  ISR_2_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt( 3,  ISR_3_Handler'address,      trap_64_bit, 0);
+      Setup_Interrupt( 4,  ISR_4_Handler'address,      trap_64_bit, 0);
+      Setup_Interrupt( 5,  ISR_5_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt( 6,  ISR_6_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt( 7,  ISR_7_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt( 8,  ISR_8_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt( 9,  ISR_9_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(10, ISR_10_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(11, ISR_11_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(12, ISR_12_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(13, ISR_13_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(14, ISR_14_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(15, ISR_15_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(16, ISR_16_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(17, ISR_17_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(18, ISR_18_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(19, ISR_19_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(20, ISR_20_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(21, ISR_21_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(22, ISR_22_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(23, ISR_23_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(24, ISR_24_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(25, ISR_25_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(26, ISR_26_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(27, ISR_27_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(28, ISR_28_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(29, ISR_29_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(30, ISR_30_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(31, ISR_31_Handler'address, interrupt_64_bit, 0);
 
       -- Now the IRQs.
       -- TODO: I don't think all of these should be callable
       -- by anything in Ring 3, but it'll do for now.
-      Setup_Interrupt(32, ISR_32_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(33, ISR_33_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(34, ISR_34_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(35, ISR_35_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(36, ISR_36_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(37, ISR_37_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(38, ISR_38_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(39, ISR_39_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(40, ISR_40_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(41, ISR_41_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(42, ISR_42_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(43, ISR_43_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(44, ISR_44_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(45, ISR_45_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(46, ISR_46_Handler'address, Interrupt_64_Bit, 3);
-      Setup_Interrupt(47, ISR_47_Handler'address, Interrupt_64_Bit, 3);
+      Setup_Interrupt(32, ISR_32_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(33, ISR_33_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(34, ISR_34_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(35, ISR_35_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(36, ISR_36_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(37, ISR_37_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(38, ISR_38_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(39, ISR_39_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(40, ISR_40_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(41, ISR_41_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(42, ISR_42_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(43, ISR_43_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(44, ISR_44_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(45, ISR_45_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(46, ISR_46_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(47, ISR_47_Handler'address, interrupt_64_bit, 3);
 
       Asm(
          -- Must disable interrupts before we can setup and use interrupts.
