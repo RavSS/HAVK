@@ -1,13 +1,51 @@
+WITH
+   HAVK_Kernel.PS2,
+   HAVK_Kernel.Intrinsics;
+USE
+   HAVK_Kernel.Intrinsics;
+
 PACKAGE BODY HAVK_Kernel.PS2.Keyboard IS
-   PROCEDURE Set_2_ASCII_Table(
-      PS2_Code_Sum : num)
+   PROCEDURE Interrupt_Manager -- This could be more efficient...
+   IS
+      Codes : ARRAY(num RANGE 0 .. 3) OF num RANGE 0 .. 16#FF# :=
+         (OTHERS => 0);
+   BEGIN
+      CASE Current_Scancode_Set IS
+         WHEN 1 => -- TODO: Set 1 is unimplemented.
+            NULL;
+         WHEN 2 => -- TODO: Set 2 is partially implemented.
+            Codes(0) := INB(IO_Data_Port);
+
+            IF Codes(0) = 16#12# THEN
+               Current_Shift_State := true;
+            ELSIF Codes(0) = 16#F0# AND THEN INB(IO_Data_Port) = 16#12# THEN
+               Current_Shift_State := false;
+            ELSIF Codes(0) /= 16#E0# THEN
+               IF Current_Shift_State = false THEN
+                  Set_2_ASCII_Table(Codes(0));
+               ELSE
+                  Set_2_ASCII_Table(Codes(0) + 16#1E2#);
+               END IF;
+            END IF;
+         WHEN 3 => -- TODO: Set 3 is unimplemented.
+            NULL;
+      END CASE;
+
+      Controller_Flush;
+   END Interrupt_Manager;
+
+   PROCEDURE Set_2_ASCII_Table( -- TODO: This is not fully complete, I believe.
+      PS2_Code_Sum : IN num)
    IS
    BEGIN
       -- 0x1E2 is added to the scancode for shift case (0xE0 + 0xF0 + 0x12).
+      -- Apparently, that is only for some keyboards or controllers?
+      -- I'm going to keep it so I don't have to convert ASCII characters
+      -- from lowercase to uppercase.
       CASE PS2_Code_Sum IS
          WHEN 16#66# => Key := character'val(08); -- Backspace.
          WHEN 16#0D# => Key := character'val(09); -- Tab.
-         WHEN 16#58# => Key := character'val(10); -- Enter (Unix terminator).
+         WHEN 16#5A# => Key := character'val(10); -- Enter (Unix terminator).
          WHEN 16#76# => Key := character'val(27); -- Escape.
 
          WHEN 16#15# => Key := 'q'; WHEN 16#1F7# => Key := 'Q';
@@ -60,8 +98,7 @@ PACKAGE BODY HAVK_Kernel.PS2.Keyboard IS
          WHEN 16#4E# => Key := '-'; WHEN 16#230# => Key := '_';
          WHEN 16#55# => Key := '='; WHEN 16#237# => Key := '+';
 
-         -- WHEN 16## => Key := ''; WHEN 16## => Key := '';
          WHEN OTHERS => Key := character'val(0);
-      END CASE:
+      END CASE;
    END Set_2_ASCII_Table;
 END HAVK_Kernel.PS2.Keyboard;

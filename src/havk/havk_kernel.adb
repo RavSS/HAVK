@@ -1,3 +1,8 @@
+WITH
+   System.Machine_Code;
+USE
+   System.Machine_Code;
+
 PACKAGE BODY HAVK_Kernel IS
    FUNCTION Memory_Copy(
       Destination          : IN System.Address;
@@ -61,7 +66,7 @@ PACKAGE BODY HAVK_Kernel IS
       -- No overlap optimizations for now, double copies is quite slow.
       Temporary_Buffer     : ALIASED u8s(0 .. Move_Size);
    BEGIN
-      FOR Copy IN Source_Location'range LOOP
+      FOR Copy IN  Source_Location'range LOOP
          Temporary_Buffer(Copy)     := Source_Location(Copy);
       END LOOP;
 
@@ -71,4 +76,13 @@ PACKAGE BODY HAVK_Kernel IS
 
       RETURN Destination;
    END Memory_Move;
+
+   PROCEDURE Breakpoint
+   IS
+   BEGIN
+      Asm(
+         "XCHG BX, BX;" & -- For the Bochs magic breakpoint.
+         "INT 3;",        -- Interrupt 3 is the breakpoint trap.
+         Volatile => true);
+   END Breakpoint;
 END HAVK_Kernel;

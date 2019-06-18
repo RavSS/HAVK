@@ -4,6 +4,8 @@ WITH
    HAVK_Kernel.UEFI,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.PS2,
+   HAVK_Kernel.PS2.Keyboard,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 USE
@@ -12,6 +14,7 @@ USE
    HAVK_Kernel.UEFI,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.PS2,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 
@@ -29,7 +32,7 @@ IS
       ALIASED framebuffer(0 .. SHR(Bootloader.Framebuffer_Size - 1, 2))
    WITH
       Import     => true,
-      Convention => Ada,
+      Convention => C,
       Address    => Bootloader.Framebuffer_Address;
 
    -- As an early test, I'll draw a grid to the screen.
@@ -48,7 +51,15 @@ IS
    Terminal : textbox((Bootloader.Horizontal_Resolution - Terminal_Border) /
       10, (Bootloader.Vertical_Resolution - Terminal_Border) / 11);
 
+   PROCEDURE Draw_Terminal;
+   PROCEDURE Draw_Terminal -- Temporary shortcut before tagged records usage.
+   IS
+   BEGIN
+      Draw_Textbox(Screen, Terminal, Terminal_Start);
+   END Draw_Terminal;
+
    Welcome : CONSTANT string := "WELCOME TO HAVK";
+   Scratch : string(1 .. 5);
 BEGIN
    -- Set up the graphics package variables.
    Screen_Width  := Bootloader.Horizontal_Resolution;
@@ -84,19 +95,42 @@ BEGIN
    Terminal.Background_Colour := Create_Pixel(0, 0, 0);
    Terminal.Foreground_Colour := Create_Pixel(255, 55, 0);
 
+   -- Print the welcome message.
    Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - Welcome'length / 2;
    Print(Terminal, Welcome);
    Next_Line(Terminal);
 
-   Draw_Textbox(
-      Screen,
-      Terminal,
-      Terminal_Start);
+   Draw_Terminal;
 
+   -- Print the font test.
    Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - 37 / 2;
    Print(Terminal, "ABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890");
    Next_Line(Terminal);
    Next_Line(Terminal);
+
+   -- Initialize the PS2 controller for input purposes.
+   PS2.Controller_Initialize;
+   IF PS2.Controller_State /= functional THEN
+      Print(Terminal, "YOUR SYSTEM DOES NOT EMULATE A PS2 CONTROLLER.");
+      Next_Line(Terminal);
+      Print(Terminal, "MEANINGFULLY CONTINUING FURTHER IS IMPOSSIBLE.");
+   ELSE
+      Print(Terminal, "TESTING KEYBOARD INPUT. EXIT BY PRESSING ENTER: ");
+      Next_Line(Terminal);
+
+      LOOP -- Keyboard test.
+         Asm("HLT;", Volatile => true);
+         Terminal.Current_X_Index := 1;
+
+         Scratch(1) := PS2.Keyboard.Key;
+         EXIT WHEN Scratch(1) = character'val(10);
+
+         Print(Terminal, Scratch);
+         Draw_Terminal;
+      END LOOP;
+
+      Next_Line(Terminal);
+   END IF;
 
    Print(Terminal, "INACCURATE SECONDS COUNT: ");
    Next_Line(Terminal);
@@ -111,9 +145,6 @@ BEGIN
          Print(Terminal, "X");
       END IF;
 
-      Draw_Textbox(
-         Screen,
-         Terminal,
-         Terminal_Start);
+      Draw_Terminal;
    END LOOP;
 END HAVK;
