@@ -1,12 +1,14 @@
 WITH
    GNAT.Source_Info,
-   HAVK_Kernel.Exceptions;
+   HAVK_Kernel.Exceptions,
+   System.Machine_Code;
 USE
-   HAVK_Kernel.Exceptions;
+   HAVK_Kernel.Exceptions,
+   System.Machine_Code;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
-   PRAGMA Warnings(Off, "formal parameter ""Stack_Frame"" is not referenced");
-   PRAGMA Warnings(Off, "formal parameter ""Error_Code"" is not referenced");
+   PRAGMA Warnings(off, "formal parameter ""Stack_Frame"" is not referenced");
+   PRAGMA Warnings(off, "formal parameter ""Error_Code"" is not referenced");
 
    PROCEDURE ISR_0_Handler(
       Stack_Frame : IN access_interrupt)
@@ -29,11 +31,18 @@ PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
       Last_Chance_Handler(ISR_2_Handler'address, GNAT.Source_Info.Line);
    END ISR_2_Handler;
 
-   PROCEDURE ISR_3_Handler(
+   PROCEDURE ISR_3_Handler( -- Breakpoint. Lazy way for now.
       Stack_Frame : IN access_interrupt)
    IS
+      -- For quick use in GDB when in this ISR's frame e.g. `set $rip=rip`.
+      -- GCC should optimize this out for the final build.
+      PRAGMA Warnings(off, "variable ""RIP"" is not referenced");
+      RIP : num := Stack_Frame.RIP;
    BEGIN
-      Last_Chance_Handler(ISR_3_Handler'address, GNAT.Source_Info.Line);
+      Asm(
+         "CLI;" &
+         "HLT;",
+         Volatile => true);
    END ISR_3_Handler;
 
    PROCEDURE ISR_4_Handler(

@@ -1,13 +1,14 @@
 WITH
    HAVK_Kernel.Interrupts.PIC,
    HAVK_Kernel.PS2,
-   System.Machine_Code;
-USE
-   System.Machine_Code;
+   HAVK_Kernel.PS2.Keyboard;
+   -- System.Machine_Code;
+-- USE
+   -- System.Machine_Code;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
-   PRAGMA Warnings(Off, "formal parameter ""Stack_Frame"" is not referenced");
-   PRAGMA Warnings(Off, "formal parameter ""Error_Code"" is not referenced");
+   PRAGMA Warnings(off, "formal parameter ""Stack_Frame"" is not referenced");
+   PRAGMA Warnings(off, "formal parameter ""Error_Code"" is not referenced");
 
    PROCEDURE ISR_32_Handler(
       Stack_Frame : IN access_interrupt)
@@ -21,7 +22,7 @@ PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      Asm("NOP;", Volatile => True);
+      PS2.Keyboard.Interrupt_Manager;
       PIC.End_Of_Interrupt;
    END ISR_33_Handler;
 

@@ -413,9 +413,21 @@ IS
          2#11111111#,   -- XXXXXXXX
          2#11111111#    -- XXXXXXXX
       ),
-      -- Blank both the control characters and the characters I have not yet
-      -- designed into my bitmap font.
-      OTHERS => (0, 0, 0, 0, 0, 0, 0, 0)
+      -- A space is just background colour.
+      32 => (0, 0, 0, 0, 0, 0, 0, 0),
+      -- Unique shape for both the control characters and the characters
+      -- I have not yet designed into my bitmap font.
+      OTHERS =>
+      (
+         2#11111111#,   -- XXXXXXXX
+         2#10011001#,   -- X  XX  X
+         2#10100101#,   -- X X  X X
+         2#11000011#,   -- XX    XX
+         2#11000011#,   -- XX    XX
+         2#10100101#,   -- X X  X X
+         2#10011001#,   -- X  XX  X
+         2#11111111#    -- XXXXXXXX
+      )
    );
 
 END HAVK_Kernel.Font;

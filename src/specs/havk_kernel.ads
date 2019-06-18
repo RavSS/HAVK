@@ -103,4 +103,10 @@ PACKAGE HAVK_Kernel IS
       Convention    => C,
       External_Name => "memmove",
       Pre           => Move_Size > 0;
+
+   -- This is for causing an emulator breakpoint, so I can inspect
+   -- values with GDB etc. Not very sophisticated, but gets the job done.
+   PROCEDURE Breakpoint
+   WITH
+      Inline => true;
 END HAVK_Kernel;
