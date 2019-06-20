@@ -1,8 +1,8 @@
 PRAGMA Restrictions(No_Enumeration_Maps);
 PRAGMA Restrictions(No_Protected_Types);
 PRAGMA Restrictions(No_Delay);
-PRAGMA Restrictions(No_Secondary_Stack);
-PRAGMA Restrictions(No_Recursion);
+-- PRAGMA Restrictions(No_Secondary_Stack);
+-- PRAGMA Restrictions(No_Recursion);
 PRAGMA Restrictions(No_Allocators);
 PRAGMA Restrictions(No_Dispatch);
 PRAGMA Restrictions(No_Implicit_Heap_Allocations);
