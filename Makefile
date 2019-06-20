@@ -2,8 +2,8 @@
 ######################### HAVK - An Operating System. #########################
 ###############################################################################
 NAME:=HAVK
-VERSION=00-07-00
-BUILD?=Final
+VERSION=UPCOMING
+BUILD?=Debug
 
 GNAT_DIR:=./com/gnatgpl/bin/
 BUILD_DIR:=./build/
@@ -35,9 +35,17 @@ LD:=ld
 AS:=nasm
 
 HAVK_PROJECT:=$(SRC_DIR)$(NAME).gpr
-HAVK_KERNEL_ENTRY:=$(BUILD_DIR)entry.o
+HAVK_RUNTIME:=$(SRC_DIR)$(NAME)_RTS.gpr
+
+# Symbolic link the source directory to the directory structure GCC demands.
+HAVK_RUNTIME_DIR:=$(SRC_DIR)runtime/
+HAVK_ADAINCLUDE_DIR:=$(BUILD_DIR)adainclude/
+HAVK_ADALIB_DIR:=$(BUILD_DIR)adalib/
+
 HAVK_BOOTLOADER:=$(BUILD_DIR)$(NAME).efi
+HAVK_LIBRARY:=$(BUILD_DIR)lib$(NAME).a
 HAVK_KERNEL:=$(BUILD_DIR)$(NAME).elf
+
 HAVK_PARTITION:=$(BUILD_DIR)$(NAME).part
 HAVK_IMAGE:=$(BUILD_DIR)$(NAME).img
 
@@ -45,8 +53,9 @@ OVMF_DIR=./ext/ovmf-x64/
 LIB_DIR=/usr/lib/
 
 EFI_DIR=/usr/include/efi/
-EFI_CRT0=$(SRC_DIR)crt0-efi-x86_64.o
-EFI_LINK=$(SRC_DIR)elf_x86_64_efi.lds
+EFI_SRC_DIR=$(SRC_DIR)uefi/
+EFI_CRT0=$(EFI_SRC_DIR)crt0-efi-x86_64.o
+EFI_LINK=$(EFI_SRC_DIR)elf_x86_64_efi.lds
 
 EFI_C_STD=-std=c11
 EFI_C_WARN=-Wall -Wextra
@@ -64,7 +73,7 @@ EFI_C_FLAGS=$(EFI_C_STD) $(EFI_C_WARN) $(EFI_C_OPT) $(EFI_C_INC) \
 ifeq ("$(BUILD)", "Debug")
 EFI_C_OPT+= -O0 -ggdb3
 else
-EFI_C_OPT+= -O1 -g0
+EFI_C_OPT+= -O2 -g0
 endif
 
 EFI_LD_OPT=-nostdlib -Bsymbolic -shared -no-undefined -znocombreloc
@@ -78,7 +87,7 @@ QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) \
 	-no-shutdown -d int
 
 EFI_NAME=boot
-EFI_C_FILE=$(SRC_DIR)$(EFI_NAME).c
+EFI_C_FILE=$(EFI_SRC_DIR)$(EFI_NAME).c
 EFI_O_FILE=$(BUILD_DIR)$(EFI_NAME).o
 EFI_SO_FILE=$(BUILD_DIR)$(EFI_NAME).so
 
@@ -113,6 +122,12 @@ all: $(HAVK_IMAGE)
 
 $(BUILD_DIR):
 	@if [ ! -d "$@" ]; then mkdir $@; fi
+	@if [ ! -d "$(HAVK_ADALIB_DIR)" ]; then mkdir $(HAVK_ADALIB_DIR); fi
+
+$(HAVK_ADAINCLUDE_DIR): | $(BUILD_DIR)
+	@if [ -d "$@" ]; then rm -r $@; fi
+	@mkdir $(HAVK_ADAINCLUDE_DIR)
+	@cp $(HAVK_RUNTIME_DIR)* $(HAVK_ADAINCLUDE_DIR)
 
 $(EFI_O_FILE): $(EFI_C_FILE) | $(BUILD_DIR)
 	$(call echo, "BUILDING BOOTLOADER TO $(HAVK_BOOTLOADER)")
@@ -137,10 +152,16 @@ $(HAVK_BOOTLOADER): $(EFI_SO_FILE)
 		-j .rel -j .rela -j .reloc --target=efi-app-x86_64 \
 		$< $@
 
-$(HAVK_KERNEL): #$(HAVK_KERNEL_ENTRY) | $(BUILD_DIR)
+$(HAVK_LIBRARY): $(HAVK_ADAINCLUDE_DIR) | $(BUILD_DIR)
+	$(call echo, "BUILDING THE HAVK RUNTIME TO $@")
+
+	gprbuild -P $(HAVK_RUNTIME) -XBuild=$(BUILD) -p -eL \
+		$(GPR_FLAGS) -d -j$(shell nproc --all) -s -o ./../$@
+
+$(HAVK_KERNEL): $(HAVK_LIBRARY) | $(BUILD_DIR)
 	$(call echo, "BUILDING THE HAVK PROJECT TO $@")
 
-	gprbuild -P $(HAVK_PROJECT) -XBuild=$(BUILD) \
+	gprbuild -P $(HAVK_PROJECT) -XBuild=$(BUILD) -p -eL \
 		$(GPR_FLAGS) -d -j$(shell nproc --all) -s -o ./../$@
 
 $(HAVK_PARTITION): $(HAVK_BOOTLOADER) $(HAVK_KERNEL)
@@ -197,11 +218,12 @@ gdb:
 proof: $(BUILD_DIR)
 	-gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) -j 0 -k \
 		--assumptions --pedantic --level=4
-	-@rm -r $(SRC_DIR)gnatprove $(SRC_DIR)build	
+	-@rm -r $(SRC_DIR)gnatprove $(SRC_DIR)build
 
 .PHONY: clean
 clean: $(BUILD_DIR)
 	$(call echo, "CLEANING BUILD DIRECTORY $<")
 
+	gprclean -P $(HAVK_RUNTIME) -XBuild=$(BUILD)
 	gprclean -P $(HAVK_PROJECT) -XBuild=$(BUILD)
 	rm -vr $<

@@ -58,6 +58,18 @@ IS
       Draw_Textbox(Screen, Terminal, Terminal_Start);
    END Draw_Terminal;
 
+   -- FUNCTION Secondary_Stack_Test RETURN string;
+   -- FUNCTION Secondary_Stack_Test RETURN string
+   -- IS
+      -- Random : CONSTANT num := num(Ticker) MOD 42;
+      -- Retstr : string(1 .. integer(Random));
+   -- BEGIN
+      -- FOR I IN Retstr'range LOOP
+         -- Retstr(I) := 'R';
+      -- END LOOP;
+      -- RETURN Retstr;
+   -- END Secondary_Stack_Test;
+
    Welcome : CONSTANT string := "WELCOME TO HAVK";
    Scratch : string(1 .. 5);
 BEGIN
@@ -106,6 +118,9 @@ BEGIN
    Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - 37 / 2;
    Print(Terminal, "ABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890");
    Next_Line(Terminal);
+
+   -- Print(Terminal, Secondary_Stack_Test);
+
    Next_Line(Terminal);
 
    -- Initialize the PS2 controller for input purposes.

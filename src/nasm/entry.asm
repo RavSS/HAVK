@@ -18,7 +18,7 @@ stacks: ; 64 KiB stack.
 	; out of the "primary task stack" for bare metal targets, so
 	; this may not be necessary.
 	;.secondary_base:
-		;RESB 16384
+		;RESB 8192
 	;.secondary_top:
 
 GLOBAL bootloader
