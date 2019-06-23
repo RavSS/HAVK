@@ -42,8 +42,11 @@ PROJECT HAVK IS
          -- but at the big cost of performance. "STRICT" mode is the default.
          -- I've decided to go with mode 3 (former) instead of 1 (latter),
          -- so that's mode "ELIMINATED". It also uses more stack space etc.,
-         -- meaning that a "STORAGE_ERROR" may be raised if a statement
-         -- calculates something that is really large.
+         -- meaning that a Storage_Error may be raised if a statement
+         -- calculates something that is really large. This may currently
+         -- be bugged with the custom RTS, as it does something with the
+         -- s-bignum.ad[b,s] files and `Div_Rem()` seems to be using 128 MB
+         -- of stack space as reported by GCC's stack-check output file.
          "-gnato33");
 
       Ada_Style_Switches := (
@@ -242,7 +245,8 @@ PROJECT HAVK IS
          -- TODO: Set the "storage size" or "default task stack size value".
          -- Is this referring to the available stack space? I've just set it
          -- to 64 KiB, which is what I've allocated in the entry assembly
-         -- file. Figure this out for sure, please.
+         -- file. Figure this out for sure, please. I think this right now does
+         -- nothing since Ada has no control over the primary stack's size.
          "-d65535");
    END Binder;
 

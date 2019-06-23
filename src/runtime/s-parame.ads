@@ -1,8 +1,8 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                          GNAT RUN-TIME COMPONENTS                        --
+--                         GNAT COMPILER COMPONENTS                         --
 --                                                                          --
---                    S Y S T E M . A S S E R T I O N S                     --
+--                    S Y S T E M . P A R A M E T E R S                     --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
@@ -29,22 +29,44 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  This package provides support for assertions (including pragma Assert,
---  pragma Debug, and Precondition/Postcondition/Predicate/Invariant aspects
---  and their corresponding pragmas).
+--  This is a small memory zfp version the package
 
---  This unit may be used directly from an application program by providing
---  an appropriate WITH, and the interface can be expected to remain stable.
+--  This package defines some system dependent parameters for GNAT. These
+--  are values that are referenced by the runtime library and are therefore
+--  relevant to the target machine.
 
-pragma Compiler_Unit_Warning;
+--  The parameters whose value is defined in the spec are not generally
+--  expected to be changed. If they are changed, it will be necessary to
+--  recompile the run-time library.
 
-package System.Assertions is
+--  The parameters which are defined by functions can be changed by modifying
+--  the body of System.Parameters in file s-parame.adb. A change to this body
+--  requires only rebinding and relinking of the application.
 
-   Assert_Failure : exception;
-   --  Exception raised when assertion fails
+--  Note: do not introduce any pragma Inline statements into this unit, since
+--  otherwise the relinking and rebinding capability would be deactivated.
 
-   procedure Raise_Assert_Failure (Msg : String);
-   pragma No_Return (Raise_Assert_Failure);
-   --  Called to raise Assert_Failure with given message
+package System.Parameters is
+   pragma Pure;
 
-end System.Assertions;
+   ------------------------------
+   -- Stack Allocation Control --
+   ------------------------------
+
+   type Size_Type is range
+     -(2 ** (Integer'(Standard'Address_Size) - 1)) ..
+     +(2 ** (Integer'(Standard'Address_Size) - 1)) - 1;
+   --  Type used to provide task stack sizes to the runtime. Sized to permit
+   --  stack sizes of up to half the total addressable memory space. This may
+   --  seem excessively large (even for 32-bit systems), however there are many
+   --  instances of users requiring large stack sizes (for example string
+   --  processing).
+
+   Unspecified_Size : constant Size_Type := Size_Type'First;
+   --  Value used to indicate that no size type is set
+
+   Runtime_Default_Sec_Stack_Size : constant Size_Type := 512;
+   --  The run-time chosen default size for secondary stacks that may be
+   --  overridden by the user with the use of binder -D switch.
+
+end System.Parameters;

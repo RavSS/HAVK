@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUN-TIME COMPONENTS                         --
+--                         GNAT COMPILER COMPONENTS                         --
 --                                                                          --
---                         S Y S T E M . M E M O R Y                        --
+--                    S Y S T E M . P A R A M E T E R S                     --
 --                                                                          --
---                                 B o d y                                  --
+--                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2001-2019, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -28,48 +28,5 @@
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
 --                                                                          --
 ------------------------------------------------------------------------------
+PRAGMA No_Body;
 
---  This implementation assumes that the underlying malloc/free/realloc
---  implementation is thread safe, and thus, no additional lock is required.
-
-with Ada.Exceptions;
-
-package body System.Memory is
-
-   use Ada.Exceptions;
-
-   function c_malloc (Size : size_t) return System.Address;
-   pragma Import (C, c_malloc, "malloc");
-
-   -----------
-   -- Alloc --
-   -----------
-
-   function Alloc (Size : size_t) return System.Address is
-      Result      : System.Address;
-      Actual_Size : size_t := Size;
-
-   begin
-      if Size = size_t'Last then
-         Raise_Exception (Storage_Error'Identity, "object too large");
-      end if;
-
-      --  Change size from zero to nonzero. We still want a proper pointer
-      --  for the zero case because pointers to zero-length objects have to
-      --  be distinct, but we can't just go ahead and allocate zero bytes,
-      --  since some mallocs return zero for a zero argument.
-
-      if Size = 0 then
-         Actual_Size := 1;
-      end if;
-
-      Result := c_malloc (Actual_Size);
-
-      if Result = System.Null_Address then
-         Raise_Exception (Storage_Error'Identity, "heap exhausted");
-      end if;
-
-      return Result;
-   end Alloc;
-
-end System.Memory;
