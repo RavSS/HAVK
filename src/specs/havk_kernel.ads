@@ -77,10 +77,10 @@ PACKAGE HAVK_Kernel IS
       Copy_Size   : IN num)
    RETURN System.Address
    WITH
-      Export        => true,
-      Convention    => C,
+      Export        =>  true,
+      Convention    =>  C,
       External_Name => "memcpy",
-      Pre           => Copy_Size > 0;
+      Pre           =>  Copy_Size > 0;
 
    FUNCTION Memory_Set(
       Destination : IN System.Address;
@@ -88,10 +88,10 @@ PACKAGE HAVK_Kernel IS
       Set_Size    : IN num)
    RETURN System.Address
    WITH
-      Export        => true,
-      Convention    => C,
+      Export        =>  true,
+      Convention    =>  C,
       External_Name => "memset",
-      Pre           => Set_Size > 0;
+      Pre           =>  Set_Size > 0;
 
    FUNCTION Memory_Move(
       Destination : IN System.Address;
@@ -99,10 +99,10 @@ PACKAGE HAVK_Kernel IS
       Move_Size   : IN num)
    RETURN System.Address
    WITH
-      Export        => true,
-      Convention    => C,
+      Export        =>  true,
+      Convention    =>  C,
       External_Name => "memmove",
-      Pre           => Move_Size > 0;
+      Pre           =>  Move_Size > 0;
 
    -- This is for causing an emulator breakpoint, so I can inspect
    -- values with GDB etc. Not very sophisticated, but it gets the job done.

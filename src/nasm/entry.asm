@@ -10,19 +10,8 @@ stacks: ; 64 KiB stack.
 		RESB 65535
 	.primary_top:
 
-	; TODO: The secondary stack is currently disabled. I believe I have
-	; to mess around with GNAT to enable it by first removing the
-	; restriction and then specifying its fixed size and location?
-	; I think this has to be set up by "s-secsta.adb" and "s-secsta.ads"?
-	; According to the GCC documents, the secondary stack is "carved"
-	; out of the "primary task stack" for bare metal targets, so
-	; this may not be necessary.
-	;.secondary_base:
-		;RESB 8192
-	;.secondary_top:
-
 GLOBAL bootloader
-bootloader: ; Store the UEFI bootloader arguments pointer here.
+bootloader: ; Store the UEFI bootloader arguments' pointer here.
 	RESQ 1
 
 SECTION .text

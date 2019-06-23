@@ -54,8 +54,11 @@ PACKAGE BODY HAVK_Kernel IS
       Destination_Location : ALIASED u8s(0 .. Move_Size)
       WITH
          Import     => true,
-         Convention => C,
-         Address    => Destination;
+         Convention => C;
+         -- Address    => Destination;
+      -- Weird GNAT bug keeps coming up if I uncomment the above.
+      -- "Storage_Error stack overflow or erroneous memory access".
+      FOR Destination_Location'address USE Destination;
 
       Source_Location      : ALIASED u8s(0 .. Move_Size)
       WITH

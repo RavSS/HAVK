@@ -58,15 +58,16 @@ IS
       Draw_Textbox(Screen, Terminal, Terminal_Start);
    END Draw_Terminal;
 
+   -- TODO: There's an issue with this next test function. Something requests
+   -- a SS_Allocate mem_request size of 0x7FFFFFFFFFFFFFFF. Not sure if
+   -- the issue is the secondary stack implementation or the big number
+   -- implementation.
+
    -- FUNCTION Secondary_Stack_Test RETURN string;
    -- FUNCTION Secondary_Stack_Test RETURN string
    -- IS
-      -- Random : CONSTANT num := num(Ticker) MOD 42;
-      -- Retstr : string(1 .. integer(Random));
+      -- Retstr : string := "Test";
    -- BEGIN
-      -- FOR I IN Retstr'range LOOP
-         -- Retstr(I) := 'R';
-      -- END LOOP;
       -- RETURN Retstr;
    -- END Secondary_Stack_Test;
 
@@ -118,9 +119,6 @@ BEGIN
    Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - 37 / 2;
    Print(Terminal, "ABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890");
    Next_Line(Terminal);
-
-   -- Print(Terminal, Secondary_Stack_Test);
-
    Next_Line(Terminal);
 
    -- Initialize the PS2 controller for input purposes.
@@ -151,15 +149,13 @@ BEGIN
    Next_Line(Terminal);
 
    LOOP -- Endless loop showcasing interrupts.
-      Asm("HLT;", Volatile => true);
+      Asm("HLT;", Volatile => true); -- Don't burn the CPU.
 
       -- This will count seconds, but if I remember correctly it depends on
       -- the timer's frequency, which I have not retrieved from the UEFI
       -- runtime service function `GetTime()`'s capabilities structure.
-      IF Ticker MOD 100 = 0 THEN
-         Print(Terminal, "X");
-      END IF;
-
+      Terminal.Current_X_Index := 1;
+      Print(Terminal, u64'image(Ticker / 100));
       Draw_Terminal;
    END LOOP;
 END HAVK;

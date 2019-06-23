@@ -196,9 +196,9 @@ IS
 
    TYPE TSS_structure    IS RECORD
       Reserved_1  : num  RANGE 0 .. 16#FFFFFFFF# :=   0;
-      RSP_Ring_0  : num  RANGE 0 ..     num'last :=   0;
-      RSP_Ring_1  : num  RANGE 0 ..     num'last :=   0;
-      RSP_Ring_2  : num  RANGE 0 ..     num'last :=   0;
+      RSP_Ring_0  : num  RANGE 0 ..     num'last :=   0; -- Ring 0 stack.
+      RSP_Ring_1  : num  RANGE 0 ..     num'last :=   0; -- Ring 1 stack.
+      RSP_Ring_2  : num  RANGE 0 ..     num'last :=   0; -- Ring 2 stack.
       Reserved_2  : num  RANGE 0 ..     num'last :=   0;
       IST_1       : num  RANGE 0 ..     num'last :=   0;
       IST_2       : num  RANGE 0 ..     num'last :=   0;
@@ -295,7 +295,7 @@ IS
 
    -- Declare the tables.
    IDT         : IDT_gates; -- Fill this in later to avoid elaboration time.
-   TSS         : TSS_structure;
+   TSS         : TSS_structure; -- Set the kernel stacks later.
    TSS_address : CONSTANT num := Address_To_num(TSS'address);
    GDT         : GDT_entries :=
    (

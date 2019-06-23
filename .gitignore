@@ -2,13 +2,20 @@
 !.gitignore
 
 !src
-!src/x86-BIOS-C
-!src/x86_64-UEFI-Ada
-!src/x86-BIOS-C/grub/boot
-src/x86-BIOS-C/grub/boot/*.bin
-!src/x86-BIOS-C/grub/boot/grub/grub.cfg
+src/gnatprove
+src/*/*.tmp
+
+!ext
+ext/*
+!ext/*.sh
+!ext/ovmf-x64
+!ext/ovmf-x64/*
+!ext/fonts
+!ext/fonts/*
+!ext/bochsrc.txt
 
 !Makefile
-!Makefile.*
 !README.md
 !CHANGELOG.md
+!LICENSE.md
+
