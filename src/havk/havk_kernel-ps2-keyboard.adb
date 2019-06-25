@@ -16,10 +16,12 @@ PACKAGE BODY HAVK_Kernel.PS2.Keyboard IS
          WHEN 2 => -- TODO: Set 2 is partially implemented.
             Codes(0) := INB(IO_Data_Port);
 
-            IF Codes(0) = 16#12# THEN
-               Current_Shift_State := true;
-            ELSIF Codes(0) = 16#F0# AND THEN INB(IO_Data_Port) = 16#12# THEN
-               Current_Shift_State := false;
+            IF Codes(0) = 16#12# THEN -- TODO: Can get stuck in reverse.
+               IF Current_Shift_State = false THEN
+                  Current_Shift_State := true;
+               ELSE
+                  Current_Shift_State := false;
+               END IF;
             ELSIF Codes(0) /= 16#E0# THEN
                IF Current_Shift_State = false THEN
                   Set_2_ASCII_Table(Codes(0));
