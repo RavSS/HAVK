@@ -116,8 +116,14 @@ BEGIN
    Draw_Terminal;
 
    -- Print the font test.
-   Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - 37 / 2;
-   Print(Terminal, "ABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890");
+   Print(Terminal, "FONT TEST:");
+   Next_Line(Terminal);
+   Print(Terminal, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+   Next_Line(Terminal);
+   Print(Terminal, "1234567890");
+   Next_Line(Terminal);
+   Print(Terminal, "!@#$%^&*()_-+=[]{}\|;:'"",<.>/?");
+
    Next_Line(Terminal);
    Next_Line(Terminal);
 
@@ -139,6 +145,7 @@ BEGIN
          EXIT WHEN Scratch(1) = character'val(10);
 
          Print(Terminal, Scratch);
+         -- Print(Terminal, num'image(INB(16#60#))); -- Output PS/2 scancodes.
          Draw_Terminal;
       END LOOP;
 
