@@ -40,7 +40,7 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
       END LOOP;
    END Draw_Character;
 
-   PROCEDURE Shift_Line(
+   PROCEDURE Scroll_Down(
       Current_Textbox : IN OUT textbox)
    IS
    BEGIN
@@ -55,7 +55,7 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
          Current_Textbox.Data(Current_Textbox.Data'last(1), X) :=
             character'val(0);
       END LOOP;
-   END Shift_Line;
+   END Scroll_Down;
 
    PROCEDURE Update_Cursor(
       Current_Textbox : IN OUT textbox)
@@ -68,7 +68,7 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
       END IF;
 
       IF Current_Textbox.Current_Y_Index > Current_Textbox.Data'last(1) THEN
-         Shift_Line(Current_Textbox);
+         Current_Textbox.Scroll_Down;
          Current_Textbox.Current_Y_Index := Current_Textbox.Data'last(1);
       END IF;
    END Update_Cursor;
@@ -99,10 +99,10 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
       Update_Cursor(Current_Textbox);
    END Next_Line;
 
-   PROCEDURE Draw_Textbox(
-      Buffer          : IN OUT framebuffer;
-      Current_Textbox : IN textbox;
-      Pixel_Start     : IN num)
+   PROCEDURE Draw(
+      Current_Textbox   : IN textbox;
+      Buffer            : IN OUT framebuffer;
+      Pixel_Start       : IN num)
    IS
       Current_Pixel   : num := Pixel_Start;
       Row_Separation  : CONSTANT num := Current_Textbox.Line_Separation +
@@ -134,9 +134,9 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
 
          Current_Pixel := Pixel_Start + Y * Next_Row;
       END LOOP;
-   END Draw_Textbox;
+   END Draw;
 
-   PROCEDURE Clear_Textbox(
+   PROCEDURE Clear_All(
       Current_Textbox : IN OUT textbox)
    IS
    BEGIN
@@ -145,5 +145,5 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
             Current_Textbox.Data(Y, X) := character'val(0);
          END LOOP;
       END LOOP;
-   END Clear_Textbox;
+   END Clear_All;
 END HAVK_Kernel.Graphics.Text;

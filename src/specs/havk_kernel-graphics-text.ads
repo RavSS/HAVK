@@ -6,12 +6,12 @@ USE
 
 PACKAGE HAVK_Kernel.Graphics.Text IS
    TYPE textbox_data IS ARRAY(num RANGE <>, num RANGE <>) OF character;
-   FOR textbox_data'component_size USE 8;
+   -- FOR textbox_data'component_size USE 8;
 
    TYPE textbox(
       Textbox_Character_Width  : num;
       Textbox_Character_Height : num)
-   IS RECORD
+   IS TAGGED RECORD
       -- Holds the data for the textbox. It may contain junk upon declaration.
       Data              : textbox_data(1 .. Textbox_Character_Height,
                                        1 .. Textbox_Character_Width);
@@ -37,7 +37,15 @@ PACKAGE HAVK_Kernel.Graphics.Text IS
    -- right now, because I don't have a secondary stack. Just keep the object
    -- as the first parameter to ensure compatibility later on.
 
-   PROCEDURE Shift_Line(
+   PROCEDURE Draw_Character(
+      Buffer            : IN OUT framebuffer;
+      Pixel_Start       : IN num;
+      Foreground_Colour : IN pixel;
+      Background_Colour : IN pixel;
+      ASCII             : IN character);
+
+PRIVATE
+   PROCEDURE Scroll_Down(
       Current_Textbox   : IN OUT textbox);
 
    PROCEDURE Update_Cursor(
@@ -50,19 +58,12 @@ PACKAGE HAVK_Kernel.Graphics.Text IS
    PROCEDURE Next_Line(
       Current_Textbox   : IN OUT textbox);
 
-   PROCEDURE Draw_Character(
-      Buffer            : IN OUT framebuffer;
-      Pixel_Start       : IN num;
-      Foreground_Colour : IN pixel;
-      Background_Colour : IN pixel;
-      ASCII             : IN character);
-
-   PROCEDURE Draw_Textbox(
-      Buffer            : IN OUT framebuffer;
+   PROCEDURE Draw(
       Current_Textbox   : IN textbox;
+      Buffer            : IN OUT framebuffer;
       Pixel_Start       : IN num);
 
-   PROCEDURE Clear_Textbox(
+   PROCEDURE Clear_All(
       Current_Textbox   : IN OUT textbox)
    WITH
       Inline => true;

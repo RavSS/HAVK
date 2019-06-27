@@ -1,5 +1,5 @@
 PACKAGE HAVK_Kernel.PS2.Keyboard IS
-   Key : character
+   Key : character := character'val(0)
    WITH
       Volatile => true;
 

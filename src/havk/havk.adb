@@ -35,10 +35,6 @@ IS
       Convention => C,
       Address    => Bootloader.Framebuffer_Address;
 
-   -- As an early test, I'll draw a grid to the screen.
-   Box_Size    : CONSTANT num := 20;
-   Grid_Colour :        pixel :=  0;
-
    -- The terminal where I will display things to the user concerning the
    -- current system like warnings, errors, info, etc.
    -- Font width and height are both 8 pixels, so divide by 10 the
@@ -51,12 +47,26 @@ IS
    Terminal : textbox((Bootloader.Horizontal_Resolution - Terminal_Border) /
       10, (Bootloader.Vertical_Resolution - Terminal_Border) / 11);
 
-   PROCEDURE Draw_Terminal;
-   PROCEDURE Draw_Terminal -- Temporary shortcut before tagged records usage.
+   -- As an early test, I'll draw a grid to the screen.
+   Box_Size    : CONSTANT num := 20;
+   Grid_Colour :        pixel :=  0;
+
+   PROCEDURE Grid_Test;
+   PROCEDURE Grid_Test
    IS
    BEGIN
-      Draw_Textbox(Screen, Terminal, Terminal_Start);
-   END Draw_Terminal;
+      -- Draw the boxes so a grid is shown across the screen in some shape.
+      FOR Y IN num RANGE 0 .. (Screen_Height / Box_Size) - 1 LOOP
+         FOR X IN num RANGE 0 .. (Screen_Width / Box_Size) - 1 LOOP
+            Draw_Box(
+               Screen,
+               Calculate_Pixel(Box_Size * X, Box_Size * Y),
+               Grid_Colour,
+               Box_Size - 1,
+               Box_Size - 1);
+         END LOOP;
+      END LOOP;
+   END Grid_Test;
 
    -- TODO: There's an issue with this next test function. Something requests
    -- a SS_Allocate mem_request size of 0x7FFFFFFFFFFFFFFF. Not sure if
@@ -86,56 +96,45 @@ BEGIN
    -- Set a colour for the grid. I've set it to "red", so that the user
    -- can confirm if the pixel format is recognized properly.
    Grid_Colour := Create_Pixel(80, 10, 10);
-
-   -- Draw the boxes so a grid is shown across the screen in some shape.
-   FOR Y IN num RANGE 0 .. (Screen_Height / Box_Size) - 1 LOOP
-      FOR X IN num RANGE 0 .. (Screen_Width / Box_Size) - 1 LOOP
-         Draw_Box(
-            Screen,
-            Calculate_Pixel(Box_Size * X, Box_Size * Y),
-            Grid_Colour,
-            Box_Size - 1,
-            Box_Size - 1);
-      END LOOP;
-   END LOOP;
+   Grid_Test;
 
    -- Prepare the descriptor tables.
    Prepare_GDT;
    Prepare_IDT;
    Asm("STI;", Volatile => true); -- Enable interrupts.
 
-   Clear_Textbox(Terminal); -- Set to all null characters.
+   Terminal.Clear_All; -- Set to all null characters.
    Terminal.Background_Colour := Create_Pixel(0, 0, 0);
    Terminal.Foreground_Colour := Create_Pixel(255, 55, 0);
 
    -- Print the welcome message.
    Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - Welcome'length / 2;
-   Print(Terminal, Welcome);
-   Next_Line(Terminal);
-
-   Draw_Terminal;
+   Terminal.Print(Welcome);
+   Terminal.Next_Line;
 
    -- Print the font test.
-   Print(Terminal, "FONT TEST:");
-   Next_Line(Terminal);
-   Print(Terminal, "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-   Next_Line(Terminal);
-   Print(Terminal, "1234567890");
-   Next_Line(Terminal);
-   Print(Terminal, "!@#$%^&*()_-+=[]{}\|;:'"",<.>/?");
+   Terminal.Print("FONT TEST:");
+   Terminal.Next_Line;
+   Terminal.Print("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+   Terminal.Next_Line;
+   Terminal.Print("1234567890");
+   Terminal.Next_Line;
+   Terminal.Print("!@#$%^&*()_-+=[]{}\|;:'"",<.>/?");
+   Terminal.Next_Line;
+   Terminal.Next_Line;
 
-   Next_Line(Terminal);
-   Next_Line(Terminal);
+   Terminal.Draw(Screen, Terminal_Start);
 
    -- Initialize the PS2 controller for input purposes.
    PS2.Controller_Initialize;
    IF PS2.Controller_State /= functional THEN
-      Print(Terminal, "YOUR SYSTEM DOES NOT EMULATE A PS2 CONTROLLER.");
-      Next_Line(Terminal);
-      Print(Terminal, "MEANINGFULLY CONTINUING FURTHER IS IMPOSSIBLE.");
+      Terminal.Print("YOUR SYSTEM DOES NOT EMULATE A PS2 CONTROLLER.");
+      Terminal.Next_Line;
+      Terminal.Print("MEANINGFULLY CONTINUING FURTHER IS IMPOSSIBLE.");
+      Terminal.Draw(Screen, Terminal_Start);
    ELSE
-      Print(Terminal, "TESTING KEYBOARD INPUT. EXIT BY PRESSING ENTER: ");
-      Next_Line(Terminal);
+      Terminal.Print("TESTING KEYBOARD INPUT. EXIT BY PRESSING ENTER: ");
+      Terminal.Next_Line;
 
       LOOP -- Keyboard test.
          Asm("HLT;", Volatile => true);
@@ -144,16 +143,15 @@ BEGIN
          Scratch(1) := PS2.Keyboard.Key;
          EXIT WHEN Scratch(1) = character'val(10);
 
-         Print(Terminal, Scratch);
-         -- Print(Terminal, num'image(INB(16#60#))); -- Output PS/2 scancodes.
-         Draw_Terminal;
+         Terminal.Print(Scratch);
+         -- Terminal.Print(num'image(INB(16#60#))); -- Output PS/2 scancodes.
+         Terminal.Draw(Screen, Terminal_Start);
       END LOOP;
-
-      Next_Line(Terminal);
    END IF;
 
-   Print(Terminal, "INACCURATE SECONDS COUNT: ");
-   Next_Line(Terminal);
+   Terminal.Next_Line;
+   Terminal.Print("INACCURATE SECONDS COUNT: ");
+   Terminal.Next_Line;
 
    LOOP -- Endless loop showcasing interrupts.
       Asm("HLT;", Volatile => true); -- Don't burn the CPU.
@@ -162,7 +160,7 @@ BEGIN
       -- the timer's frequency, which I have not retrieved from the UEFI
       -- runtime service function `GetTime()`'s capabilities structure.
       Terminal.Current_X_Index := 1;
-      Print(Terminal, u64'image(Ticker / 100));
-      Draw_Terminal;
+      Terminal.Print(u64'image(Ticker / 100));
+      Terminal.Draw(Screen, Terminal_Start);
    END LOOP;
 END HAVK;

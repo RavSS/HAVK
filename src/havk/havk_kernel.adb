@@ -80,6 +80,32 @@ PACKAGE BODY HAVK_Kernel IS
       RETURN Destination;
    END Memory_Move;
 
+   FUNCTION Memory_Compare(
+      Compare_1            : IN System.Address;
+      Compare_2            : IN System.Address;
+      Compare_Size         : IN num)
+   RETURN s32                IS
+      Pointer_1            : ALIASED u8s(0 .. Compare_Size)
+      WITH
+         Import     => true,
+         Convention => C,
+         Address    => Compare_1;
+
+      Pointer_2            : ALIASED u8s(0 .. Compare_Size)
+      WITH
+         Import     => true,
+         Convention => C,
+         Address    => Compare_2;
+   BEGIN
+      FOR Compare IN REVERSE 0 .. Compare_Size LOOP
+         IF Pointer_1(Compare) /= Pointer_2(Compare) THEN
+            RETURN s32(Pointer_1(Compare) - Pointer_2(Compare));
+         END IF;
+      END LOOP;
+
+      RETURN 0;
+   END Memory_Compare;
+
    PROCEDURE Breakpoint
    IS
    BEGIN
