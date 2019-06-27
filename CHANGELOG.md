@@ -1,21 +1,29 @@
 # Changelog for the HAVK operating system
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date UTC +13:00 )
 
-### Current Tasks - 2019-06-17
-- Create a secondary stack for easy number to string conversion and so
-tagged records are finally available, which is how OOP classes works in Ada.
-- Begin to further flesh out interrupt handler routines, primarily for
-keyboard input at the current moment.
+### Current Tasks - 2019-06-27
+- Resolve issues with returning unconstrained types.
+- Create better functions for handling keyboard input.
 - Start parsing the memory map provided by the UEFI bootloader and begin
 manipulating the page directory for memory management purposes.
-- Make the UEFI bootloader offer the SFS protocol handle choice more
+- Make the UEFI bootloader offer the SFS protocol handle user choice more
 more intuitively so the user does not have to guess the handle blindly.
 
 ## UPCOMING - 2019-??-??
 ### Overall Changes
 - C style memory manipulation functions like `memcpy()` have been created
-inside of Ada. Higher levels of optimization are further possible.
-- Framefont now supports digits/numbers, meaning they are now printable.
+inside of Ada. Higher GCC optimization flags are further usable.
+- Framefont now supports digits/numbers and a few symbols, meaning
+they are now printable.
+- PS/2 keyboard input now works mostly as expected. Desired improvements can
+be made later on if needed, but they are not urgent or vital.
+- The supplied zero-footprint runtime system is no longer being used and
+it's back to using a custom runtime system.
+- A secondary stack seems to be working, but requires further checking.
+- Imaging attributes are functional, and they have been tested with
+64 bit modular number types.
+- Tagged records are now included in HAVK's runtime system; thus, they can
+be used. This opens the way for object oriented development.
 
 ## 00-07-00 - 2019-06-16
 ### Overall Changes
@@ -96,7 +104,7 @@ uppercase for keywords, mixed-case for variables, and lowercase for types.
 ## 00-04-00 - 2019-04-07
 ### Platform Shift
 - HAVK will now target x86-64. For the sake of security, it will
-utilize Ada as its programming language for critical safety over C. 
+utilize Ada as its programming language for critical safety over C.
 In an attempt to modernize it, HAVK will boot from its own UEFI application,
 as BIOS is slated to not be included in x86(-64) Intel PCs from 2020 forward.
 Changes below to the kernel reflect the x86 and x86-64 versions.
@@ -106,7 +114,7 @@ properly from what I can infer, and jumps to the ELF header entry point after
 all loadable segments are copied into memory successfully.
 - The build system for the HAVK's Ada version is now functional.
 It was created via knowledge from the OSDev Wiki's Ada bare bones tutorial.
-That version is for x86 BIOS. Maybe I should write a UEFI 64-bit 
+That version is for x86 BIOS. Maybe I should write a UEFI 64-bit
 bare bones Ada example after I begin to comprehend Ada more.
 - The run-time system (RTS) is using minimal Ada features, but it can build
 a freestanding ELF program. From what I can see, it mimics the RavenScar

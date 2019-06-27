@@ -72,9 +72,9 @@ PACKAGE HAVK_Kernel IS
    -- raises an error when there's a reference to their symbols, but because
    -- I don't have them, they're undefined. That's why these are here.
    FUNCTION Memory_Copy(
-      Destination : IN System.Address;
-      Source      : IN System.Address;
-      Copy_Size   : IN num)
+      Destination  : IN System.Address;
+      Source       : IN System.Address;
+      Copy_Size    : IN num)
    RETURN System.Address
    WITH
       Export        =>  true,
@@ -83,9 +83,9 @@ PACKAGE HAVK_Kernel IS
       Pre           =>  Copy_Size > 0;
 
    FUNCTION Memory_Set(
-      Destination : IN System.Address;
-      Set_Value   : IN u8;
-      Set_Size    : IN num)
+      Destination  : IN System.Address;
+      Set_Value    : IN u8;
+      Set_Size     : IN num)
    RETURN System.Address
    WITH
       Export        =>  true,
@@ -94,15 +94,26 @@ PACKAGE HAVK_Kernel IS
       Pre           =>  Set_Size > 0;
 
    FUNCTION Memory_Move(
-      Destination : IN System.Address;
-      Source      : IN System.Address;
-      Move_Size   : IN num)
+      Destination  : IN System.Address;
+      Source       : IN System.Address;
+      Move_Size    : IN num)
    RETURN System.Address
    WITH
       Export        =>  true,
       Convention    =>  C,
       External_Name => "memmove",
       Pre           =>  Move_Size > 0;
+
+   FUNCTION Memory_Compare(
+      Compare_1    : IN System.Address;
+      Compare_2    : IN System.Address;
+      Compare_Size : IN num)
+   RETURN s32
+   WITH
+      Export        =>  true,
+      Convention    =>  C,
+      External_Name => "memcmp",
+      Pre           =>  Compare_Size > 0;
 
    -- This is for causing an emulator breakpoint, so I can inspect
    -- values with GDB etc. Not very sophisticated, but it gets the job done.
