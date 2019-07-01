@@ -31,9 +31,15 @@ IS
    Screen : -- 4 bytes make up a pixel, so 32 bit pixels.
       ALIASED framebuffer(0 .. SHR(Bootloader.Framebuffer_Size - 1, 2))
    WITH
-      Import     => true,
-      Convention => C,
-      Address    => Bootloader.Framebuffer_Address;
+      Import        =>  true,
+      Convention    =>  C,
+      Address       =>  Bootloader.Framebuffer_Address;
+
+   Magic : CONSTANT num
+   WITH
+      Import        =>  true,
+      Convention    =>  C,
+      External_Name => "magic";
 
    -- The terminal where I will display things to the user concerning the
    -- current system like warnings, errors, info, etc.
@@ -71,7 +77,7 @@ IS
    -- TODO: There's an issue with this next test function. Something requests
    -- a SS_Allocate mem_request size of 0x7FFFFFFFFFFFFFFF. Not sure if
    -- the issue is the secondary stack implementation or the big number
-   -- implementation.
+   -- implementation, or rather how I've slapped them together in my RTS.
 
    -- FUNCTION Secondary_Stack_Test RETURN string;
    -- FUNCTION Secondary_Stack_Test RETURN string
@@ -110,6 +116,18 @@ BEGIN
    -- Print the welcome message.
    Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - Welcome'length / 2;
    Terminal.Print(Welcome);
+   Terminal.Next_Line;
+   Terminal.Next_Line;
+
+   -- Inform if the magic number is wrong or corrupted.
+   IF    Magic = 16#55_45_46_49# THEN
+      Terminal.Print("BOOT METHOD: UEFI");
+   ELSIF Magic = 16#42_49_4F_53# THEN
+      Terminal.Print("BOOT METHOD: BIOS"); -- If I bother with it.
+   ELSE
+      Terminal.Print("BOOT METHOD: UNKNOWN");
+   END IF;
+
    Terminal.Next_Line;
 
    -- Print the font test.

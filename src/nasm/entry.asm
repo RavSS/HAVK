@@ -5,13 +5,17 @@ BITS 64 ; Already in long mode thanks to UEFI.
 SECTION .bss
 ; System V ABI for x86-64 dictates that stacks grow downwards.
 ALIGN 16 ; 16 byte alignment.
-stacks: ; 64 KiB stack.
-	.primary_base:
+stack: ; 64 KiB stack.
+	.base:
 		RESB 65535
-	.primary_top:
+	.top:
 
 GLOBAL bootloader
 bootloader: ; Store the UEFI bootloader arguments' pointer here.
+	RESQ 1
+
+GLOBAL magic
+magic: ; Store the bootloader's magic number here.
 	RESQ 1
 
 SECTION .text
@@ -22,8 +26,9 @@ entry:
 	; arguments/parameters pointer to a specific location in memory.
 	; The pointer was passed in the way of the x86-64 System V ABI.
 	MOV [bootloader], RDI
+	MOV [magic], RSI
 
-	MOV RSP, stacks.primary_top ; Set up the stack as per usual.
+	MOV RSP, stack.top ; Set up the stack as per usual.
 
 	; The GNAT (Ada specification?) generated "main" section places the
 	; name of the Ada program onto the stack, but that seems pointless
