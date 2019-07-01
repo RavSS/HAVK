@@ -7,8 +7,6 @@
 #include <efi.h>
 #include <efilib.h>
 
-// TODO: The entire bootloader needs to be refactored into multiple functions.
-
 // This should be defined and controlled by the Makefile.
 #ifndef HAVK_VERSION
 	#define HAVK_VERSION L"\?\?-\?\?-\?\?" // Avoid the silly C trigraphs.
@@ -132,18 +130,60 @@ struct uefi_arguments
 	UINT32 memory_map_descriptor_version;
 } __attribute__((packed));
 
+// Global variables.
+EFI_STATUS ret = EFI_SUCCESS; // Return status from UEFI functions.
+EFI_STATUS attempt = EFI_SUCCESS; // Secondary return status variable.
+CHAR16 *buf = NULL; // Initialize later, needs manual allocation.
+
+// EFI GUIDs. These are the ones I'm using so far.
+EFI_GUID simple_file_system_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
+EFI_GUID file_info_guid = EFI_FILE_INFO_ID;
+EFI_GUID graphics_output_protocol_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+
+// EFI protocol variables.
+EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *simple_file_system;
+EFI_FILE_PROTOCOL *root_directory;
+EFI_FILE_PROTOCOL *havk;
+EFI_GRAPHICS_OUTPUT_PROTOCOL *graphics_output_protocol;
+
+// Debug specific functions, variables, etc.
+#if HAVK_GDB_DEBUG
+	BOOLEAN gdb_ready = FALSE;
+
+	// Spinlock that must be modified by GDB to let it continue.
+	#define GDB_BREAKPOINT() do\
+	{\
+		gdb_ready = FALSE;\
+		while(!gdb_ready)\
+			__asm__ volatile("PAUSE;");\
+	}\
+	while (0)
+
+	EFIAPI
+	VOID get_bootloader_base(EFI_HANDLE image_handle)
+	{
+		EFI_LOADED_IMAGE *image_loaded = NULL;
+
+		UEFI(BS->HandleProtocol, 3,
+			image_handle,
+			&LoadedImageProtocol,
+			&image_loaded);
+
+		Print(L"! BOOTLOADER IMAGE BASE: 0x%X\r\n",
+			image_loaded->ImageBase);
+		Print(L"! ESTIMATIONS FOR SECTIONS:\r\n");
+		Print(L"        ! BOOTLOADER TEXT BASE: 0x%X\r\n",
+			image_loaded->ImageBase + 0x3000);
+		Print(L"        ! BOOTLOADER DATA BASE: 0x%X\r\n",
+			image_loaded->ImageBase + 0xC000);
+
+		GDB_BREAKPOINT();
+	}
+#endif
+
 EFIAPI
-EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
+VOID welcome(VOID)
 {
-	// Set up both "system table" and "boot services" access shortcuts.
-	// Note that you will encounter both UEFI function calls with my
-	// wrapper or the shortcut functions found in "efilib.h".
-	// See all references to "AllocatePool" for the general idea.
-	InitializeLib(image_handle, system_table);
-
-	EFI_STATUS ret = EFI_SUCCESS;
-	CHAR16 *buf = AllocatePool(BUF_SIZE + 1);
-
 	// Set the colours for the text.
 	UEFI(ST->ConOut->SetAttribute, 2,
 		ST->ConOut,
@@ -159,11 +199,30 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		ST->ConOut);
 
 	// Print the version notification in the centre of the screen.
-	PrintAt(40 - 12, 1, L"NOW BOOTING HAVK %s\r\n\r\n", HAVK_VERSION);
+	PrintAt(40 - 8, 1, L"NOW BOOTING HAVK\r\n");
+	PrintAt(40 - 8, 2, L"VERSION %s\r\n\r\n", HAVK_VERSION);
 
-	EFI_GUID simple_file_system_guid
-		= EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
+	#ifdef HAVK_GDB_DEBUG
+		Print(L"! COMPILED WITH GDB SPECIFIC DEBUGGING FUNCTIONS\r\n");
+	#endif
+}
 
+EFIAPI
+EFI_HANDLE get_sfs_handle_default(EFI_HANDLE image_handle)
+{
+	EFI_LOADED_IMAGE *image_loaded = NULL;
+
+	UEFI(BS->HandleProtocol, 3,
+		image_handle,
+		&LoadedImageProtocol,
+		&image_loaded);
+
+	return image_loaded->DeviceHandle;
+}
+
+EFIAPI
+EFI_HANDLE get_sfs_handle(VOID)
+{
 	// Prepare to get the correct simple file system handle.
 	EFI_HANDLE *handles = NULL;
 	UINTN handles_found = 0;
@@ -187,7 +246,6 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 			handles_found);
 	}
 
-	EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *simple_file_system;
 	UINTN handle_selected = 0; // EFI_HANDLE index.
 
 	if (handles_found == 1)
@@ -202,14 +260,17 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		handle_selected = Atoi(buf) - 1;
 	}
 
+	return handles[handle_selected];
+}
+
+EFIAPI
+BOOLEAN open_havk(EFI_HANDLE drive_handle)
+{
 	// Use the simple file system protocol to explore the FAT volume.
 	UEFI(BS->HandleProtocol, 3,
-		handles[handle_selected],
+		drive_handle,
 		&simple_file_system_guid,
 		&simple_file_system);
-
-	EFI_FILE_PROTOCOL *root_directory;
-	EFI_FILE_PROTOCOL *havk;
 
 	// Open the root directory of the volume.
 	UEFI(simple_file_system->OpenVolume, 2,
@@ -226,8 +287,12 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 
 	Print(L"HAVK OPENED AT \"%s\"\r\n", HAVK_LOCATION);
 
-	EFI_GUID file_info_guid = EFI_FILE_INFO_ID;
-	EFI_STATUS attempt = EFI_SUCCESS;
+	return TRUE;
+}
+
+EFIAPI
+UINT64 read_havk_size(VOID)
+{
 	EFI_FILE_INFO havk_info;
 	UINT64 havk_info_size = 0;
 
@@ -250,58 +315,73 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		havk,
 		0);
 
-	// Load HAVK's ELF file header.
-	struct elf64_file_header havk_file_header;
+	return havk_info_size;
+}
+
+EFIAPI
+VOID read_file_header(struct elf64_file_header *havk_file_header)
+{
 	UINTN elf64_file_header_size = sizeof(struct elf64_file_header);
 
+	// Read HAVK's ELF file header.
 	UEFI(havk->Read, 3,
 		havk,
 		&elf64_file_header_size,
-		&havk_file_header);
+		*&havk_file_header);
 
 	// Check for the ELF magic numbers. Less confusing to just do
 	// straight comparisons instead of using `StrnCmp` or `strncmpa`
 	// thanks to the irregular character sizes.
-	if (havk_file_header.identity[0] != 0x7F
-		|| havk_file_header.identity[1] != 0x45
-		|| havk_file_header.identity[2] != 0x4C
-		|| havk_file_header.identity[3] != 0x46)
+	if (havk_file_header->identity[0] != 0x7F
+		|| havk_file_header->identity[1] != 0x45
+		|| havk_file_header->identity[2] != 0x4C
+		|| havk_file_header->identity[3] != 0x46)
 	{
 		Print(L"ELF MAGIC NUMBERS ARE MISSING OR CORRUPTED\r\n");
 		CRITICAL_FAILURE();
 	}
 
 	Print(L"HAVK ENTRY POSITION: 0x%X\r\n",
-		havk_file_header.entry_address);
+		havk_file_header->entry_address);
+}
 
+EFIAPI
+VOID read_program_headers(struct elf64_file_header *havk_file_header,
+	struct elf64_program_header **havk_program_headers)
+{
 	// Now it's time to load HAVK's ELF program headers.
-	struct elf64_program_header *havk_program_headers;
-	UINTN havk_program_headers_size = havk_file_header.program_header_size
-		* havk_file_header.program_header_entries;
+	UINTN havk_program_headers_size = havk_file_header->program_header_size
+		* havk_file_header->program_header_entries;
 
 	// Set the position to the offset of the program headers.
 	UEFI(havk->SetPosition, 2,
 		havk,
-		havk_file_header.program_header_offset);
+		havk_file_header->program_header_offset);
 
 	// Allocate pool memory for all of the program headers.
 	UEFI(BS->AllocatePool, 3,
 		EfiLoaderData,
 		havk_program_headers_size,
-		&havk_program_headers);
+		*&havk_program_headers);
 
 	// Now get all of the program headers.
 	UEFI(havk->Read, 3,
 		havk,
 		&havk_program_headers_size,
-		havk_program_headers);
+		*havk_program_headers);
+}
 
+EFIAPI
+VOID load_havk(struct elf64_file_header *havk_file_header,
+	struct elf64_program_header *havk_program_headers)
+{
 	// Time to load the segments. I'm not too familiar with ELF
 	// loading and the System V ABI, so there may be mistakes here.
-	for (UINTN i = 0; i < havk_file_header.program_header_entries; i++)
+	for (UINTN i = 0; i < havk_file_header->program_header_entries; i++)
 	{
 		// If the type is not "LOAD", then skip it.
-		if (havk_program_headers[i].type != 1) continue;
+		if (havk_program_headers[i].type != 1)
+			continue;
 
 		EFI_PHYSICAL_ADDRESS segment_physical_address
 			= havk_program_headers[i].physical_address
@@ -310,7 +390,7 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		// Allocate a page to store the segment.
 		UEFI(BS->AllocatePages, 4,
 			AllocateAddress,
-			EfiLoaderCode, // Correct memory type, I think?
+			EfiLoaderData, // TODO: Correct memory type, I think?
 			EFI_SIZE_TO_PAGES(havk_program_headers[i].memory_size),
 			&segment_physical_address);
 
@@ -339,6 +419,16 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 			havk_program_headers[i].memory_size);
 	}
 
+	// Free the program headers' memory. Since I allocated it without
+	// the shortcut function and with my `UEFI()` wrapper, I'll free it
+	// with the wrapper.
+	UEFI(BS->FreePool, 1,
+		havk_program_headers);
+}
+
+EFIAPI
+VOID cleanup_files(VOID)
+{
 	// Close the files, as we already have HAVK in memory at our
 	// specified physical address now.
 	UEFI(havk->Close, 1,
@@ -346,22 +436,17 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 
 	UEFI(root_directory->Close, 1,
 		root_directory);
+}
 
-	// Free the program headers' memory. Since I allocated it without
-	// the shortcut function and with my `UEFI()` wrapper, I'll free it
-	// with the wrapper.
-	UEFI(BS->FreePool, 1,
-		havk_program_headers);
-
-	// Now to get the framebuffer. GOP is the new version of UGP, so
-	// I guess I will use that instead.
-	EFI_GUID graphics_output_protocol_guid
-		= EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+EFIAPI
+EFI_HANDLE get_gop_handle(VOID)
+{
+	// Now to get the framebuffer. GOP is the new version of UGP.
 
 	// Get the graphics output protocol handle. Get rid of the previously
 	// found handles for the simple file system protocol.
-	*handles = NULL;
-	handles_found = 0;
+	EFI_HANDLE *handles = NULL;
+	UINTN handles_found = 0;
 
 	// Find handles that support the graphics output protocol.
 	UEFI(BS->LocateHandleBuffer, 5,
@@ -374,17 +459,19 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	if (!handles_found)
 	{
 		Print(L"UNABLE TO FIND A GRAPHICS OUTPUT PROTOCOL HANDLE\r\n");
-		Print(L"FAILED TO BOOT HAVK\r\n");
-		Pause();
+		CRITICAL_FAILURE();
 	}
 
 	Print(L"GRAPHICS OUTPUT PROTOCOL HANDLES: %llu\r\n", handles_found);
 
-	EFI_GRAPHICS_OUTPUT_PROTOCOL *graphics_output_protocol;
-	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *graphics_information;
+	return handles[0]; // TODO: Return the first handle for now.
+}
 
+EFIAPI
+UINTN read_screen_resolutions(EFI_HANDLE gop_handle)
+{
 	UEFI(BS->HandleProtocol, 3,
-		handles[0], // TODO: Assume it's the first one.
+		gop_handle,
 		&graphics_output_protocol_guid,
 		&graphics_output_protocol);
 
@@ -408,8 +495,10 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		// What follows is just pretty printing. Specific spaces are
 		// in their hexidecimal representation for easier viewing.
 
-		if (i < 10) Print(L"\x20%llu", i);
-		else Print(L"%llu", i);
+		if (i < 10)
+			Print(L"\x20%llu", i);
+		else
+			Print(L"%llu", i);
 
 		SPrint(buf, BUF_SIZE, L": %ux%u",
 			queried_mode_information->HorizontalResolution,
@@ -419,15 +508,22 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		// Instead of relying on tabs (which don't work everywhere),
 		// format it with spaces.
 		UINTN display_length = StrnLen(buf, BUF_SIZE);
-		for (UINTN x = display_length; x < 13; x++) Print(L"\x20");
+		for (UINTN x = display_length; x < 13; x++)
+			Print(L"\x20");
 
 		// Conserve screen space instead of printing each
 		// mode and resolution on a separate line. A minimum
 		// of 80x25 is guaranteed for console size.
-		if (i % 5 == 0 || i == max_graphics_mode) Print(L"\r\n");
+		if (i % 5 == 0 || i == max_graphics_mode)
+			Print(L"\r\n");
 	}
 
-	// Default is mode zero, the smallest resolution.
+	return max_graphics_mode;
+}
+
+EFIAPI
+VOID set_screen_resolution(UINTN max_graphics_mode)
+{
 	UINTN selected_mode = 0;
 
 	do // Now handle the inputted graphics mode from the user.
@@ -446,6 +542,12 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	UEFI(graphics_output_protocol->SetMode, 2,
 		graphics_output_protocol,
 		selected_mode - 1);
+}
+
+EFIAPI
+VOID get_graphics_information(struct uefi_arguments *arguments)
+{
+	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *graphics_information;
 
 	// Get information for the user's selected mode.
 	UEFI(graphics_output_protocol->QueryMode, 4,
@@ -453,16 +555,6 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		graphics_output_protocol->Mode->Mode,
 		sizeof(graphics_information),
 		&graphics_information);
-
-	// This will get passed to HAVK later on, because we obviously
-	// need to show things on the screen.
-	struct uefi_arguments *arguments;
-
-	// Pool memory for the UEFI arguments.
-	UEFI(BS->AllocatePool, 3,
-		EfiLoaderData,
-		sizeof(arguments),
-		&arguments);
 
 	// Now fill in our self-defined "graphics map".
 	arguments->graphics_mode_current
@@ -495,18 +587,16 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		arguments->framebuffer_address,
 		arguments->framebuffer_address +
 		arguments->framebuffer_size);
+}
 
-	Print(L"PREPARING TO ENTER HAVK\r\n");
+EFIAPI
+VOID get_memory_map(EFI_HANDLE image_handle, struct uefi_arguments *arguments)
+{
 	// From here on out, do not call anything if it is not compulsory.
 	// Otherwise it can mess with the memory map and whatnot.
 
-	// TODO: Get ACPI tables etc. before the memory map.
-
-	// Free the input string buffer, as it is not needed now.
-	FreePool(buf);
-
-	// Begin to get the memory map, which is needed before we
-	// exit UEFI and its boot services.
+	// Begin to get the memory map, which is needed before we exit UEFI
+	// and its boot services. Initialize to non-garbage defaults.
 	arguments->memory_map = NULL;
 	arguments->memory_map_key = 0;
 	arguments->memory_map_size = 0;
@@ -517,11 +607,10 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	// So far, I can't figure out how to do it from looking
 	// at the official UEFI specifications themselves. For now, I'm
 	// completely (over)estimating the amount I will need.
-
 	// You need memory to store the memory map, so allocating space
 	// for the memory map should change the memory map itself?
-
-	// Guess the memory map's size so we can make space for it.
+	//
+	// Guess the memory map's size for now so we can make space for it.
 	// I'm going to go with 10 KiB.
 	arguments->memory_map_size = 10240;
 
@@ -541,31 +630,79 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	while (attempt == EFI_BUFFER_TOO_SMALL);
 	ERROR_CHECK(attempt);
 
-	// Finally exit UEFI and its boot services.
+	// Finally exit UEFI and its boot services. A valid fresh memory map
+	// is mandatory or else this will completely fail to succeed.
 	UEFI(BS->ExitBootServices, 2,
 		image_handle,
 		arguments->memory_map_key);
+}
 
-	// Set the runtime stuff's addresses from physical to virtual.
-	// Don't believe this is necessary most of the time, since the
-	// everything is identity mapped, but let's do it just in case in the
-	// event that physical addresses does not equal virtual addresses.
-	UEFI(RT->SetVirtualAddressMap, 4,
-		arguments->memory_map_size,
-		arguments->memory_map_descriptor_size,
-		arguments->memory_map_descriptor_version,
-		arguments->memory_map);
+EFIAPI
+EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
+{
+	// Set up both "system table" and "boot services" access shortcuts.
+	// Note that you will encounter both UEFI function calls with my
+	// wrapper or the shortcut functions found in "efilib.h".
+	// See all references to "AllocatePool" for the general idea.
+	InitializeLib(image_handle, system_table);
+	buf = AllocatePool(BUF_SIZE + sizeof(CHAR16));
+
+	struct uefi_arguments *arguments = NULL;
+	struct elf64_file_header havk_file_header;
+	struct elf64_program_header *havk_program_headers = NULL;
+
+	welcome();
+
+	#if HAVK_GDB_DEBUG
+		get_bootloader_base(image_handle);
+	#endif
+
+	// TODO: For now, just find the device where the bootloader is
+	// also located. This should save a lot of time guessing, but I aim
+	// to revise this in the future for more user options.
+	//open_havk(get_sfs_handle());
+	open_havk(get_sfs_handle_default(image_handle));
+	read_havk_size();
+
+	read_file_header(&havk_file_header);
+	read_program_headers(&havk_file_header, &havk_program_headers);
+
+	load_havk(&havk_file_header, havk_program_headers);
+	cleanup_files();
+
+	set_screen_resolution(read_screen_resolutions(get_gop_handle()));
+
+	// Free the input string buffer pool, as it is not needed now, and
+	// then allocate a new pool for the arguments. Must be done in order.
+	FreePool(buf);
+	arguments = AllocatePool(sizeof(struct uefi_arguments));
+	Print(L"PREPARING TO ENTER HAVK\r\n");
+
+	// TODO: Get ACPI tables etc. before the memory map.
+	get_graphics_information(arguments);
+	get_memory_map(image_handle, arguments); // UEFI services end here.
+
+	// TODO: This crashes the bootloader on a real system's UEFI firmware.
+	// I have no idea why, but I would like to use the runtime services,
+	// which I am quite sure this is necessary for. Does not freeze
+	// the TianoCore UEFI implementation running in QEMU or Bochs.
+	//
+	//UEFI(RT->SetVirtualAddressMap, 4,
+	//	arguments->memory_map_size,
+	//	arguments->memory_map_descriptor_size,
+	//	arguments->memory_map_descriptor_version,
+	//	arguments->memory_map);
 
 	// I want to pass the memory map etc. to HAVK, so instead of using
 	// inline assembly, I can just tell GCC to use the System V ABI way
 	// of passing arguments to our assembly entry function which is
 	// using the ELF format and adheres to the System V ABI.
 	__attribute__((sysv_abi))
-	void (*enter_havk) (struct uefi_arguments *arguments)
+	void (*enter_havk) (struct uefi_arguments *arguments, UINT64 magic)
 		= (void *) havk_file_header.entry_address;
 
-	// Now we leave at last.
-	enter_havk(arguments);
+	// Now we leave at last. Magic number is ASCII for "UEFI".
+	enter_havk(arguments, 0x55454649);
 
 	return EFI_SUCCESS;
 }

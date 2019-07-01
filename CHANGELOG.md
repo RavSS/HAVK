@@ -1,13 +1,11 @@
 # Changelog for the HAVK operating system
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date UTC +13:00 )
 
-### Current Tasks - 2019-06-27
+### Current Tasks - 2019-07-02
 - Resolve issues with returning unconstrained types.
 - Create better functions for handling keyboard input.
 - Start parsing the memory map provided by the UEFI bootloader and begin
 manipulating the page directory for memory management purposes.
-- Make the UEFI bootloader offer the SFS protocol handle user choice more
-more intuitively so the user does not have to guess the handle blindly.
 
 ## UPCOMING - 2019-??-??
 ### Overall Changes
@@ -24,6 +22,11 @@ it's back to using a custom runtime system.
 64 bit modular number types.
 - Tagged records are now included in HAVK's runtime system; thus, they can
 be used. This opens the way for object oriented development.
+- Refactored the entire UEFI bootloader into separate functions.
+- When booting HAVK, the user no longer has to guess the SFS handle of their
+HAVK boot drive. The choice will be added back in to boot from a separate 
+drive that doesn't contain both the bootloader and the kernel file.
+- HAVK can now tell how it was booted, either via UEFI or BIOS.
 
 ## 00-07-00 - 2019-06-16
 ### Overall Changes

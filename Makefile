@@ -3,14 +3,23 @@
 ###############################################################################
 NAME:=HAVK
 VERSION=UPCOMING
+
+# Currently, there are two build levels: "Final" and "Debug". Case sensitive.
 BUILD?=Debug
+
+# This only has any effect when the build is Debug. As of now, this
+# only controls the additional test functions added in to the UEFI bootloader,
+# and there is two levels: 1 for compiler related switches, 2 for code changes.
+DEBUG_LEVEL?=1
 
 GNAT_DIR:=./com/gnatgpl/bin/
 BUILD_DIR:=./build/
 SRC_DIR:=./src/
 
+# Not the best solution, but should stop anyone from running the Makefile
+# outside its directory, as that could be dangerous. Looks for "src".
 ifeq ("$(wildcard $(SRC_DIR))", "")
-$(error Only run the Makefile from the root directory of HAVK's source 'HAVK')
+$(error Only run the Makefile from the root directory of HAVK's source.)
 endif
 
 # Add the GNAT GPL bin folder to the beginning of the path for `gprbuild`.
@@ -74,6 +83,10 @@ ifeq ("$(BUILD)", "Debug")
 EFI_C_OPT+= -O0 -ggdb3
 else
 EFI_C_OPT+= -O2 -g0
+endif
+
+ifeq ("$(DEBUG_LEVEL)", "2")
+EFI_C_DEF+= -D HAVK_GDB_DEBUG
 endif
 
 EFI_LD_OPT=-nostdlib -Bsymbolic -shared -no-undefined -znocombreloc
@@ -146,7 +159,7 @@ $(HAVK_BOOTLOADER): $(EFI_SO_FILE)
 		-j .rel -j .rela -j .reloc  -j .debug_info -j .debug_abbrev \
 		-j .debug_loc -j .debug_aranges -j .debug_line \
 		-j .debug_macinfo -j .debug_str --target=efi-app-x86_64 \
-		$< $@.debug
+		$< $@.debug;
 
 	objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
 		-j .rel -j .rela -j .reloc --target=efi-app-x86_64 \
@@ -210,7 +223,27 @@ qemu: $(HAVK_IMAGE)
 
 .PHONY: gdb
 gdb:
-	-@gdb $(HAVK_KERNEL) \
+	-@gdb $(HAVK_KERNEL) -q \
+		-ex "set confirm off" \
+		-ex "set architecture i386:x86-64:intel" \
+		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \
+		-ex "continue"
+
+.PHONY: uefi-gdb
+uefi-gdb:
+	@if [ -z "$(UEFI_TEXT)" -o -z "$(UEFI_DATA)" ]; \
+	then \
+		echo "Set both the UEFI_TEXT and UEFI_DATA variables to"; \
+		echo "the appropriate sections when calling Make for"; \
+		echo "the UEFI GDB commands to work as intended."; \
+		exit 1; \
+	fi
+
+	-@gdb $(HAVK_BOOTLOADER) -q \
+		-ex "set confirm off" \
+		-ex "set architecture i386:x86-64:intel" \
+		-ex "add-symbol-file $(HAVK_BOOTLOADER).debug $(UEFI_TEXT) \
+			-s .data $(UEFI_DATA)" \
 		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \
 		-ex "continue"
 
