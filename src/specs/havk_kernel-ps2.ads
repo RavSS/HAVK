@@ -10,8 +10,13 @@ PACKAGE HAVK_Kernel.PS2 IS
       unreliable => 2,
       functional => 3);
 
-   Controller_State      : controller_condition := unknown;
+   SUBTYPE scancode_set IS num RANGE 1 .. 3;
 
+   Controller_State      : controller_condition := unknown;
+   Current_Scancode_Set  :         scancode_set := 2; -- IBM PC AT (default).
+   Current_Shift_State   :              boolean := false;
+
+   -- Constants for abstracting PS/2 controller operations.
    IO_Command_Port       : CONSTANT num := 16#64#;
    IO_Data_Port          : CONSTANT num := 16#60#;
 
@@ -32,6 +37,8 @@ PACKAGE HAVK_Kernel.PS2 IS
 
    Enable_Port_1         : CONSTANT num := 16#AE#;
    Enable_Port_2         : CONSTANT num := 16#A8#;
+
+   Scancode_Set_Options  : CONSTANT num := 16#F0#;
 
    TYPE PS2_configuration  IS RECORD
       Port_1_Enabled     : boolean; -- Enables port 1.
@@ -106,4 +113,16 @@ PACKAGE HAVK_Kernel.PS2 IS
       Inline => true;
 
    PROCEDURE Controller_Initialize;
+
+   PROCEDURE Keyboard_Interrupt_Manager
+   WITH
+      Inline => true;
+
+   PROCEDURE Set_Scancode_Set(
+      Set_Number   : IN scancode_set);
+
+   PROCEDURE Scancode_Set_2(
+      Scancode     : IN num;
+      Shifted      : IN boolean;
+      Break        : IN boolean);
 END HAVK_Kernel.PS2;

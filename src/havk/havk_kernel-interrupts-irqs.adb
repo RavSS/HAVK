@@ -1,7 +1,6 @@
 WITH
    HAVK_Kernel.Interrupts.PIC,
-   HAVK_Kernel.PS2,
-   HAVK_Kernel.PS2.Keyboard;
+   HAVK_Kernel.PS2;
    -- System.Machine_Code;
 -- USE
    -- System.Machine_Code;
@@ -22,7 +21,7 @@ PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PS2.Keyboard.Interrupt_Manager;
+      PS2.Keyboard_Interrupt_Manager;
       PIC.End_Of_Interrupt;
    END ISR_33_Handler;
 

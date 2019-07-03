@@ -36,18 +36,7 @@ PROJECT HAVK IS
          -- without "-ffreestanding".
          "-nostdlib",
          -- No standard include paths.
-         "-nostdinc",
-         -- After doing some reading through the GNAT manual, "ELIMINATED"
-         -- mode removes the possibility of intermediate overflows to happen,
-         -- but at the big cost of performance. "STRICT" mode is the default.
-         -- I've decided to go with mode 3 (former) instead of 1 (latter),
-         -- so that's mode "ELIMINATED". It also uses more stack space etc.,
-         -- meaning that a Storage_Error may be raised if a statement
-         -- calculates something that is really large. This may currently
-         -- be bugged with the custom RTS, as it does something with the
-         -- s-bignum.ad[b,s] files and `Div_Rem()` seems to be using 128 MB
-         -- of stack space as reported by GCC's stack-check output file.
-         "-gnato33");
+         "-nostdinc");
 
       Ada_Style_Switches := (
          -- Indentation of 3 spaces. I would have really liked to stick to

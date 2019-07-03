@@ -42,4 +42,16 @@ IS
    FUNCTION INB(
       Port  : IN num)
    RETURN num;
+
+   PROCEDURE HLT
+   WITH
+      Inline => true;
+
+   PROCEDURE STI
+   WITH
+      Inline => true;
+
+   PROCEDURE PAUSE
+   WITH
+      Inline => true;
 END HAVK_Kernel.Intrinsics;

@@ -90,4 +90,22 @@ IS
          Volatile => True);
       RETURN num(Read);
    END INB;
+
+   PROCEDURE HLT
+   IS
+   BEGIN
+      Asm("HLT;", Volatile => true);
+   END HLT;
+
+   PROCEDURE STI
+   IS
+   BEGIN
+      Asm("STI;", Volatile => true);
+   END STI;
+
+   PROCEDURE PAUSE
+   IS
+   BEGIN
+      Asm("PAUSE;", Volatile => true);
+   END PAUSE;
 END HAVK_Kernel.Intrinsics;

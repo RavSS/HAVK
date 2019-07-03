@@ -19,6 +19,8 @@ PRAGMA Restrictions(No_Exception_Propagation);
 -- PRAGMA Restrictions(No_Direct_Boolean_Operators);
 PRAGMA Normalize_Scalars;
 PRAGMA Discard_Names;
+PRAGMA Assertion_Policy(check);
+PRAGMA Overflow_Mode(MINIMIZED);
 PRAGMA Restrictions(No_Finalization);
 PRAGMA Restrictions(No_Tasking);
 PRAGMA Restrictions(No_Implicit_Dynamic_Code);
