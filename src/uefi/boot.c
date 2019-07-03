@@ -7,6 +7,9 @@
 #include <efi.h>
 #include <efilib.h>
 
+// Magic number. ASCII for "UEFI".
+#define BOOTLOADER_MAGIC 0x55454649
+
 // This should be defined and controlled by the Makefile.
 #ifndef HAVK_VERSION
 	#define HAVK_VERSION L"\?\?-\?\?-\?\?" // Avoid the silly C trigraphs.
@@ -590,7 +593,7 @@ VOID get_graphics_information(struct uefi_arguments *arguments)
 }
 
 EFIAPI
-VOID get_memory_map(EFI_HANDLE image_handle, struct uefi_arguments *arguments)
+VOID get_memory_map(struct uefi_arguments *arguments, EFI_HANDLE image_handle)
 {
 	// From here on out, do not call anything if it is not compulsory.
 	// Otherwise it can mess with the memory map and whatnot.
@@ -609,6 +612,11 @@ VOID get_memory_map(EFI_HANDLE image_handle, struct uefi_arguments *arguments)
 	// completely (over)estimating the amount I will need.
 	// You need memory to store the memory map, so allocating space
 	// for the memory map should change the memory map itself?
+	//
+	// After doing more reading, the required memory map size is returned
+	// by the `GetMemoryMap()` UEFI function if the buffer is too small.
+	// I don't think it's necessary to work with it, as my current method
+	// does the job, albeit not very tidily.
 	//
 	// Guess the memory map's size for now so we can make space for it.
 	// I'm going to go with 10 KiB.
@@ -629,6 +637,14 @@ VOID get_memory_map(EFI_HANDLE image_handle, struct uefi_arguments *arguments)
 		&arguments->memory_map_descriptor_version);
 	while (attempt == EFI_BUFFER_TOO_SMALL);
 	ERROR_CHECK(attempt);
+
+	// TODO: "Fix" the wrong descriptor size. It's not 48, it's 40 bytes.
+	// There is 32 bits of padding after the first 32 bit variable, yet
+	// the structure detailed in the UEFI Specification (Version 2.8
+	// 2.8, Page 165) indicates no padding whatsoever. See the Ada code
+	// for more, specifically in "HAVK_Kernel.UEFI".
+	if (arguments->memory_map_descriptor_size == 48)
+		arguments->memory_map_descriptor_size -= 8;
 
 	// Finally exit UEFI and its boot services. A valid fresh memory map
 	// is mandatory or else this will completely fail to succeed.
@@ -680,7 +696,11 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 
 	// TODO: Get ACPI tables etc. before the memory map.
 	get_graphics_information(arguments);
-	get_memory_map(image_handle, arguments); // UEFI services end here.
+	get_memory_map(arguments, image_handle); // UEFI services end here.
+
+	#if HAVK_GDB_DEBUG
+		GDB_BREAKPOINT();
+	#endif
 
 	// TODO: This crashes the bootloader on a real system's UEFI firmware.
 	// I have no idea why, but I would like to use the runtime services,
@@ -701,8 +721,8 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	void (*enter_havk) (struct uefi_arguments *arguments, UINT64 magic)
 		= (void *) havk_file_header.entry_address;
 
-	// Now we leave at last. Magic number is ASCII for "UEFI".
-	enter_havk(arguments, 0x55454649);
+	// Now we leave at last.
+	enter_havk(arguments, BOOTLOADER_MAGIC);
 
 	return EFI_SUCCESS;
 }

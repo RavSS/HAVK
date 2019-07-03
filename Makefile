@@ -122,7 +122,7 @@ ESP_SECTOR_SIZE=4950
 ifeq ("$(BUILD)", "Debug")
 GPR_FLAGS=-f -we -k
 else
-GPR_FLAGS=-f -q
+GPR_FLAGS=-q
 endif
 
 define echo

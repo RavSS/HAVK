@@ -1,45 +1,55 @@
 WITH
-   System.Machine_Code,
+   -- System.Machine_Code,
    HAVK_Kernel,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Input,
    HAVK_Kernel.PS2,
-   HAVK_Kernel.PS2.Keyboard,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 USE
-   System.Machine_Code,
+   -- System.Machine_Code,
    HAVK_Kernel,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Input,
    HAVK_Kernel.PS2,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 
 PROCEDURE HAVK WITH No_Return
 IS
-   -- Access the UEFI Bootloader passed by HAVK's UEFI bootloader.
+   -- Access the arguments passed by HAVK's UEFI bootloader.
    Bootloader : access_UEFI_arguments
    WITH
       Import        =>  true,
       Convention    =>  C,
       External_Name => "bootloader";
 
-   -- Access the framebuffer that we can hopefully manipulate.
-   Screen : -- 4 bytes make up a pixel, so 32 bit pixels.
-      ALIASED framebuffer(0 .. SHR(Bootloader.Framebuffer_Size - 1, 2))
-   WITH
-      Import        =>  true,
-      Convention    =>  C,
-      Address       =>  Bootloader.Framebuffer_Address;
-
+   -- Bootloader magic number.
    Magic : CONSTANT num
    WITH
       Import        =>  true,
       Convention    =>  C,
       External_Name => "magic";
+
+   -- Access the framebuffer that we can hopefully manipulate.
+   -- 4 bytes make up a pixel, so 32 bit pixels.
+   Screen : ALIASED framebuffer(0 .. Bootloader.Framebuffer_Size / 4)
+   WITH
+      Import        =>  true,
+      Convention    =>  C,
+      Address       =>  Bootloader.Framebuffer_Address;
+
+   -- The UEFI memory map. Assumes the descriptor size has been "fixed".
+   Map    : ALIASED memory_map(0  .. Bootloader.Memory_Map_Size /
+      Bootloader.Memory_Map_Descriptor_Size)
+   WITH
+      Import        =>  true,
+      Convention    =>  C,
+      Address       =>  Bootloader.Memory_Map_Address;
 
    -- The terminal where I will display things to the user concerning the
    -- current system like warnings, errors, info, etc.
@@ -54,8 +64,9 @@ IS
       10, (Bootloader.Vertical_Resolution - Terminal_Border) / 11);
 
    -- As an early test, I'll draw a grid to the screen.
-   Box_Size    : CONSTANT num := 20;
-   Grid_Colour :        pixel :=  0;
+   Box_Size        : CONSTANT num := 20;
+   -- The grid's colour. I set it after I obtain the pixel format.
+   Grid_Colour     :        pixel :=  0;
 
    PROCEDURE Grid_Test;
    PROCEDURE Grid_Test
@@ -74,21 +85,8 @@ IS
       END LOOP;
    END Grid_Test;
 
-   -- TODO: There's an issue with this next test function. Something requests
-   -- a SS_Allocate mem_request size of 0x7FFFFFFFFFFFFFFF. Not sure if
-   -- the issue is the secondary stack implementation or the big number
-   -- implementation, or rather how I've slapped them together in my RTS.
-
-   -- FUNCTION Secondary_Stack_Test RETURN string;
-   -- FUNCTION Secondary_Stack_Test RETURN string
-   -- IS
-      -- Retstr : string := "Test";
-   -- BEGIN
-      -- RETURN Retstr;
-   -- END Secondary_Stack_Test;
-
    Welcome : CONSTANT string := "WELCOME TO HAVK";
-   Scratch : string(1 .. 5);
+   Scratch : string(1 .. 10) := (OTHERS => character'val(0));
 BEGIN
    -- Set up the graphics package variables.
    Screen_Width  := Bootloader.Horizontal_Resolution;
@@ -96,18 +94,14 @@ BEGIN
    Pixel_Size    := Bootloader.Pixels_Per_Scanline / Screen_Width;
    Pixel_Format  := Bootloader.Pixel_Format;
 
-   -- Clear the screen.
+   -- Clear the screen and draw the testing grid.
    Draw_Fill(Screen, Screen'first, Screen'last, 0);
-
-   -- Set a colour for the grid. I've set it to "red", so that the user
-   -- can confirm if the pixel format is recognized properly.
-   Grid_Colour := Create_Pixel(80, 10, 10);
+   Grid_Colour := Create_Pixel(70, 10, 10);
    Grid_Test;
 
    -- Prepare the descriptor tables.
    Prepare_GDT;
    Prepare_IDT;
-   Asm("STI;", Volatile => true); -- Enable interrupts.
 
    Terminal.Clear_All; -- Set to all null characters.
    Terminal.Background_Colour := Create_Pixel(0, 0, 0);
@@ -141,10 +135,19 @@ BEGIN
    Terminal.Next_Line;
    Terminal.Next_Line;
 
+   -- TODO: Needs work.
+   Terminal.Print("MEMORY MAP ENUMERATION:");
+   Terminal.Next_Line;
+   Terminal.Print("MEMORY DESCRIPTORS: " & num'image(Map'length));
+   Terminal.Next_Line;
+   Terminal.Next_Line;
+
    Terminal.Draw(Screen, Terminal_Start);
 
    -- Initialize the PS2 controller for input purposes.
    PS2.Controller_Initialize;
+   STI; -- Enable interrupts.
+
    IF PS2.Controller_State /= functional THEN
       Terminal.Print("YOUR SYSTEM DOES NOT EMULATE A PS2 CONTROLLER.");
       Terminal.Next_Line;
@@ -155,16 +158,25 @@ BEGIN
       Terminal.Next_Line;
 
       LOOP -- Keyboard test.
-         Asm("HLT;", Volatile => true);
+         HLT;
          Terminal.Current_X_Index := 1;
 
-         Scratch(1) := PS2.Keyboard.Key;
+         Scratch(1) := Get_Key;
          EXIT WHEN Scratch(1) = character'val(10);
 
          Terminal.Print(Scratch);
-         -- Terminal.Print(num'image(INB(16#60#))); -- Output PS/2 scancodes.
          Terminal.Draw(Screen, Terminal_Start);
       END LOOP;
+
+      -- LOOP -- Keyboard scancode test.
+         -- Asm("HLT;", Volatile => true);
+         -- Terminal.Print("     "); -- Clear the first 5 characters.
+         -- Terminal.Draw(Screen, Terminal_Start);
+         -- Terminal.Current_X_Index := 1;
+
+         -- Terminal.Print(num'image(INB(16#60#)));
+         -- Terminal.Draw(Screen, Terminal_Start);
+      -- END LOOP;
    END IF;
 
    Terminal.Next_Line;
@@ -172,7 +184,7 @@ BEGIN
    Terminal.Next_Line;
 
    LOOP -- Endless loop showcasing interrupts.
-      Asm("HLT;", Volatile => true); -- Don't burn the CPU.
+      HLT; -- Don't burn the CPU.
 
       -- This will count seconds, but if I remember correctly it depends on
       -- the timer's frequency, which I have not retrieved from the UEFI

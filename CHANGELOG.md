@@ -1,22 +1,23 @@
 # Changelog for the HAVK operating system
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date UTC +13:00 )
 
-### Current Tasks - 2019-07-02
-- Resolve issues with returning unconstrained types.
-- Create better functions for handling keyboard input.
+### Tasklist - 2019-07-04
 - Start parsing the memory map provided by the UEFI bootloader and begin
 manipulating the page directory for memory management purposes.
+- Refactor the main procedure and split the many boot-up operations
+before they get too large. Try making a new package for that purpose.
+- Very specific resolutions like 1366x768 are bugged and unusable.
+- Implement a logging utility to store kernel information.
 
 ## UPCOMING - 2019-??-??
 ### Overall Changes
-- C style memory manipulation functions like `memcpy()` have been created
-inside of Ada. Higher GCC optimization flags are further usable.
 - Framefont now supports digits/numbers and a few symbols, meaning
 they are now printable.
 - PS/2 keyboard input now works mostly as expected. Desired improvements can
 be made later on if needed, but they are not urgent or vital.
 - The supplied zero-footprint runtime system is no longer being used and
-it's back to using a custom runtime system.
+it's back to using a custom runtime system while utilizing a lot of the
+default ZFP RTS's packages.
 - A secondary stack seems to be working, but requires further checking.
 - Imaging attributes are functional, and they have been tested with
 64 bit modular number types.
@@ -27,6 +28,11 @@ be used. This opens the way for object oriented development.
 HAVK boot drive. The choice will be added back in to boot from a separate 
 drive that doesn't contain both the bootloader and the kernel file.
 - HAVK can now tell how it was booted, either via UEFI or BIOS.
+- The overflow mode has been changed from ELIMINATED to MINIMIZED to resolve
+an issue with the bignum package, so e.g. strings can now be returned from 
+functions as the problem is no longer present.
+- How HAVK handles keyboard input and keypresses has been revamped. It is
+now more performance costly, but at the benefit of functionality and clarity.
 
 ## 00-07-00 - 2019-06-16
 ### Overall Changes
