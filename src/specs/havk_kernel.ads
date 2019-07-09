@@ -1,5 +1,5 @@
--- This is the main package for the kernel itself, it just contains
--- some types for usage everywhere else.
+-- This is the main package spec for the kernel itself, it just contains
+-- some types for usage everywhere else, along with some shortcuts.
 WITH
    System,
    Ada.Unchecked_Conversion;
@@ -10,7 +10,7 @@ PACKAGE HAVK_Kernel IS
    TYPE num  IS MOD 2 ** 64; -- Natural number, assuming you include zero.
    TYPE nums IS ARRAY(num RANGE <>) OF num;
    FOR  num'size USE 64;
-   PRAGMA Provide_Shift_Operators(num);
+   PRAGMA Provide_Shift_Operators(num); -- GNAT shift intrinsics are provided.
 
    TYPE int  IS RANGE -(2 ** 63) .. +(2 ** 63 - 1); -- Integer.
    TYPE ints IS ARRAY(num RANGE <>) OF int;
@@ -19,17 +19,17 @@ PACKAGE HAVK_Kernel IS
 
    -- These types should be avoided, but sometimes you need a new type
    -- with a specific range. Don't use these for array/record packing, please.
-   TYPE  u64 IS MOD 2 ** 64;
-   TYPE  u32 IS MOD 2 ** 32;
-   TYPE  u16 IS MOD 2 ** 16;
-   TYPE   u8 IS MOD 2 **  8;
+   TYPE u64  IS MOD 2 ** 64;
+   TYPE u32  IS MOD 2 ** 32;
+   TYPE u16  IS MOD 2 ** 16;
+   TYPE  u8  IS MOD 2 **  8;
 
-   TYPE  s64 IS RANGE -(2 ** 63) .. +(2 ** 63 - 1);
-   TYPE  s32 IS RANGE -(2 ** 31) .. +(2 ** 31 - 1);
-   TYPE  s16 IS RANGE -(2 ** 15) .. +(2 ** 15 - 1);
-   TYPE   s8 IS RANGE -(2 **  7) .. +(2 **  7 - 1);
+   TYPE s64  IS RANGE -(2 ** 63) .. +(2 ** 63 - 1);
+   TYPE s32  IS RANGE -(2 ** 31) .. +(2 ** 31 - 1);
+   TYPE s16  IS RANGE -(2 ** 15) .. +(2 ** 15 - 1);
+   TYPE  s8  IS RANGE -(2 **  7) .. +(2 **  7 - 1);
 
-   -- Generic arrays. These will often be used to reference memory (aliased).
+   -- Generic arrays. These will rarely be used to reference memory (aliased).
    TYPE u64s IS ARRAY(num RANGE <>) OF ALIASED u64;
    TYPE u32s IS ARRAY(num RANGE <>) OF ALIASED u32;
    TYPE u16s IS ARRAY(num RANGE <>) OF ALIASED u16;
@@ -67,9 +67,14 @@ PACKAGE HAVK_Kernel IS
       Source => System.Address,
       Target => num);
 
-   -- This is for causing an emulator breakpoint, so I can inspect
-   -- values with GDB etc. Not very sophisticated, but it gets the job done.
-   PROCEDURE Breakpoint
+   -- The `Debug_*()` calls are just wrappers for the "HAVK_Kernel.Debug"
+   -- package. Mostly so I don't have to "WITH" it everywhere.
+   PROCEDURE Debug_Initialize
+   WITH
+      Inline => true;
+
+   PROCEDURE Debug_Message(
+      Message : IN string)
    WITH
       Inline => true;
 END HAVK_Kernel;
