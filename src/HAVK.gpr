@@ -139,11 +139,11 @@ PROJECT HAVK IS
       END CASE;
 
       -- Add my Ada configuration file and apply it everywhere.
-      FOR Global_Configuration_Pragmas USE "specs/havk.adc";
+      FOR Global_Configuration_Pragmas USE "./specs/havk.adc";
 
       -- Just a default output. The Makefile should control it, so this
       -- is only a fallback.
-      FOR Executable("havk.adb") USE "No_Makefile_HAVK.elf";
+      FOR Executable("havk.adb") USE "../build/No_Makefile_HAVK.elf";
       FOR Executable_Suffix USE ".elf";
    END Builder;
 

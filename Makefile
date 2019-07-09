@@ -46,7 +46,7 @@ AS:=nasm
 HAVK_PROJECT:=$(SRC_DIR)$(NAME).gpr
 HAVK_RUNTIME:=$(SRC_DIR)$(NAME)_RTS.gpr
 
-# Symbolic link the source directory to the directory structure GCC demands.
+# Copy the source directory to the directory structure GNAT demands.
 HAVK_RUNTIME_DIR:=$(SRC_DIR)runtime/
 HAVK_ADAINCLUDE_DIR:=$(BUILD_DIR)adainclude/
 HAVK_ADALIB_DIR:=$(BUILD_DIR)adalib/
@@ -97,7 +97,7 @@ EFI_LD_FLAGS=$(EFI_LD_OPT) $(EFI_LD_INC) $(EFI_CRT0)
 GDB_REMOTE_DEBUG_PORT=40404
 QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) \
 	-d guest_errors -m 1024 -cpu qemu64 -net none -no-reboot \
-	-no-shutdown -d int
+	-no-shutdown # -d int
 
 EFI_NAME=boot
 EFI_C_FILE=$(EFI_SRC_DIR)$(EFI_NAME).c

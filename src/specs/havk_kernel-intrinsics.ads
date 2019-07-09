@@ -10,19 +10,21 @@ IS
    -- GNAT's ones), which I think means they can be used with SPARK, but then
    -- again they utilize inline assembly, which is not allowed in SPARK...
 
-   -- Shift operators. The right-hand number refers to the amount of bits
-   -- in the number, and the function itself returns a type of that size.
-   ----------------------------------------------------------------------------
+   -- Shift a value to the left (<<).
    FUNCTION SHL(
       Value  : IN num;
       Shifts : IN num)
-   RETURN num;
+   RETURN num
+   WITH
+      Inline => true;
 
+   -- Shift a value to the right (>>).
    FUNCTION SHR(
       Value  : IN num;
       Shifts : IN num)
-   RETURN num;
-   ----------------------------------------------------------------------------
+   RETURN num
+   WITH
+      Inline => true;
 
    -- Does a bit test on a specific value and returns true for a set bit etc.
    -- Note that the BT instruction might be slow when factoring in
@@ -32,26 +34,36 @@ IS
    FUNCTION BT(
       Value : IN num;
       Bit   : IN num)
-   RETURN boolean;
+   RETURN boolean
+   WITH
+      Inline => true;
 
-   -- IN and OUT port instructions.
+   -- Outputs a byte to an IO port.
    PROCEDURE OUTB(
       Port  : IN num;
-      Value : IN num);
+      Value : IN num)
+   WITH
+      Inline => true;
 
+   -- Reads a byte from an IO port.
    FUNCTION INB(
       Port  : IN num)
-   RETURN num;
+   RETURN num
+   WITH
+      Inline => true;
 
+   -- Halts the CPU.
    PROCEDURE HLT
    WITH
       Inline => true;
 
+   -- Enables interrupts.
    PROCEDURE STI
    WITH
       Inline => true;
 
-   PROCEDURE PAUSE
+   -- Disables interrupts.
+   PROCEDURE CLI
    WITH
       Inline => true;
 END HAVK_Kernel.Intrinsics;

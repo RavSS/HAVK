@@ -1,15 +1,18 @@
 WITH
-   System.Machine_Code;
-USE
-   System.Machine_Code;
+   HAVK_Kernel.Debug;
 
 PACKAGE BODY HAVK_Kernel IS
-   PROCEDURE Breakpoint
+   -- TODO: Is there a way I can avoid these wrappers for the debug procedures?
+   PROCEDURE Debug_Initialize
    IS
    BEGIN
-      Asm(
-         "XCHG BX, BX;" & -- For the Bochs magic breakpoint.
-         "INT 3;",        -- Interrupt 3 is the breakpoint trap.
-         Volatile => true);
-   END Breakpoint;
+      Debug.Initialize;
+   END Debug_Initialize;
+
+   PROCEDURE Debug_Message(
+      Message : IN string)
+   IS
+   BEGIN
+      Debug.Message(Message);
+   END Debug_Message;
 END HAVK_Kernel;

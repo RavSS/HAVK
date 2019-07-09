@@ -103,9 +103,9 @@ IS
       Asm("STI;", Volatile => true);
    END STI;
 
-   PROCEDURE PAUSE
+   PROCEDURE CLI
    IS
    BEGIN
-      Asm("PAUSE;", Volatile => true);
-   END PAUSE;
+      Asm("CLI;", Volatile => true);
+   END CLI;
 END HAVK_Kernel.Intrinsics;
