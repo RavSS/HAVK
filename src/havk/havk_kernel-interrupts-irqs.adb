@@ -1,9 +1,6 @@
 WITH
    HAVK_Kernel.Interrupts.PIC,
    HAVK_Kernel.PS2;
-   -- System.Machine_Code;
--- USE
-   -- System.Machine_Code;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
    PRAGMA Warnings(off, "formal parameter ""Stack_Frame"" is not referenced");

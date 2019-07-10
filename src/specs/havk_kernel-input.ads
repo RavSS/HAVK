@@ -18,19 +18,19 @@ PACKAGE HAVK_Kernel.Input IS
       Key_Shifted       : boolean;
    END RECORD;
 
-   -- Lock/blocking variable.
-   Key_State_Requested  : boolean := false;
-
    -- Pads out the fixed string.
    FUNCTION Key_String_Format(
       Unformatted : IN string)
    RETURN key_string
    WITH
-      Pre => Unformatted'length <= key_string'length;
+      Inline => true,
+      Pre    => Unformatted'length <= key_string'length;
 
    -- See the "Last_Key_State" variable for this function's purpose.
    FUNCTION Get_Key_State
-   RETURN key_state;
+   RETURN key_state
+   WITH
+      Inline => true;
 
    -- Purpose is the same as the above function's purpose.
    PROCEDURE Set_Key_State(
@@ -40,7 +40,9 @@ PACKAGE HAVK_Kernel.Input IS
       ASCII_Shifted : character;
       Printable     : boolean;
       Break         : boolean;
-      Shifted       : boolean);
+      Shifted       : boolean)
+   WITH
+      Inline => true;
 
    -- Shortcut function.
    FUNCTION Get_Key

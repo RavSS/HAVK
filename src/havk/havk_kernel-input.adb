@@ -1,11 +1,6 @@
-WITH
-   System.Machine_Code;
-USE
-   System.Machine_Code;
-
 PACKAGE BODY HAVK_Kernel.Input IS
    FUNCTION Key_String_Format(
-      Unformatted :  IN string)
+      Unformatted : IN string)
    RETURN key_string IS
       Formatted   : key_string;
    BEGIN
@@ -23,31 +18,18 @@ PACKAGE BODY HAVK_Kernel.Input IS
    FUNCTION Get_Key_State
    RETURN key_state IS
    BEGIN
-      Key_State_Requested := true;
-
-      WHILE Key_State_Requested LOOP
-         -- The variable should flip back to false when the request is done.
-         Asm("HLT;", Volatile => true); -- HLT instead of PAUSE to save power.
-      END LOOP;
-
       RETURN Last_Key_State;
    END Get_Key_State;
 
    FUNCTION Get_Key
    RETURN character IS
-      Current_Key_State : key_state := Get_Key_State;
+      Current_Key_State : CONSTANT key_state := Get_Key_State;
    BEGIN
-      LOOP
-         IF Current_Key_State.Key_Break = false THEN
-            IF Current_Key_State.Key_Shifted    THEN
-               RETURN Current_Key_State.Key_ASCII_Shifted;
-            ELSE
-               RETURN Current_Key_State.Key_ASCII;
-            END IF;
-         ELSE
-            Current_Key_State := Get_Key_State;
-         END IF;
-      END LOOP;
+      IF Current_Key_State.Key_Shifted THEN
+         RETURN Current_Key_State.Key_ASCII_Shifted;
+      ELSE
+         RETURN Current_Key_State.Key_ASCII;
+      END IF;
    END Get_Key;
 
    PROCEDURE Set_Key_State(

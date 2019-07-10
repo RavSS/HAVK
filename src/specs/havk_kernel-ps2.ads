@@ -118,9 +118,6 @@ PACKAGE HAVK_Kernel.PS2 IS
    WITH
       Inline => true;
 
-   PROCEDURE Set_Scancode_Set(
-      Set_Number   : IN scancode_set);
-
    PROCEDURE Scancode_Set_2(
       Scancode     : IN num;
       Shifted      : IN boolean;

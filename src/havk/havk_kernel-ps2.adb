@@ -109,22 +109,19 @@ PACKAGE BODY HAVK_Kernel.PS2 IS
          WHEN 2 => -- TODO: Set 2 is partially implemented.
             Codes(1) := INB(IO_Data_Port);
 
-            IF Codes(1) = 16#12#        THEN -- TODO: Can get stuck in reverse.
-               IF Current_Shift_State   THEN
+            IF Codes(1) = 16#12#      THEN -- TODO: Can get stuck in reverse.
+               IF Current_Shift_State THEN
                   Current_Shift_State := false;
                ELSE
                   Current_Shift_State := true;
                END IF;
-            ELSIF Codes(1) /= 16#E0#    THEN
-               IF Key_State_Requested   THEN -- Only get keys when wanted.
-                  IF Codes(1) /= 16#F0# THEN -- Handle the break.
-                     Codes(2) := INB(IO_Data_Port);
-                     Scancode_Set_2(Codes(2), Current_Shift_State, false);
-                  ELSE
-                     Scancode_Set_2(Codes(1), Current_Shift_State, true);
-                  END IF;
-
-                  Key_State_Requested := false; -- Reset it.
+            ELSIF Codes(1) /= 16#E0#  THEN -- TODO: Handle the special keys.
+               IF Codes(1) /= 16#F0#  THEN -- Handle the break.
+                  Codes(2) := INB(IO_Data_Port);
+                  Scancode_Set_2(Codes(2), Current_Shift_State, false);
+               ELSE
+                  Codes(2) := INB(IO_Data_Port);
+                  Scancode_Set_2(Codes(2), Current_Shift_State, true);
                END IF;
             END IF;
          WHEN 3 => -- TODO: Set 3 is unimplemented.
@@ -133,14 +130,6 @@ PACKAGE BODY HAVK_Kernel.PS2 IS
 
       Controller_Flush;
    END Keyboard_Interrupt_Manager;
-
-   PROCEDURE Set_Scancode_Set(
-      Set_Number : scancode_set)
-   IS
-   BEGIN -- TODO: Lacks PS/2 controller error checking as usual.
-      OUTB(IO_Command_Port, Scancode_Set_Options);
-      OUTB(IO_Data_Port,    Set_Number);
-   END Set_Scancode_Set;
 
    PROCEDURE Scancode_Set_2( -- TODO: This is not fully complete, I believe.
       Scancode      : IN num;
@@ -422,7 +411,7 @@ PACKAGE BODY HAVK_Kernel.PS2 IS
             Name_Shifted  := Key_String_Format("UNKNOWN");
       END CASE;
 
-      Set_Key_State(Name, Name_Shifted, ASCII, ASCII_Shifted, Printable,
-         Break, Shifted);
+      Set_Key_State(Name, Name_Shifted, ASCII, ASCII_Shifted,
+         Printable, Break, Shifted);
    END Scancode_Set_2;
 END HAVK_Kernel.PS2;

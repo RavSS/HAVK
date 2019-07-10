@@ -1,16 +1,19 @@
 # Changelog for the HAVK operating system
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date UTC +13:00 )
 
-### Tasklist - 2019-07-09
+### Tasklist - 2019-07-10
 - Start parsing the memory map provided by the UEFI bootloader and begin
 manipulating the page directory for memory management purposes.
 - Refactor the main procedure and split the many boot-up operations
 before they get too large. Try making a new package for that purpose.
 - Very specific resolutions like 1366x768 are bugged and unusable.
 - Implement a logging utility to store kernel information.
-- Prepare to update the version.
+- If there's too many keypresses too fast, the keyboard shift state
+can become stuck.
 
 ## UPCOMING - 2019-??-??
+
+## 00-08-00 - 2019-07-10
 ### Overall Changes
 - Framefont now supports digits/numbers and a few symbols, meaning
 they are now printable.
@@ -38,6 +41,7 @@ the possibility for bare metal debugging. At the moment, it just sends
 progress messages.
 - ASCII numerical characters in strings can now be scanned and read
 into proper number types due to an expansion of the runtime system.
+- Trimmed down read-me and made it more to the point.
 
 ## 00-07-00 - 2019-06-16
 ### Overall Changes
