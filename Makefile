@@ -2,10 +2,10 @@
 ######################### HAVK - An Operating System. #########################
 ###############################################################################
 NAME:=HAVK
-VERSION=00-08-00
+VERSION=UPCOMING
 
 # Currently, there are two build levels: "Final" and "Debug". Case sensitive.
-BUILD?=Final
+BUILD?=Debug
 
 # This only has any effect when the build is Debug. As of now, this
 # only controls the additional test functions added in to the UEFI bootloader,
@@ -118,11 +118,16 @@ ESP_SECTOR_START=50
 ESP_SECTOR_END=5000
 ESP_SECTOR_SIZE=4950
 
-# Force recompilation when debugging and consider all warnings as errors.
+# Force kernel recompilation when debugging and consider warnings as errors.
+# Also control the optimization here so it's easier to tweak.
 ifeq ("$(BUILD)", "Debug")
-GPR_FLAGS=-f -we -k
+O?=0
+GPR_RTS_FLAGS=-we -k -d -O$(O)
+GPR_KERNEL_FLAGS=-we -k -d -f -O$(O)
 else
-GPR_FLAGS=-q
+O?=2
+GPR_RTS_FLAGS=-q -vP0 -O$(O)
+GPR_KERNEL_FLAGS=-q -vP0 -O$(O)
 endif
 
 define echo
@@ -165,20 +170,20 @@ $(HAVK_BOOTLOADER): $(EFI_SO_FILE)
 		-j .rel -j .rela -j .reloc --target=efi-app-x86_64 \
 		$< $@
 
-$(HAVK_LIBRARY): $(HAVK_ADAINCLUDE_DIR) | $(BUILD_DIR)
+$(HAVK_LIBRARY): | $(HAVK_ADAINCLUDE_DIR) $(BUILD_DIR)
 	$(call echo, "BUILDING THE HAVK RUNTIME TO $@")
 
 	gprbuild -P $(HAVK_RUNTIME) -XBuild=$(BUILD) -p -eL \
-		$(GPR_FLAGS) -d -j$(shell nproc --all) -s -o ./../$@
+		$(GPR_RTS_FLAGS) -j0 -s -o ./../$@
 
 $(HAVK_KERNEL): $(HAVK_LIBRARY) | $(BUILD_DIR)
-	$(call echo, "BUILDING THE HAVK PROJECT TO $@")
+	$(call echo, "BUILDING THE HAVK KERNEL TO $@")
 
 	gprbuild -P $(HAVK_PROJECT) -XBuild=$(BUILD) -p -eL \
-		$(GPR_FLAGS) -d -j$(shell nproc --all) -s -o ./../$@
+		$(GPR_KERNEL_FLAGS) -j0 -s -o ./../$@
 
 $(HAVK_PARTITION): $(HAVK_BOOTLOADER) $(HAVK_KERNEL)
-	$(call echo, "CREATING EFI SYSTEM PARTITION")
+	$(call echo, "CREATING EFI SYSTEM PARTITION FILE")
 
 	dd if=/dev/zero of=$@ bs=$(IMAGE_BLOCK_SIZE) count=$(ESP_SECTOR_SIZE)
 	mkfs.fat -v -F $(FAT_SIZE) -s 1 -S $(IMAGE_BLOCK_SIZE) $@
@@ -195,7 +200,7 @@ $(HAVK_IMAGE): $(HAVK_PARTITION)
 
 	dd if=/dev/zero of=$@ bs=$(IMAGE_BLOCK_SIZE) count=$(IMAGE_SECTORS)
 
-	parted $@ --align optimal --script \
+	parted $@ --align minimal --script \
 		mktable gpt \
 		mkpart primary fat$(FAT_SIZE) \
 			$(ESP_SECTOR_START)s $(ESP_SECTOR_END)s \
@@ -214,7 +219,7 @@ qemu: $(HAVK_IMAGE)
 	-drive if=pflash,format=raw,unit=0,\
 	file=$(OVMF_DIR)OVMF_CODE-pure-efi.fd,readonly=on \
 	-drive if=pflash,format=raw,unit=1,\
-	file=$(OVMF_DIR)OVMF_VARS-pure-efi.fd,readonly=off \
+	file=$(OVMF_DIR)OVMF_VARS-pure-efi.fd,readonly=on \
 	-drive index=0,format=raw,media=disk,\
 	file=$<,readonly=off \
 	$(QEMU_FLAGS)
@@ -252,6 +257,21 @@ proof: $(BUILD_DIR)
 	-gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) -j 0 -k \
 		--assumptions --pedantic --level=4
 	-@rm -r $(SRC_DIR)gnatprove $(SRC_DIR)build
+
+.PHONY: stats
+stats:
+	$(call echo, "HAVK KERNEL STATISTICS")
+
+	@echo -n "Makefile kernel image size capacity: \
+	$(shell du -sh $(HAVK_KERNEL) \
+		| awk -F '\t' '{print $$1}')"
+
+	@echo -e " / $(shell du -sh $(HAVK_PARTITION) \
+		| awk -F '\t' '{print $$1}')\n"
+
+	@cd $(SRC_DIR) && \
+		gnatmetric -P HAVK.gpr -XBuild=$(BUILD) -U --contract-all \
+		--syntax-all --lines-all --lines-spark --complexity-all
 
 .PHONY: clean
 clean: $(BUILD_DIR)

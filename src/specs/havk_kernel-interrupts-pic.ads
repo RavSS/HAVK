@@ -13,6 +13,8 @@ PACKAGE HAVK_Kernel.Interrupts.PIC IS
    Request_Register : CONSTANT num := 16#0A#;
    Service_Register : CONSTANT num := 16#0B#;
 
+   -- Remaps the interrupt vector so the IRQs do not overlap with the CPU
+   -- exceptions, but instead come directly after them.
    PROCEDURE Remap;
 
    -- Sends an End Of Interrupt to both PICs regardless if the slave PIC was
@@ -21,6 +23,7 @@ PACKAGE HAVK_Kernel.Interrupts.PIC IS
    PROCEDURE End_Of_Interrupt
    WITH
       Import        => true,
-      Convention    => C,
+      Inline        => true,
+      Convention    => NASM,
       External_Name => "pic_eoi";
 END HAVK_Kernel.Interrupts.PIC;

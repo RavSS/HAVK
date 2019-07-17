@@ -6,7 +6,7 @@ PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
    PRAGMA Warnings(off, "formal parameter ""Stack_Frame"" is not referenced");
    PRAGMA Warnings(off, "formal parameter ""Error_Code"" is not referenced");
 
-   PROCEDURE ISR_32_Handler(
+   PROCEDURE ISR_32_Handler( -- Timer.
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN

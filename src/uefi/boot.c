@@ -311,7 +311,8 @@ UINT64 read_havk_size(VOID)
 	// If the `GetInfo()` function truly failed, then raise the error.
 	ERROR_CHECK(attempt);
 
-	Print(L"HAVK KERNEL FILE SIZE: %llu BYTES\r\n", havk_info.FileSize);
+	Print(L"HAVK KERNEL FILE SIZE: %llu KIBIBYTES\r\n",
+		havk_info.FileSize / 1024);
 
 	// Reset the HAVK file's position, as we just read HAVK's size.
 	UEFI(havk->SetPosition, 2,
@@ -417,9 +418,9 @@ VOID load_havk(struct elf64_file_header *havk_file_header,
 			&havk_program_headers[i].size,
 			segment_physical_address);
 
-		Print(L"HAVK SEGMENT ADDRESS: 0x%X (%llu bytes)\r\n",
+		Print(L"HAVK SEGMENT ADDRESS: 0x%X (%llu KIBIBYTES)\r\n",
 			segment_physical_address,
-			havk_program_headers[i].memory_size);
+			havk_program_headers[i].memory_size / 1024);
 	}
 
 	// Free the program headers' memory. Since I allocated it without
@@ -432,7 +433,7 @@ VOID load_havk(struct elf64_file_header *havk_file_header,
 EFIAPI
 VOID cleanup_files(VOID)
 {
-	// Close the files, as we already have HAVK in memory at our
+	// Close the files, as we (should) already have HAVK in memory at our
 	// specified physical address now.
 	UEFI(havk->Close, 1,
 		havk);
@@ -588,8 +589,8 @@ VOID get_graphics_information(struct uefi_arguments *arguments)
 
 	Print(L"VIDEO FRAMEBUFFER RANGE: 0x%X to 0x%X\r\n",
 		arguments->framebuffer_address,
-		arguments->framebuffer_address +
-		arguments->framebuffer_size);
+		arguments->framebuffer_address
+		+ arguments->framebuffer_size);
 }
 
 EFIAPI

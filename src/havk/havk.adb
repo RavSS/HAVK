@@ -1,15 +1,14 @@
 WITH
-   -- System.Machine_Code,
    HAVK_Kernel,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Input,
+   HAVK_Kernel.Paging,
    HAVK_Kernel.PS2,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 USE
-   -- System.Machine_Code,
    HAVK_Kernel,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.Interrupts,
@@ -24,32 +23,32 @@ IS
    -- Access the arguments passed by HAVK's UEFI bootloader.
    Bootloader : CONSTANT access_UEFI_arguments
    WITH
-      Import        =>  true,
-      Convention    =>  C,
-      External_Name => "bootloader";
+      Import     => true,
+      Convention => C,
+      Link_Name  => "bootloader.arguments";
 
    -- Bootloader magic number.
    Magic      : CONSTANT num
    WITH
-      Import        =>  true,
-      Convention    =>  C,
-      External_Name => "magic";
+      Import     => true,
+      Convention => C,
+      Link_Name  => "bootloader.magic";
 
    -- Access the framebuffer that we can hopefully manipulate.
    -- 4 bytes make up a pixel, so 32 bit pixels.
    Screen     : ALIASED framebuffer(0 .. Bootloader.Framebuffer_Size / 4)
    WITH
-      Import        =>  true,
-      Convention    =>  C,
-      Address       =>  Bootloader.Framebuffer_Address;
+      Import     => true,
+      Convention => C,
+      Address    => Bootloader.Framebuffer_Address;
 
    -- The UEFI memory map. Assumes the descriptor size has been "fixed".
-   Map         : ALIASED memory_map(0  .. Bootloader.Memory_Map_Size /
+   Map        : ALIASED memory_map(0  .. Bootloader.Memory_Map_Size /
       Bootloader.Memory_Map_Descriptor_Size)
    WITH
-      Import        =>  true,
-      Convention    =>  C,
-      Address       =>  Bootloader.Memory_Map_Address;
+      Import     => true,
+      Convention => C,
+      Address    => Bootloader.Memory_Map_Address;
 
    -- The terminal where I will display things to the user concerning the
    -- current system like warnings, errors, info, etc.
@@ -86,7 +85,8 @@ IS
    END Grid_Test;
 
    Welcome : CONSTANT string := "WELCOME TO HAVK";
-   Scratch : string(1 .. 10) := (OTHERS => character'val(0));
+   -- Scratch : string(1 .. 10) := (OTHERS => character'val(0));
+   Kernel_Paging_Layout : Paging.page_layout_huge;
 BEGIN
    -- Initialize the debugging message mechanism if debugging is enabled.
    PRAGMA Debug(Debug_Initialize);
@@ -100,7 +100,7 @@ BEGIN
 
    -- Clear the screen and draw the testing grid.
    Draw_Fill(Screen, Screen'first, Screen'last, 0);
-   Grid_Colour := Create_Pixel(70, 10, 10);
+   Grid_Colour   := Create_Pixel(70, 10, 10);
    Grid_Test;
    PRAGMA Debug(Debug_Message("Grid test printed to framebuffer/screen."));
 
@@ -108,6 +108,20 @@ BEGIN
    Prepare_GDT;
    Prepare_IDT;
    PRAGMA Debug(Debug_Message("Descriptor tables prepared."));
+
+   -- Identity map the kernel.
+   Kernel_Paging_Layout.Map_Linear_Address_Range(
+      Paging.Kernel_Base, Paging.Kernel_Base,
+      Paging.Kernel_Size);
+
+   -- Map the framebuffer address space.
+   Kernel_Paging_Layout.Map_Linear_Address_Range(
+      Address_To_num(Screen'address), Address_To_num(Screen'address),
+      Screen'size / 8);
+
+   -- Finally, load the CR3 register with the highest level directory.
+   Kernel_Paging_Layout.Load;
+   PRAGMA Debug(Debug_Message("Self-described page directories loaded."));
 
    Terminal.Clear_All; -- Set to all null characters.
    Terminal.Background_Colour := Create_Pixel(0, 0, 0);
@@ -122,10 +136,13 @@ BEGIN
    -- Inform if the magic number is wrong or corrupted.
    IF    Magic = 16#55_45_46_49# THEN
       Terminal.Print("BOOT METHOD: UEFI");
+      PRAGMA Debug(Debug_Message("Successful UEFI boot."));
    ELSIF Magic = 16#42_49_4F_53# THEN
       Terminal.Print("BOOT METHOD: BIOS"); -- If I bother with it.
+      PRAGMA Debug(Debug_Message("Successful BIOS boot."));
    ELSE
       Terminal.Print("BOOT METHOD: UNKNOWN");
+      PRAGMA Debug(Debug_Message("Unsuccessful boot via unknown method."));
    END IF;
 
    Terminal.Next_Line;
@@ -133,18 +150,18 @@ BEGIN
    -- Print the font test.
    Terminal.Print("FONT TEST:");
    Terminal.Next_Line;
-   Terminal.Print("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+   Terminal.Print("   ABCDEFGHIJKLMNOPQRSTUVWXYZ");
    Terminal.Next_Line;
-   Terminal.Print("1234567890");
+   Terminal.Print("   1234567890");
    Terminal.Next_Line;
-   Terminal.Print("!@#$%^&*()_-+=[]{}\|;:'"",<.>/?");
+   Terminal.Print("   !@#$%^&*()_-+=[]{}\|;:'"",<.>/?");
    Terminal.Next_Line;
    Terminal.Next_Line;
 
    -- TODO: Needs work.
    Terminal.Print("MEMORY MAP ENUMERATION:");
    Terminal.Next_Line;
-   Terminal.Print("MEMORY DESCRIPTORS: " & num'image(Map'length));
+   Terminal.Print("   MEMORY DESCRIPTORS: " & num'image(Map'length));
    Terminal.Next_Line;
    Terminal.Next_Line;
 
@@ -164,22 +181,29 @@ BEGIN
       Terminal.Draw(Screen, Terminal_Start);
       PRAGMA Debug(Debug_Message("PS/2 controller is inoperable."));
    ELSE
-      Terminal.Print("TESTING KEYBOARD INPUT. EXIT BY PRESSING ENTER: ");
+      Terminal.Print("PRESS ENTER TO CONTINUE");
       Terminal.Next_Line;
       Terminal.Draw(Screen, Terminal_Start);
+
       PRAGMA Debug(Debug_Message("Keyboard test started."));
 
-      LOOP -- Keyboard test.
+      LOOP
          HLT;
-         Terminal.Current_X_Index := 1;
-
-         Scratch(1) := Get_Key;
-         EXIT WHEN Scratch(1) = character'val(10);
-
-         Terminal.Print(Scratch);
-         Terminal.Draw(Screen, Terminal_Start);
+         EXIT WHEN Get_Key = character'val(10);
       END LOOP;
+
       PRAGMA Debug(Debug_Message("Keyboard test ended."));
+
+      -- LOOP -- Keyboard test.
+      --    HLT;
+      --    Terminal.Current_X_Index := 1;
+
+      --    Scratch(1) := Get_Key;
+      --    EXIT WHEN Scratch(1) = character'val(10);
+
+      --    Terminal.Print(Scratch);
+      --    Terminal.Draw(Screen, Terminal_Start);
+      -- END LOOP;
 
       -- LOOP -- Keyboard scancode test.
          -- Asm("HLT;", Volatile => true);

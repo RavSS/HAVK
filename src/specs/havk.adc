@@ -1,7 +1,20 @@
+PRAGMA License(GPL);
+
+PRAGMA Normalize_Scalars;
+PRAGMA Discard_Names;
+
+-- TODO:This doesn't work properly and causes GNAT to raise a bug.
+-- It would be really helpful to make "num" and "System.Address"
+-- implicitly convert to each other.
+PRAGMA Allow_Integer_Address;
+
+PRAGMA Assertion_Policy(CHECK);
+PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);
+PRAGMA Convention_Identifier(NASM, Assembler);
+
 PRAGMA Restrictions(No_Enumeration_Maps);
 PRAGMA Restrictions(No_Protected_Types);
 PRAGMA Restrictions(No_Delay);
--- PRAGMA Restrictions(No_Secondary_Stack);
 -- PRAGMA Restrictions(No_Recursion);
 PRAGMA Restrictions(No_Allocators);
 PRAGMA Restrictions(No_Dispatch);
@@ -11,17 +24,11 @@ PRAGMA Restrictions(No_Implicit_Task_Allocations);
 -- PRAGMA Restrictions(No_Implicit_Loops);
 PRAGMA Restrictions(No_Obsolescent_Features);
 PRAGMA Restrictions(No_IO);
--- PRAGMA Restrictions(No_Long_Long_Integers);
 PRAGMA Restrictions(Static_Storage_Size);
 PRAGMA Restrictions(No_Wide_Characters);
 PRAGMA Restrictions(No_Exception_Handlers);
 PRAGMA Restrictions(No_Exception_Propagation);
--- PRAGMA Restrictions(No_Direct_Boolean_Operators);
-PRAGMA Normalize_Scalars;
-PRAGMA Discard_Names;
-PRAGMA Assertion_Policy(check);
-PRAGMA Overflow_Mode(MINIMIZED);
+PRAGMA Restrictions(No_Direct_Boolean_Operators);
 PRAGMA Restrictions(No_Finalization);
 PRAGMA Restrictions(No_Tasking);
 PRAGMA Restrictions(No_Implicit_Dynamic_Code);
-

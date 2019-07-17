@@ -32,22 +32,22 @@ IS
    -- it's much clearer to use it instead of messing around with GNAT's shifts
    -- or my own handwritten assembly shifts and use AND operators with them.
    FUNCTION BT(
-      Value : IN num;
-      Bit   : IN num)
+      Value  : IN num;
+      Bit    : IN num)
    RETURN boolean
    WITH
       Inline => true;
 
    -- Outputs a byte to an IO port.
    PROCEDURE OUTB(
-      Port  : IN num;
-      Value : IN num)
+      Port   : IN num;
+      Value  : IN num)
    WITH
       Inline => true;
 
    -- Reads a byte from an IO port.
    FUNCTION INB(
-      Port  : IN num)
+      Port   : IN num)
    RETURN num
    WITH
       Inline => true;

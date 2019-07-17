@@ -6,8 +6,8 @@ It is influenced by Unix, but it is not necessarily a Unix clone.
 ### Software requirements
 There are a few mandatory software requirements:
 1. GNAT Community. GCC can compile Ada, and the package contains the
-GNU Project Manager tools. There's a script inside the "ext" folder which you
-can utilize.
+GNAT Project Manager tools. There's a script inside the "ext" folder which
+you can utilize.
 2. GNU Make. This is pretty obvious.
 3. GNU-EFI. The bootloader I created uses UEFI to boot HAVK, not BIOS.
 4. GNU Mtools & GNU Parted. Used for creating a hard drive image.
