@@ -59,10 +59,11 @@ PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
       Last_Chance_Handler(ISR_5_Handler'address, GNAT.Source_Info.Line);
    END ISR_5_Handler;
 
-   PROCEDURE ISR_6_Handler(
+   PROCEDURE ISR_6_Handler( -- Invalid opcode.
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
+      Debug_Message("Invalid opcode at: " & Stack_Frame.RIP'img & '.');
       Last_Chance_Handler(ISR_6_Handler'address, GNAT.Source_Info.Line);
    END ISR_6_Handler;
 
@@ -75,7 +76,7 @@ PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
 
    PROCEDURE ISR_8_Handler(
       Stack_Frame : IN access_interrupt;
-      Error_Code  : IN u64)
+      Error_Code  : IN num)
    IS
    BEGIN
       Last_Chance_Handler(ISR_8_Handler'address, GNAT.Source_Info.Line);
@@ -90,7 +91,7 @@ PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
 
    PROCEDURE ISR_10_Handler(
       Stack_Frame : IN access_interrupt;
-      Error_Code  : IN u64)
+      Error_Code  : IN num)
    IS
    BEGIN
       Last_Chance_Handler(ISR_10_Handler'address, GNAT.Source_Info.Line);
@@ -98,7 +99,7 @@ PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
 
    PROCEDURE ISR_11_Handler(
       Stack_Frame : IN access_interrupt;
-      Error_Code  : IN u64)
+      Error_Code  : IN num)
    IS
    BEGIN
       Last_Chance_Handler(ISR_11_Handler'address, GNAT.Source_Info.Line);
@@ -106,26 +107,27 @@ PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
 
    PROCEDURE ISR_12_Handler(
       Stack_Frame : IN access_interrupt;
-      Error_Code  : IN u64)
+      Error_Code  : IN num)
    IS
    BEGIN
       Last_Chance_Handler(ISR_12_Handler'address, GNAT.Source_Info.Line);
    END ISR_12_Handler;
 
-   PROCEDURE ISR_13_Handler(
+   PROCEDURE ISR_13_Handler( -- General protection fault.
       Stack_Frame : IN access_interrupt;
-      Error_Code  : IN u64)
+      Error_Code  : IN num)
    IS
    BEGIN
-      Last_Chance_Handler(ISR_13_Handler'address, GNAT.Source_Info.Line);
+      PRAGMA Debug(Debug_Message(
+         "ISR 13: General protection fault triggered."));
    END ISR_13_Handler;
 
-   PROCEDURE ISR_14_Handler(
+   PROCEDURE ISR_14_Handler( -- Page fault.
       Stack_Frame : IN access_interrupt;
-      Error_Code  : IN u64)
+      Error_Code  : IN num)
    IS
    BEGIN
-      Last_Chance_Handler(ISR_14_Handler'address, GNAT.Source_Info.Line);
+      PRAGMA Debug(Debug_Message("ISR 14: Page fault triggered."));
    END ISR_14_Handler;
 
    PROCEDURE ISR_15_Handler(
@@ -144,7 +146,7 @@ PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
 
    PROCEDURE ISR_17_Handler(
       Stack_Frame : IN access_interrupt;
-      Error_Code  : IN u64)
+      Error_Code  : IN num)
    IS
    BEGIN
       Last_Chance_Handler(ISR_17_Handler'address, GNAT.Source_Info.Line);
@@ -236,7 +238,7 @@ PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
 
    PROCEDURE ISR_30_Handler(
       Stack_Frame : IN access_interrupt;
-      Error_Code  : IN u64)
+      Error_Code  : IN num)
    IS
    BEGIN
       Last_Chance_Handler(ISR_30_Handler'address, GNAT.Source_Info.Line);

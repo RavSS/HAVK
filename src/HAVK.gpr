@@ -9,12 +9,13 @@ PROJECT HAVK IS
    TYPE Kernel_Type IS("Final", "Debug");
    Build : Kernel_Type := EXTERNAL("Build");
 
-   -- I have gone back to using my own runtime system, as the only option for
-   -- the future is to customize the ZFP RTS for secondary stack functionality.
-   -- I rather just have my own runtime at this point anyway.
+   -- I have gone back to using my own runtime system, as the ZFP RTS lacked
+   -- secondary stack support and tagged records. Note that the object
+   -- directory must contain "adainclude" and "adalib". They are handled
+   -- by the "HAVK_RTS.gpr" project, which compiles HAVK's runtime system.
    FOR Runtime("Ada") USE HAVK'Object_Dir;
 
-   -- Note that none of the arguments are allowed to have spaces, or
+   -- NOTE: none of the arguments are allowed to have spaces, or
    -- else they somehow become corrupted when passed to the
    -- programs used for compilation. I don't think GPR allows spaces.
 
@@ -26,10 +27,24 @@ PROJECT HAVK IS
       Ada_Basic_Switches := (
          -- May as well use the latest version of Ada, there is no harm in it.
          "-gnat2012",
+         -- Strictly 7-bit ASCII only in source code. Disallow the upper
+         -- half of the byte for the extra ISO 8859-1 (Latin-1) characters.
+         "-gnatin",
          -- Disable the style enforcement and configure it later.
          "-gnatyN",
-         -- Enable all warnings by default.
+         -- Enable (very nearly) all warnings by default.
          "-gnatwa",
+         -- All runtime errors are not just warnings, but static errors.
+         -- No idea why this is not enabled by default.
+         "-gnatwE",
+         -- Elaboration issues now raise a warning.
+         "-gnatwl",
+         -- Enable GNAT warnings.
+         "-gnatw.g",
+         -- Raise warnings about gaps inside representation clauses.
+         "-gnatw.h",
+         -- If a specified size is overridden, then mention it.
+         "-gnatw.s",
          -- Disable exception propagation warnings.
          "-gnatw.X",
          -- No standard library since HAVK is a freestanding program
@@ -78,8 +93,6 @@ PROJECT HAVK IS
          "-gnatyx");
 
       Ada_Final_Switches := (
-         -- Reasonable optimization level for the final version.
-         "-O2",
          -- No debug information at all for obvious reasons.
          "-g0",
          -- Default validity checks. Specified by default regardless.
@@ -89,11 +102,6 @@ PROJECT HAVK IS
          "-gnatx");
 
       Ada_Debug_Switches := (
-         -- Zero optimization by default. Makes reading `objdump -d` a little
-         -- easier for me personally when debugging. Change it if the
-         -- final optimization breaks something and you also need the
-         -- symbols for debugging.
-         "-O0",
          -- Maximum debug information for GDB specifically.
          "-ggdb3",
          -- All validity checks for debugging.
@@ -149,8 +157,12 @@ PROJECT HAVK IS
 
    PACKAGE Compiler IS -- `gcc` / `x86_64-pc-linux-gnu-gcc` & `nasm`
       GCC_Basic_Switches := (
-         -- Stack protector fully enabled, because why not.
-         "-fstack-protector-all",
+         -- Stack protector fully enabled, because why not. Doesn't seem to
+         -- actually do anything that Ada's checks don't do already. However,
+         -- I have the stack fail function called after `MOV CR3, *` somehow.
+         -- I've removed "*-all" and replaced it with "*-strong" for now.
+         -- This adds a heap of instructions and a little overhead either way.
+         "-fstack-protector-strong",
          -- Add some extra instructions that check if we've gone
          -- over the stack space limit. Usually that just causes an
          -- intense crash like a general page-fault for example.
@@ -169,14 +181,17 @@ PROJECT HAVK IS
          -- for me right now.
          "-mno-red-zone",
          -- Allows me to place the kernel anywhere. I can also specify
-         -- "large" instead of "kernel". Not sure if there is a difference.
-         "-mcmodel=kernel",
+         -- "kernel" instead of "large", that causes much less overhead and is
+         -- very useful, as the "kernel" memory model reduces overhead yet
+         -- still allows me to place the kernel in the higher half of memory.
+         -- Enable that once HAVK starts virtually living over there.
+         "-mcmodel=large",
          -- No MMX instructions.
          "-mno-mmx",
-         -- No SSE instructions.
-         "-mno-sse",
-         -- No SSE2 instructions.
-         "-mno-sse2",
+         -- No SSE and SSE2 instructions. Please note that SSE and SSE2 are
+         -- supported by any CPU that supports long mode, but I've just
+         -- disabled them for now.
+         "-mno-sse", "-mno-sse2",
          -- Intel syntax for inline x86-64 assembly, since I like it more
          -- and it's less messy.
          "-masm=intel",
@@ -188,8 +203,9 @@ PROJECT HAVK IS
       -- Switches to be used by any files that generate interrupt handlers.
       GCC_Interrupt_Switches := (
          -- Disable the usage of 80387/x87 instructions as GCC refuses
-         -- to create an interrupt handler with the possibility of them
-         -- being used in it. Apparently due to unimplemention.
+         -- to create an interrupt handler with the possibility of them being
+         -- used in it. Apparently due to unimplemention. I believe this is
+         -- because the ancient x87 coprocessors did something with the stack.
          "-mno-80387",
          -- Make sure only the general registers are being utilized.
          "-mgeneral-regs-only");
@@ -223,20 +239,26 @@ PROJECT HAVK IS
       FOR Default_Switches("Ada") USE(
          -- Static GNAT run-time.
          "-static",
-         -- State and imply that there is no "main" section. The assembly
-         -- entry function will handle its role. Then rename "adainit" to
-         -- "ada_havk_init". This is to ensure that the kernel was compiled
-         -- with this project file's switches.
-         "-n", "-Lada_havk_",
+         -- I've reverted this from much earlier as the `main` function seems
+         -- to do some additional instructions before the call to `ada_init`
+         -- upon recent inspection. Uncomment the latter two arguments and
+         -- modify the entry assembly routine if you want to revert it. Also,
+         -- if I rename the `main` function to something else, then `gnatbind`
+         -- whines about it and there's no way to silence that "warning" from
+         -- here, as it's not even counted as a real warning for some reason.
+         -- "-MHAVK", -- "-n", "-Lada_havk_",
+         ----------------------------------------------------------------------
          -- Check if the source files actually exist and are findable,
          -- otherwise, raise an error.
          "-s",
          -- TODO: Set the "storage size" or "default task stack size value".
          -- Is this referring to the available stack space? I've just set it
-         -- to 64 KiB, which is what I've allocated in the entry assembly
-         -- file. Figure this out for sure, please. I think this right now does
+         -- to 64 KiB, which is what I've allocated in the entry assembly file.
+         -- Figure this out for sure, please. I think this right now does
          -- nothing since Ada has no control over the primary stack's size.
-         "-d65535");
+         "-d65535",
+         -- Default secondary stack size is set to 16 KiB.
+         "-D16384");
    END Binder;
 
    PACKAGE Linker IS -- `gnatlink`
@@ -251,15 +273,23 @@ PROJECT HAVK IS
          -- Include the GCC library.
          "-lgcc", "-static-libgcc",
          -- The UEFI `AllocatePages()` function allocates pages of size 4 KiB.
-         -- Match it here just in case. Should also save some pages. It is
-         -- also the page size I will use later on, I believe.
-         "-zmax-page-size=0x1000",
-         "-Ladalib", "-lHAVK");
+         -- Match it here just in case. Should also save some pages.
+         "-zcommon-page-size=0x1000", "-zmax-page-size=0x1000",
+         -- Specify the main library (libHAVK.a) to be used by the executable.
+         "-lHAVK");
 
       Linker_Final_Switches := (
          -- Remove any unused dead code and data from the kernel file,
          -- just to make it smaller.
-         "-Wl,--gc-sections");
+         "-Wl,--gc-sections",
+         -- Strip the symbols in the discarded sections.
+         "-Wl,--strip-discarded");
+
+      Linker_Debug_Switches := (
+         -- Do not discard any local symbols.
+         "-Wl,--discard-none",
+         -- The binder source file now is compiled with debug information.
+         "-g");
 
       CASE Build IS
          WHEN "Final" =>
@@ -268,7 +298,8 @@ PROJECT HAVK IS
                Linker_Final_Switches;
          WHEN "Debug" =>
             FOR Default_Switches("Ada") USE
-               Linker_Basic_Switches;
+               Linker_Basic_Switches &
+               Linker_Debug_Switches;
       END CASE;
    END Linker;
 END HAVK;

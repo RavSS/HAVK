@@ -7,11 +7,10 @@ STARTUP(entry.o)
 /  example. I have removed some segments, they
 /  did not seem like they were used. */
 
-__stack_size = 65535;
-
 SECTIONS
 {
-	/* I've moved the kernel position up by
+	/* TODO: Find a better solution.
+	/  I've moved the kernel position up by
 	/  2 MiB so hopefully it doesn't collide
 	/  with some system reserved memory, which
 	/  tends to be the case on real hardware.
@@ -45,5 +44,6 @@ SECTIONS
 		*(COMMON)
 		*(.bss)
 	}
-}
 
+	kernel_end = .;
+}

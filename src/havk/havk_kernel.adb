@@ -13,6 +13,6 @@ PACKAGE BODY HAVK_Kernel IS
       Message : IN string)
    IS
    BEGIN
-      Debug.Message(Message);
+      PRAGMA Debug(Debug.Message(Message));
    END Debug_Message;
 END HAVK_Kernel;
