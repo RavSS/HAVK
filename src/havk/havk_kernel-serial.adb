@@ -4,7 +4,7 @@ USE
    HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Serial IS
-   PROCEDURE Interface_Initialize(
+   PROCEDURE Interface_Initialise(
       Connection : IN serial_connection)
    IS
       -- TODO: Perhaps make these into functions.
@@ -43,7 +43,7 @@ PACKAGE BODY HAVK_Kernel.Serial IS
       -- TODO: Make records for these.
       OUTB(Connection.Port + 2, 16#C7#); -- 11000111 -  FIFO control register.
       OUTB(Connection.Port + 4, 16#0B#); --     1011 - modem control register.
-   END Interface_Initialize;
+   END Interface_Initialise;
 
    PROCEDURE Write(
       Connection : IN serial_connection;

@@ -1,21 +1,19 @@
 # Changelog for the HAVK operating system
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date UTC +13:00 )
 
-### Tasklist - 2019-07-18
+### Tasklist - 2019-08-27
 - Start parsing the memory map provided by the UEFI bootloader and begin
 manipulating the page directory for memory management purposes.
-- Refactor the main procedure and split the many boot-up operations
-before they get too large. Try making a new package for that purpose.
 - Very specific resolutions like 1366x768 are bugged and unusable.
 - Implement a logging utility to store kernel information.
-- If there's too many keypresses too fast, the keyboard shift state
-can become stuck.
-- GCC fails to inline anything, this causes an amount of
-overhead, even when trying to do something as simple as halting
-the CPU by using my intrinsic procedures. Shifting them to imported
-NASM routines only helps in reducing the filler instructions, not
-`CALL` and `RET`. Either that, or I do not understand the differences
-between C99 inlined functions and Ada inlined procedures/functions.
+- If there's a lot of keys pressed too fast, the keyboard shift state
+often becomes stuck in reverse.
+- Unoptimised `Screen(Index, Pixel)` function as I cannot figure out
+how to add a non-local address aliased array into a tagged record, or
+any other optimal solution. Cannot use `inline_always` due to it
+being a dispatching subprogram and `inline` has no effect.
+- Reorganise the bootloader arguments structure and provide
+a consistent format that does away with some of UEFI's oddities.
 
 ## UPCOMING - 2019-??-??
 ### Overall Changes
@@ -23,6 +21,8 @@ between C99 inlined functions and Ada inlined procedures/functions.
 to physical addresses. It is not complete and has a default page size of
 2 MiB to save time and kernel file space for now.
 - Expanded the Last Chance Handler to send crash information to COM1.
+- Massive shift of code from the main procedure to an initialisation
+package for organisation purposes.
 
 ## 00-08-00 - 2019-07-10
 ### Overall Changes

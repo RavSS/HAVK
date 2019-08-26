@@ -5,7 +5,8 @@ USE
 
 -- This package will do for now before I get GDB working over
 -- a serial connection via a stub.
-PACKAGE HAVK_Kernel.Debug IS
+PACKAGE HAVK_Kernel.Debug
+IS
    -- Variable for usage with kernel debugging. Used by two
    -- functions in the base package. For now, it exists to send messages
    -- over COM1 as a quick and easy alternative to proper debugging.
@@ -32,9 +33,9 @@ PACKAGE HAVK_Kernel.Debug IS
    );
 
    -- Initializes the debugging serial port for sending debug info to.
-   PROCEDURE Initialize
+   PROCEDURE Initialise
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    -- Writes a string to the serial port used for debugging.
    PROCEDURE Message(
@@ -44,5 +45,5 @@ PACKAGE HAVK_Kernel.Debug IS
    -- values with GDB etc. Not very sophisticated, but it gets the job done.
    PROCEDURE Breakpoint
    WITH
-      Inline => true;
+      Inline_Always => true;
 END HAVK_Kernel.Debug;

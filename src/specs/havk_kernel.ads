@@ -4,7 +4,8 @@ WITH
    System,
    Ada.Unchecked_Conversion;
 
-PACKAGE HAVK_Kernel IS
+PACKAGE HAVK_Kernel
+IS
    -- These types are to be used when the size really does not matter.
    -- Because HAVK is a 64-bit kernel, I'll make the "default" types 64-bit.
    TYPE num  IS MOD 2 ** 64; -- Natural number, assuming you include zero.
@@ -69,12 +70,8 @@ PACKAGE HAVK_Kernel IS
 
    -- The `Debug_*()` calls are just wrappers for the "HAVK_Kernel.Debug"
    -- package. Mostly so I don't have to "WITH" it everywhere.
-   PROCEDURE Debug_Initialize
-   WITH
-      Inline => true;
+   PROCEDURE Debug_Initialise;
 
    PROCEDURE Debug_Message(
-      Message : IN string)
-   WITH
-      Inline => true;
+      Message : IN string);
 END HAVK_Kernel;

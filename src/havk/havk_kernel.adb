@@ -3,11 +3,11 @@ WITH
 
 PACKAGE BODY HAVK_Kernel IS
    -- TODO: Is there a way I can avoid these wrappers for the debug procedures?
-   PROCEDURE Debug_Initialize
+   PROCEDURE Debug_Initialise
    IS
    BEGIN
-      Debug.Initialize;
-   END Debug_Initialize;
+      PRAGMA Debug(Debug.Initialise);
+   END Debug_Initialise;
 
    PROCEDURE Debug_Message(
       Message : IN string)

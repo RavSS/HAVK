@@ -1,7 +1,9 @@
 -- This package has the purpose of managing page translation.
--- TODO: Currently only supports a page size of 2 MiB.
+-- TODO: Currently only supports a page size of 2 MiB. Needs a complete
+-- refactor so directory entry records can represent any page size layout.
 
-PACKAGE HAVK_Kernel.Paging IS
+PACKAGE HAVK_Kernel.Paging
+IS
    -- READ: https://wiki.osdev.org/Page_Tables#48-bit_virtual_address_space
    -- Also see "Figure 5-1. Virtual to Physical Address Translation-Long Mode"
    -- in the AMD64 system programming manual. Also see "Figure 5-22. 2-Mbyte
@@ -168,11 +170,11 @@ PACKAGE HAVK_Kernel.Paging IS
    -- The range of entries in any type of directory. I've started it from
    -- zero, so that way, converting a virtual address to a physical address
    -- requires less work, both technically and mentally.
-   SUBTYPE directory_entry_range IS num RANGE 0 .. 511;
+   SUBTYPE directory_entry_range  IS num RANGE 0 .. 511;
 
    -- Level 1 structure. A page directory table that contains entries for
    -- 2 MiB physical pages.
-   TYPE  directory_table_huge    IS ARRAY(directory_entry_range)
+   TYPE  directory_table_huge     IS ARRAY(directory_entry_range)
       OF directory_entry_huge    -- References a physical page.
    WITH
       Component_Size => 64,
@@ -180,7 +182,7 @@ PACKAGE HAVK_Kernel.Paging IS
 
    -- Level 2 structure. A page directory pointer table that contains entries
    -- which point to directory tables.
-   TYPE  directory_pointer_table IS ARRAY(directory_entry_range)
+   TYPE  directory_pointer_table  IS ARRAY(directory_entry_range)
       OF directory_pointer_entry -- References a directory table.
    WITH
       Component_Size => 64,
@@ -188,18 +190,48 @@ PACKAGE HAVK_Kernel.Paging IS
 
    -- Level 3 structure. A page directory map table that contains entries
    -- which point to directory pointer tables.
-   TYPE  directory_map_table     IS ARRAY(directory_entry_range)
+   TYPE  directory_map_table      IS ARRAY(directory_entry_range)
       OF directory_map_entry     -- References a directory pointer table.
    WITH
       Component_Size => 64,
       Alignment      => 4096;
 
+   -- TODO: I have no damn idea what the actual structure of the paging
+   -- layout is, every resource is unclear. It's either one of the
+   -- following structures for 2 MiB pages if we ignore 4 KiB page size:
+   ----------------------------------------------------------------------------
+   -- A: 1 "PtrTable" that contains 512 entries. Same for "Table".
+   --                                Map
+   --                                 |
+   --                              PtrTable
+   --                                 |
+   --                               Table
+   ----------------------------------------------------------------------------
+   -- B: 512 "PtrTables" that each contain 512 entries. Same for "Tables".
+   --                                Map
+   --                                 |
+   --          ... ___PtrTable________|________PtrTable___ ...
+   --                    |                        |
+   --        ... Table___|___Table ...... Table___|___Table ...
+   ----------------------------------------------------------------------------
+   -- I am going to confusingly assume B is correct, because it makes more
+   -- sense as changing an entry in the lowest level will be reflected among
+   -- all other table entries in structure A. It's a tree-like structure?
+
+   -- Contains 512 directory tables which each have 512 entries.
+   TYPE  directory_tables_huge    IS ARRAY(directory_entry_range)
+      OF directory_table_huge;
+
+   -- Contains 512 directory pointer tables which each have 512 entries.
+   TYPE  directory_pointer_tables IS ARRAY(directory_entry_range)
+      OF directory_pointer_table;
+
    -- The 3 level paging structure layout when using a page size of 2 MiB.
    -- The lowest level contains the physical page, but it's built-in as part
    -- of the directory table when using the huge page size (2 MiB).
    TYPE page_layout_huge IS TAGGED RECORD
-      Level_1  : directory_table_huge;
-      Level_2  : directory_pointer_table;
+      Level_1  : directory_tables_huge;
+      Level_2  : directory_pointer_tables;
       Level_3  : directory_map_table;
    END RECORD;
 
@@ -225,17 +257,25 @@ PACKAGE HAVK_Kernel.Paging IS
       Size     : IN num)
    RETURN num
    WITH
-      Inline => true;
+      Inline        => true,
+      Pre           => Size > 0,
+      -- Always return at least one page for obvious reasons.
+      Post          => Size_To_Pages_Huge'result > 0;
 
-   -- Maps a virtual address to a physical address, 2 MiB aligned.
+   -- Maps a virtual address to a physical address, huge entry.
+   -- Requires all addresses passed to it as 2 MiB aligned.
    PROCEDURE Map_Address(
       Object           : IN OUT page_layout_huge;
       Virtual_Address  : IN num;
-      Physical_Address : IN num);
+      Physical_Address : IN num)
+   WITH
+      Pre => Virtual_Address = Align_Huge(Virtual_Address) AND THEN
+         Physical_Address = Align_Huge(Physical_Address);
 
    -- Shortcut procedure for identity mapping a virtual address range to a
    -- physical address range. The range is determined by the size, which
-   -- is then converted into 2 MiB physical pages.
+   -- is then converted into 2 MiB physical pages. Requires all addresses
+   -- passed to it as 2 MiB aligned.
    PROCEDURE Map_Linear_Address_Range(
       Object           : IN OUT page_layout_huge;
       Virtual_Address  : IN num;

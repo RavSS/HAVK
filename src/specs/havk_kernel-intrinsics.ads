@@ -16,7 +16,7 @@ IS
       Shifts : IN num)
    RETURN num
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    -- Shift a value to the right (>>).
    FUNCTION SHR(
@@ -24,7 +24,7 @@ IS
       Shifts : IN num)
    RETURN num
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    -- Does a bit test on a specific value and returns true for a set bit etc.
    -- Note that the BT instruction might be slow when factoring in
@@ -36,34 +36,34 @@ IS
       Bit    : IN num)
    RETURN boolean
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    -- Outputs a byte to an IO port.
    PROCEDURE OUTB(
       Port   : IN num;
       Value  : IN num)
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    -- Reads a byte from an IO port.
    FUNCTION INB(
       Port   : IN num)
    RETURN num
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    -- Halts the CPU.
    PROCEDURE HLT
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    -- Enables interrupts.
    PROCEDURE STI
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    -- Disables interrupts.
    PROCEDURE CLI
    WITH
-      Inline => true;
+      Inline_Always => true;
 END HAVK_Kernel.Intrinsics;

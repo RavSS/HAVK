@@ -49,26 +49,33 @@ PACKAGE BODY HAVK_Kernel.Paging IS
       Level_3_Address_Shift : CONSTANT num := 12;
    BEGIN
       -- Mark the entries are present, as they will actually be present soon.
-      Object.Level_1(Level_1_Offset).Present           := true;
-      Object.Level_2(Level_2_Offset).Present           := true;
-      Object.Level_3(Level_3_Offset).Present           := true;
-      -- By default, give the new mappings write access.
-      Object.Level_1(Level_1_Offset).Write_Access      := true;
-      Object.Level_2(Level_2_Offset).Write_Access      := true;
-      Object.Level_3(Level_3_Offset).Write_Access      := true;
+      Object.Level_3(Level_3_Offset).Present := true;
+      Object.Level_2(Level_3_Offset)(Level_2_Offset).Present := true;
+      Object.Level_1(Level_2_Offset)(Level_1_Offset).Present := true;
 
-      -- Calculate the physical page's base address.
-      Object.Level_1(Level_1_Offset).Physical_Address  :=
-         SHR(Align_Huge(Physical_Address),
-         Level_1_Address_Shift);
-      -- Calculate the directory table's base address.
-      Object.Level_2(Level_2_Offset).Directory_Address :=
-         SHR(Address_To_num(Object.Level_1(Level_1_Offset)'address),
-         Level_2_Address_Shift);
+      -- By default, give the new mappings write access.
+      Object.Level_3(Level_3_Offset).Write_Access := true;
+      Object.Level_2(Level_3_Offset)(Level_2_Offset).Write_Access := true;
+      Object.Level_1(Level_2_Offset)(Level_1_Offset).Write_Access := true;
+
       -- Calculate the directory pointer table's base address.
       Object.Level_3(Level_3_Offset).Directory_Pointer :=
-         SHR(Address_To_num(Object.Level_2(Level_2_Offset)'address),
+         SHR(Address_To_num(
+         Object.Level_2(Level_3_Offset)(Level_2_Offset)'address),
          Level_3_Address_Shift);
+
+      -- Calculate the directory table's base address.
+      Object.Level_2(Level_3_Offset)(Level_2_Offset).Directory_Address :=
+         SHR(Address_To_num(
+         Object.Level_1(Level_2_Offset)(Level_1_Offset)'address),
+         Level_2_Address_Shift);
+
+      -- Calculate the physical page's base address.
+      Object.Level_1(Level_2_Offset)(Level_1_Offset).Physical_Address  :=
+         SHR(Physical_Address, Level_1_Address_Shift);
+
+      -- PRAGMA Debug(Debug_Message("Page address mapping offsets 3 2 1:" &
+         -- Level_3_Offset'img & Level_2_Offset'img & Level_1_Offset'img));
    END Map_Address;
 
    PROCEDURE Map_Linear_Address_Range(
@@ -79,12 +86,15 @@ PACKAGE BODY HAVK_Kernel.Paging IS
    IS
       Pages            : CONSTANT num := Size_To_Pages_Huge(Size);
    BEGIN
-      FOR P IN 1 .. Pages LOOP
-         Object.Map_Address(Virtual_Address * P, Physical_Address * P);
+      FOR P IN 0 .. Pages - 0 LOOP
+         Object.Map_Address(
+            Virtual_Address  + 16#200000# * P,
+            Physical_Address + 16#200000# * P);
       END LOOP;
    END Map_Linear_Address_Range;
 
    -- Took this function's equation from the UEFI macro `EFI_SIZE_TO_PAGES()`.
+   -- I am certain I have failed to implement it correctly.
    FUNCTION Size_To_Pages_Huge(
       Size        : IN num)
    RETURN num       IS
@@ -95,7 +105,8 @@ PACKAGE BODY HAVK_Kernel.Paging IS
       IF Extra_Page /= 0 THEN
          RETURN Huge_Pages + 1;
       ELSE
-         RETURN Huge_Pages;
+         -- If the size is even a single byte, then it still needs one page.
+         RETURN (IF Huge_Pages /= 0 THEN Huge_Pages ELSE 1);
       END IF;
    END Size_To_Pages_Huge;
 

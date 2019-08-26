@@ -97,7 +97,11 @@ EFI_LD_FLAGS=$(EFI_LD_OPT) $(EFI_LD_INC) $(EFI_CRT0)
 GDB_REMOTE_DEBUG_PORT=40404
 QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) \
 	-d guest_errors -m 1024 -cpu qemu64 -net none -no-reboot \
-	-no-shutdown # -d int
+	-no-shutdown
+
+ifeq ("$(INT)", "1")
+QEMU_FLAGS+= -d int
+endif
 
 EFI_NAME=boot
 EFI_C_FILE=$(EFI_SRC_DIR)$(EFI_NAME).c

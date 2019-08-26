@@ -4,11 +4,11 @@ USE
    System.Machine_Code;
 
 PACKAGE BODY HAVK_Kernel.Debug IS
-   PROCEDURE Initialize
+   PROCEDURE Initialise
    IS
    BEGIN
-      Debugger.Interface_Initialize;
-   END Initialize;
+      Debugger.Interface_Initialise;
+   END Initialise;
 
    PROCEDURE Message(
       Info : IN string)

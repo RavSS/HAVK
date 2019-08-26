@@ -1,4 +1,5 @@
-PACKAGE HAVK_Kernel.Input IS
+PACKAGE HAVK_Kernel.Input
+IS
    SUBTYPE key_string IS string(1 .. 32);
 
    TYPE key_state IS RECORD

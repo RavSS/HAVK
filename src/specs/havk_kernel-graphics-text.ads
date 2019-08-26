@@ -27,36 +27,39 @@ PACKAGE HAVK_Kernel.Graphics.Text IS
       -- The line separation between rows is 3 pixels by default.
       -- This does not include the font height, that is handled automatically.
       Line_Separation   : num := 3;
+      -- Where the textbox should be drawn on the framebuffer.
+      Position          : num := 1;
+      -- An access variable to the default view for drawing.
+      Display           : ACCESS view;
    END RECORD;
 
    PROCEDURE Draw_Character(
-      Buffer            : IN OUT framebuffer;
+      Object            : IN view;
       Pixel_Start       : IN num;
       Foreground_Colour : IN pixel;
       Background_Colour : IN pixel;
       ASCII             : IN character);
 
-PRIVATE
    PROCEDURE Scroll_Down(
-      Current_Textbox   : IN OUT textbox);
+      Object  : IN OUT textbox);
 
    PROCEDURE Update_Cursor(
-      Current_Textbox   : IN OUT textbox);
+      Object  : IN OUT textbox);
 
    PROCEDURE Print(
-      Current_Textbox   : IN OUT textbox;
-      Message           : IN string);
+      Object  : IN OUT textbox;
+      Message : IN string);
 
    PROCEDURE Next_Line(
-      Current_Textbox   : IN OUT textbox);
+      Object  : IN OUT textbox)
+   WITH
+      Inline => true;
 
    PROCEDURE Draw(
-      Current_Textbox   : IN textbox;
-      Buffer            : IN OUT framebuffer;
-      Pixel_Start       : IN num);
+      Object  : IN textbox);
 
    PROCEDURE Clear_All(
-      Current_Textbox   : IN OUT textbox)
+      Object  : IN OUT textbox)
    WITH
       Inline => true;
 END HAVK_Kernel.Graphics.Text;
