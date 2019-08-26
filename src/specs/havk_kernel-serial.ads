@@ -5,7 +5,8 @@
 -- there will be a lot of unused records and whatnot.
 -- READ: https://en.wikibooks.org/wiki/Serial_Programming/8250_UART_Programming
 
-PACKAGE HAVK_Kernel.Serial IS
+PACKAGE HAVK_Kernel.Serial
+IS
    -- A type that contains a few of the COM ports that may be present.
    -- I believe only COM1 and COM2 are actually guaranteed on the hardware.
    COM : CONSTANT nums(1 .. 4) := (16#3F8#, 16#2F8#, 16#3E8#, 16#2E8#);
@@ -85,7 +86,7 @@ PACKAGE HAVK_Kernel.Serial IS
    TYPE serial_connection IS TAGGED RECORD
       -- 16-bit IO address for the COM port.
       Port               : num RANGE  0 .. 16#FFFF#;
-      -- The baud rate used by the connection upon initialization.
+      -- The baud rate used by the connection upon initialisation.
       Baud_Rate          : num RANGE 50 .. 115200;
       -- For the convenience of the data receiver, especially when just
       -- sending ASCII for textual purposes.
@@ -129,7 +130,7 @@ PACKAGE HAVK_Kernel.Serial IS
    END RECORD;
 
    -- Sets up the serial port debugging functionality.
-   PROCEDURE Interface_Initialize(
+   PROCEDURE Interface_Initialise(
       Connection : IN serial_connection);
 
    -- Prints a string to the serial connection Connection's port.

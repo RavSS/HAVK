@@ -1,4 +1,5 @@
-PACKAGE HAVK_Kernel.PS2 IS
+PACKAGE HAVK_Kernel.PS2
+IS
    TYPE controller_condition IS(
       unknown,
       unemulated,
@@ -100,26 +101,28 @@ PACKAGE HAVK_Kernel.PS2 IS
       Configuration : IN PS2_configuration)
    RETURN num
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    FUNCTION Byte_To_Status(
       Status_Byte   : IN num)
    RETURN PS2_status
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    PROCEDURE Controller_Flush
    WITH
-      Inline => true;
+      Inline_Always => true;
 
-   PROCEDURE Controller_Initialize;
+   PROCEDURE Controller_Initialise;
 
    PROCEDURE Keyboard_Interrupt_Manager
    WITH
-      Inline => true;
+      Inline_Always => true;
 
    PROCEDURE Scancode_Set_2(
       Scancode     : IN num;
       Shifted      : IN boolean;
-      Break        : IN boolean);
+      Break        : IN boolean)
+   WITH
+      Inline_Always => true;
 END HAVK_Kernel.PS2;

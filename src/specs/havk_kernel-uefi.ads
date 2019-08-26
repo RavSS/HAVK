@@ -1,6 +1,5 @@
 WITH
-   System,
-   HAVK_Kernel;
+   System;
 
 PACKAGE HAVK_Kernel.UEFI
 IS
@@ -23,8 +22,7 @@ IS
    END RECORD
    WITH
       Convention => C;
-   FOR pixel_bitmasks'size USE 32 * 4;
-   FOR pixel_bitmasks      USE RECORD
+   FOR pixel_bitmasks USE RECORD
       Red        AT  0 RANGE 0 .. 31;
       Green      AT  4 RANGE 0 .. 31;
       Blue       AT  8 RANGE 0 .. 31;
@@ -70,7 +68,7 @@ IS
    -- of the "System.Max_Binary_Modulus" type. Lovely.
    memory_attribute_runtime         : CONSTANT num  := 16#8000000000000000#;
 
-   TYPE memory_descriptor  IS RECORD
+   TYPE memory_descriptor IS RECORD
       Memory_Type_Bitmask           : num   RANGE 0 .. 16#FFFFFFFF#;
       Start_Address_Physical        : num;
       Start_Address_Virtual         : num;
@@ -79,7 +77,7 @@ IS
    END RECORD
    WITH
       Convention => C;
-   FOR  memory_descriptor USE RECORD
+   FOR memory_descriptor USE RECORD
       Memory_Type_Bitmask             AT  0 RANGE 0 .. 63;
       -- TODO: There's 32 bits of padding right here from what GDB tells me,
       -- so I've padded out "Memory_Type_Bitmask" with an extra 32 bits while

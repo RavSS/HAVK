@@ -39,6 +39,9 @@ PROJECT HAVK IS
          "-gnatwE",
          -- Elaboration issues now raise a warning.
          "-gnatwl",
+         -- Enable subprogram inlining, but don't give the aggression value,
+         -- as we can let the optimisation level handle that.
+         "-gnatn",
          -- Enable GNAT warnings.
          "-gnatw.g",
          -- Raise warnings about gaps inside representation clauses.

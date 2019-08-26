@@ -1,49 +1,33 @@
 WITH
    HAVK_Kernel,
    HAVK_Kernel.UEFI,
-   HAVK_Kernel.Interrupts,
-   HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.Input,
-   HAVK_Kernel.Paging,
-   HAVK_Kernel.PS2,
    HAVK_Kernel.Graphics,
-   HAVK_Kernel.Graphics.Text;
+   HAVK_Kernel.Graphics.Text,
+   HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Initialise;
 USE
    HAVK_Kernel,
    HAVK_Kernel.UEFI,
-   HAVK_Kernel.Interrupts,
-   HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.Input,
-   HAVK_Kernel.PS2,
    HAVK_Kernel.Graphics,
-   HAVK_Kernel.Graphics.Text;
+   HAVK_Kernel.Graphics.Text,
+   HAVK_Kernel.Intrinsics;
 
-PROCEDURE HAVK WITH No_Return
+-- This is the main procedure, this is where HAVK starts itself after entry.
+PROCEDURE HAVK
+WITH
+   No_Return => true
 IS
    -- Access the arguments passed by HAVK's UEFI bootloader.
-   Bootloader : CONSTANT access_UEFI_arguments
+   Bootloader    : CONSTANT access_UEFI_arguments
    WITH
       Import     => true,
-      Convention => C,
+      Convention => NASM,
       Link_Name  => "bootloader.arguments";
 
-   -- Bootloader magic number.
-   Magic      : CONSTANT num
-   WITH
-      Import     => true,
-      Convention => C,
-      Link_Name  => "bootloader.magic";
-
-   -- Access the framebuffer that we can hopefully manipulate.
-   -- 4 bytes make up a pixel, so 32 bit pixels.
-   Screen     : ALIASED framebuffer(0 .. Bootloader.Framebuffer_Size / 4)
-   WITH
-      Import     => true,
-      Convention => C,
-      Address    => Bootloader.Framebuffer_Address;
+   Display       : ALIASED view := Create_View(Bootloader.ALL);
 
    -- The UEFI memory map. Assumes the descriptor size has been "fixed".
-   Map        : ALIASED memory_map(0  .. Bootloader.Memory_Map_Size /
+   Map           : ALIASED memory_map(0  .. Bootloader.Memory_Map_Size /
       Bootloader.Memory_Map_Descriptor_Size)
    WITH
       Import     => true,
@@ -56,76 +40,33 @@ IS
    -- horizontal resolution (2 for default kerning) and divide by 11
    -- the vertical resolution (3 for default line separation). A small
    -- border is placed around the terminal.
-   Terminal_Border : CONSTANT num := Bootloader.Horizontal_Resolution / 4;
-   Terminal_Start  : CONSTANT num := Calculate_Pixel(Terminal_Border / 2,
-      Terminal_Border / 2);
-   Terminal : textbox((Bootloader.Horizontal_Resolution - Terminal_Border) /
-      10, (Bootloader.Vertical_Resolution - Terminal_Border) / 11);
+   Terminal_Border : CONSTANT num := Display.Screen_Width / 4;
+   Terminal_Start  : CONSTANT num := Display.Calculate_Pixel(
+      Terminal_Border / 2, Terminal_Border / 2);
 
-   -- As an early test, I'll draw a grid to the screen.
-   Box_Size        : CONSTANT num := 20;
-   -- The grid's colour. I set it after I obtain the pixel format.
-   Grid_Colour     :        pixel :=  0;
+   Terminal : textbox(
+      (Display.Screen_Width  - Terminal_Border) / 10,
+      (Display.Screen_Height - Terminal_Border) / 11);
 
-   PROCEDURE Grid_Test;
-   PROCEDURE Grid_Test
-   IS
-   BEGIN
-      -- Draw the boxes so a grid is shown across the screen in some shape.
-      FOR Y IN num RANGE 0 .. (Screen_Height / Box_Size) - 1 LOOP
-         FOR X IN num RANGE 0 .. (Screen_Width / Box_Size) - 1 LOOP
-            Draw_Box(
-               Screen,
-               Calculate_Pixel(Box_Size * X, Box_Size * Y),
-               Grid_Colour,
-               Box_Size - 1,
-               Box_Size - 1);
-         END LOOP;
-      END LOOP;
-   END Grid_Test;
-
-   Welcome : CONSTANT string := "WELCOME TO HAVK";
-   -- Scratch : string(1 .. 10) := (OTHERS => character'val(0));
-   Kernel_Paging_Layout : Paging.page_layout_huge;
+   Welcome  : CONSTANT string := "WELCOME TO HAVK";
 BEGIN
-   -- Initialize the debugging message mechanism if debugging is enabled.
-   PRAGMA Debug(Debug_Initialize);
+   -- Initialise the debugging message mechanism if debugging is enabled.
+   PRAGMA Debug(Debug_Initialise);
    PRAGMA Debug(Debug_Message("Entered main kernel procedure."));
 
-   -- Set up the graphics package variables.
-   Screen_Width  := Bootloader.Horizontal_Resolution;
-   Screen_Height := Bootloader.Vertical_Resolution;
-   Pixel_Size    := Bootloader.Pixels_Per_Scanline / Screen_Width;
-   Pixel_Format  := Bootloader.Pixel_Format;
+   Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
 
-   -- Clear the screen and draw the testing grid.
-   Draw_Fill(Screen, Screen'first, Screen'last, 0);
-   Grid_Colour   := Create_Pixel(70, 10, 10);
-   Grid_Test;
-   PRAGMA Debug(Debug_Message("Grid test printed to framebuffer/screen."));
+   Initialise.Descriptor_Tables;
+   Initialise.Default_Page_Layout(Display);
 
-   -- Prepare the descriptor tables.
-   Prepare_GDT;
-   Prepare_IDT;
-   PRAGMA Debug(Debug_Message("Descriptor tables prepared."));
+   Initialise.PS2_Input;
 
-   -- Identity map the kernel.
-   Kernel_Paging_Layout.Map_Linear_Address_Range(
-      Paging.Kernel_Base, Paging.Kernel_Base,
-      Paging.Kernel_Size);
-
-   -- Map the framebuffer address space.
-   Kernel_Paging_Layout.Map_Linear_Address_Range(
-      Address_To_num(Screen'address), Address_To_num(Screen'address),
-      Screen'size / 8);
-
-   -- Finally, load the CR3 register with the highest level directory.
-   Kernel_Paging_Layout.Load;
-   PRAGMA Debug(Debug_Message("Self-described page directories loaded."));
-
+   -- Set up the terminal.
    Terminal.Clear_All; -- Set to all null characters.
-   Terminal.Background_Colour := Create_Pixel(0, 0, 0);
-   Terminal.Foreground_Colour := Create_Pixel(255, 55, 0);
+   Terminal.Position := Terminal_Start; -- Set the top-left corner of the box.
+   Terminal.Display  := Display'unchecked_access; -- Set the buffer to draw to.
+   Terminal.Background_Colour := Display.Create_Pixel(0, 0, 0);
+   Terminal.Foreground_Colour := Display.Create_Pixel(200, 55, 0);
 
    -- Print the welcome message.
    Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - Welcome'length / 2;
@@ -133,102 +74,25 @@ BEGIN
    Terminal.Next_Line;
    Terminal.Next_Line;
 
-   -- Inform if the magic number is wrong or corrupted.
-   IF    Magic = 16#55_45_46_49# THEN
-      Terminal.Print("BOOT METHOD: UEFI");
-      PRAGMA Debug(Debug_Message("Successful UEFI boot."));
-   ELSIF Magic = 16#42_49_4F_53# THEN
-      Terminal.Print("BOOT METHOD: BIOS"); -- If I bother with it.
-      PRAGMA Debug(Debug_Message("Successful BIOS boot."));
-   ELSE
-      Terminal.Print("BOOT METHOD: UNKNOWN");
-      PRAGMA Debug(Debug_Message("Unsuccessful boot via unknown method."));
-   END IF;
-
-   Terminal.Next_Line;
-
    -- Print the font test.
-   Terminal.Print("FONT TEST:");
-   Terminal.Next_Line;
-   Terminal.Print("   ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-   Terminal.Next_Line;
-   Terminal.Print("   1234567890");
-   Terminal.Next_Line;
-   Terminal.Print("   !@#$%^&*()_-+=[]{}\|;:'"",<.>/?");
-   Terminal.Next_Line;
+   Initialise.Font_Test(Terminal);
    Terminal.Next_Line;
 
    -- TODO: Needs work.
    Terminal.Print("MEMORY MAP ENUMERATION:");
    Terminal.Next_Line;
-   Terminal.Print("   MEMORY DESCRIPTORS: " & num'image(Map'length));
+   Terminal.Print("   MEMORY DESCRIPTORS:" & num'image(Map'length));
    Terminal.Next_Line;
    Terminal.Next_Line;
 
-   Terminal.Draw(Screen, Terminal_Start);
+   Terminal.Draw;
    PRAGMA Debug(Debug_Message("First terminal draw done."));
 
-   -- Initialize the PS2 controller for input purposes.
-   PS2.Controller_Initialize;
-   PRAGMA Debug(Debug_Message("PS/2 controller initialized."));
+   Initialise.Input_Key_Test(Terminal);
+   Initialise.Seconds_Count(Terminal);
 
-   STI; -- Enable interrupts.
-
-   IF PS2.Controller_State /= functional THEN
-      Terminal.Print("YOUR SYSTEM DOES NOT EMULATE A PS/2 CONTROLLER.");
-      Terminal.Next_Line;
-      Terminal.Print("MEANINGFULLY CONTINUING FURTHER IS IMPOSSIBLE.");
-      Terminal.Draw(Screen, Terminal_Start);
-      PRAGMA Debug(Debug_Message("PS/2 controller is inoperable."));
-   ELSE
-      Terminal.Print("PRESS ENTER TO CONTINUE");
-      Terminal.Next_Line;
-      Terminal.Draw(Screen, Terminal_Start);
-
-      PRAGMA Debug(Debug_Message("Keyboard test started."));
-
-      LOOP
-         HLT;
-         EXIT WHEN Get_Key = character'val(10);
-      END LOOP;
-
-      PRAGMA Debug(Debug_Message("Keyboard test ended."));
-
-      -- LOOP -- Keyboard test.
-      --    HLT;
-      --    Terminal.Current_X_Index := 1;
-
-      --    Scratch(1) := Get_Key;
-      --    EXIT WHEN Scratch(1) = character'val(10);
-
-      --    Terminal.Print(Scratch);
-      --    Terminal.Draw(Screen, Terminal_Start);
-      -- END LOOP;
-
-      -- LOOP -- Keyboard scancode test.
-         -- Asm("HLT;", Volatile => true);
-         -- Terminal.Print("     "); -- Clear the first 5 characters.
-         -- Terminal.Draw(Screen, Terminal_Start);
-         -- Terminal.Current_X_Index := 1;
-
-         -- Terminal.Print(num'image(INB(16#60#)));
-         -- Terminal.Draw(Screen, Terminal_Start);
-      -- END LOOP;
-   END IF;
-
-   Terminal.Next_Line;
-   Terminal.Print("INACCURATE SECONDS COUNT: ");
-   Terminal.Next_Line;
-   PRAGMA Debug(Debug_Message("Endless seconds count beginning."));
-
-   LOOP -- Endless loop showcasing interrupts.
-      HLT; -- Don't burn the CPU.
-
-      -- This will count seconds, but if I remember correctly it depends on
-      -- the timer's frequency, which I have not retrieved from the UEFI
-      -- runtime service function `GetTime()`'s capabilities structure.
-      Terminal.Current_X_Index := 1;
-      Terminal.Print(u64'image(Ticker / 100));
-      Terminal.Draw(Screen, Terminal_Start);
+   PRAGMA Debug(Debug_Message("Reached the end of the HAVK procedure."));
+   LOOP
+      HLT;
    END LOOP;
 END HAVK;

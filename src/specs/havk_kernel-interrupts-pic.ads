@@ -4,7 +4,8 @@
 -- the UEFI system still emulates the ancient chip and is not buggy...
 -- https://wiki.osdev.org/8259_PIC
 
-PACKAGE HAVK_Kernel.Interrupts.PIC IS
+PACKAGE HAVK_Kernel.Interrupts.PIC
+IS
    Master_Command   : CONSTANT num := 16#20#;
    Master_Data      : CONSTANT num := 16#21#;
    Slave_Command    : CONSTANT num := 16#A0#;

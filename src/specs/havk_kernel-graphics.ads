@@ -7,33 +7,60 @@ USE
 
 PACKAGE HAVK_Kernel.Graphics
 IS
-   TYPE       pixel IS MOD 2 ** 32;
-   TYPE framebuffer IS ARRAY(num RANGE <>) OF ALIASED pixel;
-   FOR  framebuffer'component_size USE 32;
-   FOR  framebuffer'alignment      USE  4;
+   TYPE pixel       IS MOD 2 ** 32;
+   TYPE framebuffer IS ARRAY(num RANGE <>) OF ALIASED pixel
+   WITH
+      Component_Size => 32,
+      Alignment      => 4;
 
-   -- Global variables so I don't need to keep passing them everywhere.
-   -- Bare minimum values as default for screen properties.
-   -- Will (must) be changed by the kernel startup.
-   Screen_Width  :           num := 400;
-   Screen_Height :           num := 200;
-   Pixel_Size    :           num :=   1;
-   Pixel_Format  : pixel_formats := Max;
+   TYPE view IS TAGGED RECORD
+      PRAGMA Warnings(off, "record layout may cause performance issues");
+      -- PRAGMA Warnings(off, "*length depends on a discriminant");
+      PRAGMA Warnings(off, "comes too early and was moved down");
+      -- The framebuffer MMIO address or size passed by the bootloader.
+      Framebuffer_Address : num;
+      Framebuffer_Size    : num;
+      -- Details the width or height of the monitor or screen.
+      Screen_Width        : num;
+      Screen_Height       : num;
+      -- The size of each pixel on the screen. Sometimes, a pixel may be more
+      -- than a single pixel unit, which is common on very dense screens.
+      Pixel_Size          : num;
+      -- The pixel format does not have to always be in a static format like
+      -- RGB, it can be BGR or a form of masks that show a pixel's layout.
+      Pixel_Format        : pixel_formats;
+   END RECORD;
 
-   -- All drawing procedures ignore the constraint error and just
-   -- silently return. It does not matter to the stability of
-   -- the kernel and anything "off-screen" is just not displayed.
+   FUNCTION Create_View(
+      Configuration : IN UEFI_arguments)
+   RETURN view;
+
+   -- TODO: Accesses the framebuffer dynamically. This is where my current
+   -- knowledge of Ada falters, I have no idea how to add an imported and
+   -- overlayed array into a (tagged) record, nor can I do it with an access.
+   -- Last time I checked, this is going to add seriously awful overhead, as
+   -- a procedure is called for every single pixel update. I can't apply
+   -- the GNAT specific "Inline_Always" pragma either to primitive operations.
+   PROCEDURE Screen(
+      Object : IN view;
+      Index  : IN num;
+      Data   : IN pixel)
+   WITH
+      Inline => true,
+      Pre    => Index <= Object.Framebuffer_Size;
 
    -- Creates a pixel by taking in RGB values which are then shifted
    -- and OR'd into a single value according to the pixel format.
    FUNCTION Create_Pixel(
-      Red   : IN u8;
-      Green : IN u8;
-      Blue  : IN u8)
+      Object : IN view;
+      Red    : IN u8;
+      Green  : IN u8;
+      Blue   : IN u8)
    RETURN pixel;
 
    -- Turns a screen resolution position into a framebuffer position.
    FUNCTION Calculate_Pixel(
+      Object : IN view;
       Width  : IN num;
       Height : IN num)
    RETURN num;
@@ -41,28 +68,28 @@ IS
    -- Fills the entire framebuffer with a colour. Can be used for
    -- clearing out the framebuffer fast.
    PROCEDURE Draw_Fill(
-      Buffer       : IN OUT framebuffer;
+      Object       : IN OUT view;
       Pixel_Start  : IN num;
       Pixel_End    : IN num;
       Pixel_Colour : IN pixel);
 
    -- Draws a horizontal line with a specific line size.
    PROCEDURE Draw_Horizontal_Line(
-      Buffer       : IN OUT framebuffer;
+      Object       : IN OUT view;
       Pixel_Start  : IN num;
       Pixel_Colour : IN pixel;
       Line_Size    : IN num);
 
    -- Draws a vertical line with a specific line size.
    PROCEDURE Draw_Vertical_Line(
-      Buffer       : IN OUT framebuffer;
+      Object       : IN OUT view;
       Pixel_Start  : IN num;
       Pixel_Colour : IN pixel;
       Line_Size    : IN num);
 
    -- Draws a box with a box width and box height in pixel size.
    PROCEDURE Draw_Box(
-      Buffer       : IN OUT framebuffer;
+      Object       : IN OUT view;
       Pixel_Start  : IN num;
       Pixel_Colour : IN pixel;
       Box_Width    : IN num;

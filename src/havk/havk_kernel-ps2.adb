@@ -41,7 +41,7 @@ PACKAGE BODY HAVK_Kernel.PS2 IS
       END LOOP;
    END Controller_Flush;
 
-   PROCEDURE Controller_Initialize
+   PROCEDURE Controller_Initialise
    IS
       Current_Configuration   : CONSTANT PS2_configuration :=
       (
@@ -96,7 +96,7 @@ PACKAGE BODY HAVK_Kernel.PS2 IS
 
       -- Set the package's global state variable to functional.
       Controller_State := functional;
-   END Controller_Initialize;
+   END Controller_Initialise;
 
    PROCEDURE Keyboard_Interrupt_Manager -- This could be more efficient...
    IS

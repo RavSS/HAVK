@@ -3,7 +3,8 @@ WITH
 USE
    System;
 
-PACKAGE HAVK_Kernel.Exceptions IS
+PACKAGE HAVK_Kernel.Exceptions
+IS
    PROCEDURE Last_Chance_Handler(
       Source_Location : System.Address;
       Line            : integer)
