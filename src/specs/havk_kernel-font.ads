@@ -578,7 +578,8 @@ IS
          2#11111111#,   -- XXXXXXXX
          2#11111111#    -- XXXXXXXX
       ),
-      -- A space is just background colour.
+      -- Both nulls and spaces are just background colour.
+      00 => (0, 0, 0, 0, 0, 0, 0, 0),
       32 => (0, 0, 0, 0, 0, 0, 0, 0),
       -- Unique shape for both the control characters and the characters
       -- I have not yet designed into my bitmap font.

@@ -45,9 +45,15 @@ IS
    WITH
       Inline => true;
 
-   -- Shortcut function.
+   -- Shortcut function to retrieve the ASCII value of the key pressed.
    FUNCTION Get_Key
    RETURN character
+   WITH
+      Inline => true;
+
+   -- Shortcut function to retrieve the name as a string of the key pressed.
+   FUNCTION Get_Key_Name
+   RETURN string
    WITH
       Inline => true;
 

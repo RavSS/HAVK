@@ -11,7 +11,7 @@ PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
    IS
    BEGIN
       Ticker := Ticker + 1;
-      PIC.End_Of_Interrupt;
+      PIC.Master_Reset;
    END ISR_32_Handler;
 
    PROCEDURE ISR_33_Handler( -- Keyboard.
@@ -19,104 +19,106 @@ PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
    IS
    BEGIN
       PS2.Keyboard_Interrupt_Manager;
-      PIC.End_Of_Interrupt;
+      PIC.Master_Reset;
    END ISR_33_Handler;
 
    PROCEDURE ISR_34_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Master_Reset;
    END ISR_34_Handler;
 
    PROCEDURE ISR_35_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Master_Reset;
    END ISR_35_Handler;
 
    PROCEDURE ISR_36_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Master_Reset;
    END ISR_36_Handler;
 
    PROCEDURE ISR_37_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Master_Reset;
    END ISR_37_Handler;
 
    PROCEDURE ISR_38_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Master_Reset;
    END ISR_38_Handler;
 
    PROCEDURE ISR_39_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Master_Reset;
    END ISR_39_Handler;
+
+   -- Slave PIC is used for interrupts below this line.
 
    PROCEDURE ISR_40_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Dual_Reset;
    END ISR_40_Handler;
 
    PROCEDURE ISR_41_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Dual_Reset;
    END ISR_41_Handler;
 
    PROCEDURE ISR_42_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Dual_Reset;
    END ISR_42_Handler;
 
    PROCEDURE ISR_43_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Dual_Reset;
    END ISR_43_Handler;
 
    PROCEDURE ISR_44_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Dual_Reset;
    END ISR_44_Handler;
 
    PROCEDURE ISR_45_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Dual_Reset;
    END ISR_45_Handler;
 
    PROCEDURE ISR_46_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Dual_Reset;
    END ISR_46_Handler;
 
    PROCEDURE ISR_47_Handler(
       Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      PIC.End_Of_Interrupt;
+      PIC.Dual_Reset;
    END ISR_47_Handler;
 END HAVK_Kernel.Interrupts.IRQs;

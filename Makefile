@@ -12,14 +12,14 @@ BUILD?=Debug
 # and there is two levels: 1 for compiler related switches, 2 for code changes.
 DEBUG_LEVEL?=1
 
-GNAT_DIR:=./com/gnatgpl/bin/
+GNAT_DIR:=./com/gnatgpl_linux/bin/
 BUILD_DIR:=./build/
 SRC_DIR:=./src/
 
 # Not the best solution, but should stop anyone from running the Makefile
 # outside its directory, as that could be dangerous. Looks for "src".
 ifeq ("$(wildcard $(SRC_DIR))", "")
-$(error Only run the Makefile from the root directory of HAVK's source.)
+	$(error Only run the Makefile from the root directory of HAVK's source)
 endif
 
 # Add the GNAT GPL bin folder to the beginning of the path for `gprbuild`.
@@ -36,10 +36,10 @@ MAKEFLAGS+=--no-builtin-rules --no-builtin-variables
 # EFI applications, so I do not think a cross-compiler is necessary.
 # Clang is also capable. You need both C and Ada enabled for GCC to build HAVK.
 # GNAT GPL comes with a version of x86-64 targeting GCC, so that may be used
-# as the system may not contain the exact target name. The system's current
+# as the system may not use the exact same target. The system's current
 # linker (`ld`) will be used instead of the supplied one, as that's more
 # common among installations (no matter bfd or gold).
-CC:=x86_64-pc-linux-gnu-gcc
+CC:=gcc
 LD:=ld
 AS:=nasm
 
@@ -80,13 +80,13 @@ EFI_C_FLAGS=$(EFI_C_STD) $(EFI_C_WARN) $(EFI_C_OPT) $(EFI_C_INC) \
 # in it. For better analyzing, it's wise to use the same optimization level
 # for both of the bootloader application's files.
 ifeq ("$(BUILD)", "Debug")
-EFI_C_OPT+= -O0 -ggdb3
+	EFI_C_OPT+= -O0 -ggdb3
 else
-EFI_C_OPT+= -O2 -g0
+	EFI_C_OPT+= -O2 -g0
 endif
 
 ifeq ("$(DEBUG_LEVEL)", "2")
-EFI_C_DEF+= -D HAVK_GDB_DEBUG
+	EFI_C_DEF+= -D HAVK_GDB_DEBUG
 endif
 
 EFI_LD_OPT=-nostdlib -Bsymbolic -shared -no-undefined -znocombreloc
@@ -100,7 +100,7 @@ QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) \
 	-no-shutdown
 
 ifeq ("$(INT)", "1")
-QEMU_FLAGS+= -d int
+	QEMU_FLAGS+= -d int
 endif
 
 EFI_NAME=boot
@@ -125,13 +125,13 @@ ESP_SECTOR_SIZE=4950
 # Force kernel recompilation when debugging and consider warnings as errors.
 # Also control the optimization here so it's easier to tweak.
 ifeq ("$(BUILD)", "Debug")
-O?=0
-GPR_RTS_FLAGS=-we -k -d -O$(O)
-GPR_KERNEL_FLAGS=-we -k -d -f -O$(O)
+	O?=0
+	GPR_RTS_FLAGS=-we -k -d -O$(O)
+	GPR_KERNEL_FLAGS=-we -k -d -f -O$(O)
 else
-O?=2
-GPR_RTS_FLAGS=-q -vP0 -O$(O)
-GPR_KERNEL_FLAGS=-q -vP0 -O$(O)
+	O?=2
+	GPR_RTS_FLAGS=-q -vP0 -O$(O)
+	GPR_KERNEL_FLAGS=-q -vP0 -O$(O)
 endif
 
 define echo

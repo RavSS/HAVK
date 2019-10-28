@@ -5,11 +5,34 @@
 set -e
 
 # This points to the source location for GNAT GPL.
-GNAT_SRC=http://mirrors.cdn.adacore.com/art/5cdffc5409dcd015aaf82626
-GNAT_SHA1=0cd3e2a668332613b522d9612ffa27ef3eb0815b
-GNAT_BIN=gnat-community.bin
-GNAT_CHECKSUM_LINE="$GNAT_SHA1 *./ext/$GNAT_BIN"
-GNAT_DIR=com/gnatgpl
+if [ "$1" = "windows" ] # Windows Subsystem for Linux support.
+then
+	echo "Obtaining GNAT for Windows to use with WSL."
+
+	if [ "$(id -u)" -ne 0 ]
+	then
+		echo "This script must be ran as root for WSL. Try again."
+		exit 1
+	fi
+
+	GNAT_SRC=https://community.download.adacore.com/v1/
+	GNAT_SHA1=c13b2d02d23057d9251bcdc9a073cb932177f016
+	GNAT_FILE=gnat-community.exe
+	GNAT_DIR=com/gnatgpl_windows
+elif [ "$1" = "linux" ]
+then
+	echo "Obtaining GNAT for Linux."
+	GNAT_SRC=https://community.download.adacore.com/v1/
+	GNAT_SHA1=0cd3e2a668332613b522d9612ffa27ef3eb0815b
+	GNAT_FILE=gnat-community.bin
+	GNAT_DIR=com/gnatgpl_linux
+else
+	echo "Usage: $0 <linux/windows>"
+	exit 1
+fi
+
+GNAT_SRC="$GNAT_SRC""$GNAT_SHA1""?filename=gnat" # Rename it later.
+GNAT_CHECKSUM_LINE="$GNAT_SHA1 *./ext/$GNAT_FILE"
 
 CUR_DIR=`basename $PWD`
 
@@ -42,12 +65,12 @@ then
 	mkdir ./build
 fi
 
-if ls ./ext/$GNAT_BIN 1> /dev/null 2>&1
+if ls ./ext/$GNAT_FILE 1> /dev/null 2>&1
 then
-	echo "GNAT Community installation file ($GNAT_BIN) already exists."
+	echo "GNAT Community installation file ($GNAT_FILE) already exists."
 else
-	wget $GNAT_SRC -nc -O ./ext/$GNAT_BIN
-	chmod +x ./ext/$GNAT_BIN
+	wget $GNAT_SRC -nc -O ./ext/$GNAT_FILE
+	chmod +x ./ext/$GNAT_FILE
 fi
 
 if echo $GNAT_CHECKSUM_LINE | sha1sum -c -
@@ -61,5 +84,5 @@ fi
 
 # TODO: Integrate AdaCore's installation scripts into this file so the user
 # doesn't need to use the graphical interface.
-echo "Please install GNAT Community to '$PWD/$GNAT_DIR'. GPS IDE is optional."
-./ext/$GNAT_BIN
+echo "Please install GNAT Community to '$PWD/$GNAT_DIR'."
+./ext/$GNAT_FILE

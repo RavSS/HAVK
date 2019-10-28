@@ -32,6 +32,17 @@ PACKAGE BODY HAVK_Kernel.Input IS
       END IF;
    END Get_Key;
 
+   FUNCTION Get_Key_Name
+   RETURN string IS
+      Current_Key_State : CONSTANT key_state := Get_Key_State;
+   BEGIN
+      IF Current_Key_State.Key_Shifted THEN
+         RETURN Current_Key_State.Key_Name_Shifted;
+      ELSE
+         RETURN Current_Key_State.Key_Name;
+      END IF;
+   END Get_Key_Name;
+
    PROCEDURE Set_Key_State(
       Name          : key_string;
       Name_Shifted  : key_string;

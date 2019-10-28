@@ -116,7 +116,7 @@ PACKAGE BODY HAVK_Kernel.Paging IS
    BEGIN
       Asm(
          "MOV CR3, %0;",
-         Inputs   => System.Address'asm_input("g", Object.Level_3'address),
+         Inputs   => System.Address'asm_input("r", Object.Level_3'address),
          Volatile => true);
    END Load;
 END HAVK_Kernel.Paging;

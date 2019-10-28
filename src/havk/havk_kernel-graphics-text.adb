@@ -44,8 +44,7 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
       Object : IN OUT textbox)
    IS
    BEGIN
-      FOR Y IN Object.Data'range(1) LOOP
-         EXIT WHEN Y = Object.Data'last(1);
+      FOR Y IN Object.Data'first(1) .. Object.Data'last(1) - 1 LOOP
          FOR X IN Object.Data'range(2) LOOP
             Object.Data(Y, X) := Object.Data(Y + 1, X);
          END LOOP;
@@ -62,11 +61,10 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
    BEGIN
       IF Object.Current_X_Index >  Object.Data'last(2) THEN
          Object.Current_X_Index := Object.Data'first(2);
-         Object.Current_Y_Index :=
-            Object.Current_Y_Index + 1;
+         Object.Current_Y_Index := Object.Current_Y_Index + 1;
       END IF;
 
-      IF Object.Current_Y_Index > Object.Data'last(1) THEN
+      IF Object.Current_Y_Index >  Object.Data'last(1) THEN
          Object.Scroll_Down;
          Object.Current_Y_Index := Object.Data'last(1);
       END IF;
@@ -87,14 +85,17 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
       END LOOP;
    END Print;
 
-   PROCEDURE Next_Line(
-      Object : IN OUT textbox)
+   PROCEDURE Newline(
+      Object : IN OUT textbox;
+      Amount : IN num := 1)
    IS
    BEGIN
-      Object.Current_Y_Index := Object.Current_Y_Index + 1;
-      Object.Current_X_Index := Object.Data'first(2);
-      Object.Update_Cursor;
-   END Next_Line;
+      FOR I in 1 .. Amount LOOP
+         Object.Current_Y_Index := Object.Current_Y_Index + 1;
+         Object.Current_X_Index := Object.Data'first(2);
+         Object.Update_Cursor;
+      END LOOP;
+   END Newline;
 
    PROCEDURE Draw(
       Object          : IN textbox)
@@ -113,8 +114,11 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
             -- ASCII characters start at 33, from the exclamation mark.
             -- This should grant a performance increase. Do still draw
             -- spaces (32) though, or else there would be a gap between
-            -- words if the user wanted to fill in the background too.
-            IF character'pos(Object.Data(Y, X)) > 31 THEN
+            -- words if the user wanted to fill in the background too. Null
+            -- characters are also drawn for the purpose of an explicit blank.
+            IF character'pos(Object.Data(Y, X)) > 31 OR ELSE
+               character'pos(Object.Data(Y, X)) =  0
+            THEN
                Draw_Character(
                   Object.Display.ALL,
                   Current_Pixel,
@@ -140,4 +144,24 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
          END LOOP;
       END LOOP;
    END Clear_All;
+
+   PROCEDURE Clear_Column(
+      Object  : IN OUT textbox;
+      Column  : IN num)
+   IS
+   BEGIN
+      FOR Y IN Object.Data'range(1) LOOP
+         Object.Data(Y, Column) := character'val(0);
+      END LOOP;
+   END Clear_Column;
+
+   PROCEDURE Clear_Line(
+      Object  : IN OUT textbox;
+      Line    : IN num)
+   IS
+   BEGIN
+      FOR X IN Object.Data'range(2) LOOP
+         Object.Data(Line, X) := character'val(0);
+      END LOOP;
+   END Clear_Line;
 END HAVK_Kernel.Graphics.Text;

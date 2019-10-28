@@ -2,8 +2,7 @@ WITH
    HAVK_Kernel,
    HAVK_Kernel.UEFI;
 USE
-   HAVK_Kernel,
-   HAVK_Kernel.UEFI;
+   HAVK_Kernel;
 
 PACKAGE HAVK_Kernel.Graphics
 IS
@@ -15,7 +14,6 @@ IS
 
    TYPE view IS TAGGED RECORD
       PRAGMA Warnings(off, "record layout may cause performance issues");
-      -- PRAGMA Warnings(off, "*length depends on a discriminant");
       PRAGMA Warnings(off, "comes too early and was moved down");
       -- The framebuffer MMIO address or size passed by the bootloader.
       Framebuffer_Address : num;
@@ -28,34 +26,34 @@ IS
       Pixel_Size          : num;
       -- The pixel format does not have to always be in a static format like
       -- RGB, it can be BGR or a form of masks that show a pixel's layout.
-      Pixel_Format        : pixel_formats;
+      Pixel_Format        : UEFI.pixel_formats;
    END RECORD;
 
    FUNCTION Create_View(
-      Configuration : IN UEFI_arguments)
+      Configuration : IN UEFI.arguments)
    RETURN view;
 
    -- TODO: Accesses the framebuffer dynamically. This is where my current
    -- knowledge of Ada falters, I have no idea how to add an imported and
    -- overlayed array into a (tagged) record, nor can I do it with an access.
    -- Last time I checked, this is going to add seriously awful overhead, as
-   -- a procedure is called for every single pixel update. I can't apply
-   -- the GNAT specific "Inline_Always" pragma either to primitive operations.
+   -- a procedure is called for every single pixel update. Inlining doesn't
+   -- solve it.
    PROCEDURE Screen(
-      Object : IN view;
+      Object : IN view'class;
       Index  : IN num;
       Data   : IN pixel)
    WITH
-      Inline => true,
-      Pre    => Index <= Object.Framebuffer_Size;
+      Inline_Always => true,
+      Pre           => Index <= Object.Framebuffer_Size;
 
    -- Creates a pixel by taking in RGB values which are then shifted
    -- and OR'd into a single value according to the pixel format.
    FUNCTION Create_Pixel(
       Object : IN view;
-      Red    : IN u8;
-      Green  : IN u8;
-      Blue   : IN u8)
+      Red    : IN num;
+      Green  : IN num;
+      Blue   : IN num)
    RETURN pixel;
 
    -- Turns a screen resolution position into a framebuffer position.
