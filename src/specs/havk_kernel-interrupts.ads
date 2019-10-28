@@ -19,10 +19,10 @@ IS
       RFLAGS : num;
       RSP    : num;
       SS     : num;
-   END RECORD;
-   -- I believe the stack frame needs 16 byte alignment?
-   FOR interrupt'alignment USE 16;
-   PRAGMA Pack(interrupt);
+   END RECORD
+   WITH
+      Alignment => 16, -- I believe the stack frame needs 16 byte alignment?
+      Pack      => true;
 
    -- GCC wants the handlers to take in a pointer
    -- to the interrupt stack frame as a parameter.
@@ -56,7 +56,6 @@ IS
       -- the IDT gates, where I fill the entire range in).
       Present                 : boolean;
    END RECORD;
-   FOR GDT_access'size          USE 8;
    FOR GDT_access               USE RECORD
       Accessed                  AT 0 RANGE 0 .. 0;
       Readable_Or_Writable      AT 0 RANGE 1 .. 1;
@@ -78,7 +77,6 @@ IS
       -- This applies to the end address value only, I think...
       Granularity             : boolean;
    END RECORD;
-   FOR GDT_flags'size           USE 4;
    FOR GDT_flags                USE RECORD
       Zeroed                    AT 0 RANGE 0 .. 0;
       Long_Descriptor_Size      AT 0 RANGE 1 .. 1;
@@ -102,7 +100,6 @@ IS
       -- End 8 bits of the 32-bit starting address for the segment.
       Start_Address_High      : num  RANGE 0 ..   16#FF#;
    END RECORD;
-   FOR GDT_entry'size           USE 64;
    FOR GDT_entry                USE RECORD
       End_Address_Low           AT 0 RANGE 0 .. 15;
       Start_Address_Low         AT 2 RANGE 0 .. 15;
@@ -153,7 +150,6 @@ IS
       -- so all the blank interrupts are not set to present.
       Present            : boolean;
    END RECORD;
-   FOR IDT_attributes'size USE 8;
    FOR IDT_attributes      USE RECORD
       Gate                 AT 0 RANGE 0 .. 3;
       Storage_Segment      AT 0 RANGE 4 .. 4;
@@ -183,7 +179,6 @@ IS
       -- 32 bits of zeroes only and nothing else.
       Zeroed             : num  RANGE 0 .. 16#FFFFFFFF#;
    END RECORD;
-   FOR IDT_gate'size      USE 128;
    FOR IDT_gate           USE RECORD
       ISR_Address_Low     AT  0 RANGE 0 .. 15;
       CS_Selector         AT  2 RANGE 0 .. 15;
@@ -212,7 +207,6 @@ IS
       -- IOPB disabled by default (byte size of TSS).
       IOPB        : num  RANGE 0 ..     16#FFFF# := 104;
    END RECORD;
-   FOR TSS_structure'size      USE 832;
    FOR TSS_structure           USE RECORD
       Reserved_1 AT   0  RANGE 0 .. 31;
       RSP_Ring_0 AT   4  RANGE 0 .. 63;
@@ -238,7 +232,6 @@ IS
       Zeroed                    : num RANGE 0 ..        16#F#;
       Reserved_2                : num RANGE 0 ..    16#FFFFF#;
    END RECORD;
-   FOR GDT_entry_TSS64'size       USE 128;
    FOR GDT_entry_TSS64            USE RECORD
       Descriptor_TSS              AT 0 RANGE   0 ..  63; -- 64 bits.
       Start_Address_Extended      AT 0 RANGE  64 ..  95; -- 32 bits.
@@ -257,7 +250,6 @@ IS
       Descriptor_User_DS        : GDT_entry;       -- 0x24 = 100100.
       Descriptor_TSS64          : GDT_entry_TSS64; -- 0x28 = 101000.
    END RECORD;
-   FOR GDT_entries'size           USE 5 * 64 + 128;
    FOR GDT_entries                USE RECORD
       Descriptor_Null             AT  0 RANGE 0 .. 63;
       Descriptor_Kernel_CS        AT  8 RANGE 0 .. 63;
@@ -271,17 +263,16 @@ IS
       Table_Size                : num RANGE 0 .. 16#FFFF#;
       Start_Address             : System.Address;
    END RECORD;
-   FOR descriptor_table'size      USE 80;
-   FOR descriptor_table'alignment USE  1;
    FOR descriptor_table           USE RECORD
       Table_Size                  AT 0 RANGE 0 .. 15;
       Start_Address               AT 2 RANGE 0 .. 63;
    END RECORD;
 
    -- Increase this later on if need be.
-   TYPE IDT_gates IS ARRAY(num RANGE 0 .. 47) OF IDT_gate;
-   FOR  IDT_gates'component_size USE 128;
-   PRAGMA Pack(IDT_gates);
+   TYPE IDT_gates IS ARRAY(num RANGE 0 .. 47) OF IDT_gate
+   WITH
+      Component_Size => 128,
+      Pack           => true;
 
    PROCEDURE Prepare_GDT;
 
@@ -467,7 +458,7 @@ IS
    -- TODO: Store IRQ 0 interrupts here temporarily.
    -- No idea what the timer's frequency is, so I can't exactly
    -- count seconds right now.
-   Ticker : u64 := 0
+   Ticker : num := 0
    WITH
       Volatile => true;
 END HAVK_Kernel.Interrupts;

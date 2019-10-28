@@ -1,7 +1,7 @@
 # Changelog for the HAVK operating system
-#### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date UTC +13:00 )
+#### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date at UTC +13:00 )
 
-### Tasklist - 2019-08-27
+### Tasklist - 2019-10-28
 - Start parsing the memory map provided by the UEFI bootloader and begin
 manipulating the page directory for memory management purposes.
 - Very specific resolutions like 1366x768 are bugged and unusable.
@@ -10,8 +10,8 @@ manipulating the page directory for memory management purposes.
 often becomes stuck in reverse.
 - Unoptimised `Screen(Index, Pixel)` function as I cannot figure out
 how to add a non-local address aliased array into a tagged record, or
-any other optimal solution. Cannot use `inline_always` due to it
-being a dispatching subprogram and `inline` has no effect.
+any other optimal solution. Making it non-primitive doesn't help at
+removing the overhead.
 - Reorganise the bootloader arguments structure and provide
 a consistent format that does away with some of UEFI's oddities.
 
@@ -20,7 +20,8 @@ a consistent format that does away with some of UEFI's oddities.
 - The page structure is now controllable and HAVK can map virtual addresses
 to physical addresses. It is not complete and has a default page size of
 2 MiB to save time and kernel file space for now.
-- Expanded the Last Chance Handler to send crash information to COM1.
+- Expanded the Last Chance Handler to send crash information to COM1, along
+with new kernel panic functionality.
 - Massive shift of code from the main procedure to an initialisation
 package for organisation purposes.
 

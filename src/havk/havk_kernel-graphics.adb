@@ -13,18 +13,19 @@ IS
    -- RGB and BGR for now.
    FUNCTION Create_Pixel(
       Object   : IN view;
-      Red      : IN u8;
-      Green    : IN u8;
-      Blue     : IN u8)
+      Red      : IN num;
+      Green    : IN num;
+      Blue     : IN num)
    RETURN pixel  IS
-      -- Green will always be in-between red and blue.
-      Mid_Byte : CONSTANT num := SHL(num(Green), 8) AND 16#00FF00#;
+      USE HAVK_Kernel.UEFI;
+      -- Green will always be in-between red and blue (for now).
+      Mid_Byte : CONSTANT num := SHL(Green, 8) AND 16#00FF00#;
       Value    : pixel;
    BEGIN
       IF    Object.Pixel_Format = BGR THEN
-         Value := pixel(SHL(num(Red),  16) OR Mid_Byte OR num(Blue));
+         Value := pixel(SHL(Red,  16) OR Mid_Byte OR Blue);
       ELSIF Object.Pixel_Format = RGB THEN
-         Value := pixel(SHL(num(Blue), 16) OR Mid_Byte OR num(Red));
+         Value := pixel(SHL(Blue, 16) OR Mid_Byte OR Red);
       ELSE
          Value := 16#DEADC0DE#; -- Incorrect format error.
       END IF;
@@ -114,7 +115,7 @@ IS
    END Calculate_Pixel;
 
    FUNCTION Create_View(
-      Configuration : IN UEFI_arguments)
+      Configuration : IN UEFI.arguments)
    RETURN view        IS
       New_View      : CONSTANT view :=
       (
@@ -132,7 +133,7 @@ IS
    END Create_View;
 
    PROCEDURE Screen(
-      Object : IN view;
+      Object : IN view'class;
       Index  : IN num;
       Data   : IN pixel)
    IS

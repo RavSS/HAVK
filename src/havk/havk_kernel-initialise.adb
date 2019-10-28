@@ -29,7 +29,7 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
          Paging.Align_Huge(Display.Framebuffer_Address);
    BEGIN
       PRAGMA Debug(Debug_Message("Paging structure size:" &
-         num'image(Kernel_Paging_Layout'size / 8) & " KiB"));
+         num'image(Kernel_Paging_Layout'size / 8 / 1024) & " KiB"));
 
       -- TODO: Identity map the first 2 MiB page, can't remember why it is
       -- needed. Something to do with the UEFI bootloader's memory allocations?
@@ -97,15 +97,15 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
       Common_Symbols : CONSTANT string := "!@#$%^&*()_-+=[]{}\|;:'"",<.>/?";
    BEGIN
       Terminal.Print("FONT TEST:");
-      Terminal.Next_Line;
+      Terminal.Newline;
       Terminal.Print("   " & Uppercase);
-      Terminal.Next_Line;
+      Terminal.Newline;
       Terminal.Print("   " & Lowercase);
-      Terminal.Next_Line;
+      Terminal.Newline;
       Terminal.Print("   " & Numeric_Digits);
-      Terminal.Next_Line;
+      Terminal.Newline;
       Terminal.Print("   " & Common_Symbols);
-      Terminal.Next_Line;
+      Terminal.Newline;
    END Font_Test;
 
    PROCEDURE PS2_Input
@@ -128,9 +128,9 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
    BEGIN
       LOOP
          HLT;
-         Terminal.Current_X_Index := 1;
+         Terminal.Current_X_Index := Terminal.Data'first(2);
          Terminal.Print("     "); -- Clear the first 5 characters.
-         Terminal.Current_X_Index := 1;
+         Terminal.Current_X_Index := Terminal.Data'first(2);
          Terminal.Print(num'image(INB(16#60#)));
       END LOOP;
    END PS2_Scancode_Test;
@@ -138,24 +138,28 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
    PROCEDURE Input_Key_Test(
       Terminal : IN OUT textbox)
    IS
-      Key      : character := '-';
+      -- TODO: Store the key state here, don't fetch the latest one on each
+      -- of the `Get_*` functions, or else a race occurs and there can be
+      -- an erroneous difference in the output if the user is fast enough
+      -- or their system is slow enough.
    BEGIN
       Terminal.Print("PS/2 KEYPRESS TEST, PRESS ENTER TO EXIT: ");
-      Terminal.Next_Line;
+      Terminal.Newline;
       PRAGMA Debug(Debug_Message("PS/2 key test has started."));
 
-      WHILE Key /= character'val(10) LOOP
-         Key := Get_Key;
-         Terminal.Current_X_Index := 1;
-         Terminal.Print(Key & "");
+      WHILE Get_Key /= character'val(10) LOOP
+         Terminal.Clear_Line(Terminal.Current_Y_Index);
+         Terminal.Current_X_Index := Terminal.Data'first(2);
+
+         Terminal.Print(Get_Key & " - " & Get_Key_Name);
          Terminal.Draw;
          HLT;
       END LOOP;
 
-      Terminal.Current_X_Index := 1;
+      Terminal.Current_X_Index := Terminal.Data'first(2);
       Terminal.Print("ENTER KEY SUCCESSFULLY PRESSED.");
-      Terminal.Next_Line;
-      Terminal.Next_Line;
+      Terminal.Newline;
+      Terminal.Newline;
 
       PRAGMA Debug(Debug_Message("PS/2 key test ended."));
    END Input_Key_Test;
@@ -165,7 +169,7 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
    IS
    BEGIN
       Terminal.Print("INACCURATE SECONDS COUNT: ");
-      Terminal.Next_Line;
+      Terminal.Newline;
       PRAGMA Debug(Debug_Message("Endless seconds count beginning."));
 
       LOOP -- Endless loop showcasing interrupts.
@@ -176,7 +180,7 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
          -- the timer's frequency, which I have not retrieved from the UEFI
          -- runtime service function `GetTime()`'s capabilities structure nor
          -- have I programmed the legacy PIT to my settings.
-         Terminal.Print(u64'image(Ticker / 100));
+         Terminal.Print(num'image(Ticker / 100));
          Terminal.Draw;
       END LOOP;
    END Seconds_Count;

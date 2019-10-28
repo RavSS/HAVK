@@ -1,10 +1,11 @@
-PROJECT HAVK IS
+PROJECT HAVK
+IS
    FOR Default_Language USE "Ada";
-   FOR Languages USE("Ada", "NASM");
-   FOR Source_Dirs USE("./havk/", "./specs/", "./nasm/");
-   FOR Object_Dir USE "./../build/";
-   FOR Exec_Dir USE "./";
-   FOR Main USE("havk.adb");
+   FOR Languages        USE("Ada", "NASM");
+   FOR Source_Dirs      USE("./havk/", "./specs/", "./nasm/");
+   FOR Object_Dir       USE "./../build/";
+   FOR Exec_Dir         USE "./";
+   FOR Main             USE("havk.adb");
 
    TYPE Kernel_Type IS("Final", "Debug");
    Build : Kernel_Type := EXTERNAL("Build");
@@ -13,13 +14,13 @@ PROJECT HAVK IS
    -- secondary stack support and tagged records. Note that the object
    -- directory must contain "adainclude" and "adalib". They are handled
    -- by the "HAVK_RTS.gpr" project, which compiles HAVK's runtime system.
-   FOR Runtime("Ada") USE HAVK'Object_Dir;
+   FOR Runtime("Ada")   USE HAVK'Object_Dir;
 
    -- NOTE: none of the arguments are allowed to have spaces, or
    -- else they somehow become corrupted when passed to the
    -- programs used for compilation. I don't think GPR allows spaces.
 
-   PACKAGE Naming IS
+   PACKAGE Naming  IS
       FOR Body_Suffix("NASM") USE ".asm";
    END Naming;
 
@@ -132,7 +133,7 @@ PROJECT HAVK IS
 
       CASE Build IS
          WHEN "Final" =>
-            FOR Default_Switches("Ada") USE
+            FOR Default_Switches("Ada")  USE
                Ada_Basic_Switches &
                Ada_Style_Switches &
                Ada_Final_Switches;
@@ -140,7 +141,7 @@ PROJECT HAVK IS
                NASM_Basic_Switches &
                NASM_Final_Switches;
          WHEN "Debug" =>
-            FOR Default_Switches("Ada") USE
+            FOR Default_Switches("Ada")  USE
                Ada_Basic_Switches &
                Ada_Style_Switches &
                Ada_Debug_Switches;
@@ -150,12 +151,12 @@ PROJECT HAVK IS
       END CASE;
 
       -- Add my Ada configuration file and apply it everywhere.
-      FOR Global_Configuration_Pragmas USE "./specs/havk.adc";
+      FOR Global_Configuration_Pragmas   USE "./specs/havk.adc";
 
       -- Just a default output. The Makefile should control it, so this
       -- is only a fallback.
       FOR Executable("havk.adb") USE "../build/No_Makefile_HAVK.elf";
-      FOR Executable_Suffix USE ".elf";
+      FOR Executable_Suffix      USE ".elf";
    END Builder;
 
    PACKAGE Compiler IS -- `gcc` / `x86_64-pc-linux-gnu-gcc` & `nasm`
@@ -165,7 +166,7 @@ PROJECT HAVK IS
          -- I have the stack fail function called after `MOV CR3, *` somehow.
          -- I've removed "*-all" and replaced it with "*-strong" for now.
          -- This adds a heap of instructions and a little overhead either way.
-         "-fstack-protector-strong",
+         "-fstack-protector-all",
          -- Add some extra instructions that check if we've gone
          -- over the stack space limit. Usually that just causes an
          -- intense crash like a general page-fault for example.
@@ -215,20 +216,20 @@ PROJECT HAVK IS
 
       -- Define my "new language's" configuration for NASM/assembly.
       -- Use the `nasm` executable. Expect it in the user's path.
-      FOR Driver("NASM") USE "nasm";
+      FOR Driver("NASM")                    USE "nasm";
       -- We're only assembling ELF-64 format binaries with HAVK.
       FOR Leading_Required_Switches("NASM") USE ("-felf64");
       -- Specify the object file's suffix as ".o", set as default anyway.
-      FOR Object_File_Suffix("NASM") USE ".o";
+      FOR Object_File_Suffix("NASM")        USE ".o";
       -- This needs to be specified even when it's "supposedly"
       -- the default setting. Doesn't work without it for me as NASM
       -- just generates the object file into the source directory.
-      FOR Object_File_Switches("NASM") USE ("-o");
+      FOR Object_File_Switches("NASM")      USE ("-o");
       -- Don't think I need this, but NASM does include some Makefile
       -- specific options. Set it anyway.
-      FOR Dependency_Kind("NASM") USE "Makefile";
+      FOR Dependency_Kind("NASM")           USE "Makefile";
       -- This will pass all source directories to NASM.
-      FOR Include_Switches("NASM") USE ("-I");
+      FOR Include_Switches("NASM")          USE ("-I");
 
       FOR Default_Switches("Ada") USE
          GCC_Basic_Switches;
@@ -254,6 +255,7 @@ PROJECT HAVK IS
          -- Check if the source files actually exist and are findable,
          -- otherwise, raise an error.
          "-s",
+         "-E",
          -- TODO: Set the "storage size" or "default task stack size value".
          -- Is this referring to the available stack space? I've just set it
          -- to 64 KiB, which is what I've allocated in the entry assembly file.

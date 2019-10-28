@@ -7,27 +7,26 @@ WITH
    HAVK_Kernel.Initialise;
 USE
    HAVK_Kernel,
-   HAVK_Kernel.UEFI,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text,
    HAVK_Kernel.Intrinsics;
 
--- This is the main procedure, this is where HAVK starts itself after entry.
+-- This is the main procedure, it is where HAVK starts itself after entry.
 PROCEDURE HAVK
 WITH
    No_Return => true
 IS
    -- Access the arguments passed by HAVK's UEFI bootloader.
-   Bootloader    : CONSTANT access_UEFI_arguments
+   Bootloader      : CONSTANT UEFI.access_arguments
    WITH
       Import     => true,
       Convention => NASM,
       Link_Name  => "bootloader.arguments";
 
-   Display       : ALIASED view := Create_View(Bootloader.ALL);
+   Display         : ALIASED view := Create_View(Bootloader.ALL);
 
    -- The UEFI memory map. Assumes the descriptor size has been "fixed".
-   Map           : ALIASED memory_map(0  .. Bootloader.Memory_Map_Size /
+   Map             : ALIASED UEFI.memory_map(0 .. Bootloader.Memory_Map_Size /
       Bootloader.Memory_Map_Descriptor_Size)
    WITH
       Import     => true,
@@ -44,11 +43,11 @@ IS
    Terminal_Start  : CONSTANT num := Display.Calculate_Pixel(
       Terminal_Border / 2, Terminal_Border / 2);
 
-   Terminal : textbox(
+   Terminal        : textbox(
       (Display.Screen_Width  - Terminal_Border) / 10,
       (Display.Screen_Height - Terminal_Border) / 11);
 
-   Welcome  : CONSTANT string := "WELCOME TO HAVK";
+   Welcome         : CONSTANT string := "WELCOME TO HAVK";
 BEGIN
    -- Initialise the debugging message mechanism if debugging is enabled.
    PRAGMA Debug(Debug_Initialise);
@@ -62,7 +61,7 @@ BEGIN
    Initialise.PS2_Input;
 
    -- Set up the terminal.
-   Terminal.Clear_All; -- Set to all null characters.
+   Terminal.Clear_All;
    Terminal.Position := Terminal_Start; -- Set the top-left corner of the box.
    Terminal.Display  := Display'unchecked_access; -- Set the buffer to draw to.
    Terminal.Background_Colour := Display.Create_Pixel(0, 0, 0);
@@ -71,19 +70,17 @@ BEGIN
    -- Print the welcome message.
    Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - Welcome'length / 2;
    Terminal.Print(Welcome);
-   Terminal.Next_Line;
-   Terminal.Next_Line;
+   Terminal.Newline(2);
 
    -- Print the font test.
    Initialise.Font_Test(Terminal);
-   Terminal.Next_Line;
+   Terminal.Newline;
 
    -- TODO: Needs work.
    Terminal.Print("MEMORY MAP ENUMERATION:");
-   Terminal.Next_Line;
+   Terminal.Newline;
    Terminal.Print("   MEMORY DESCRIPTORS:" & num'image(Map'length));
-   Terminal.Next_Line;
-   Terminal.Next_Line;
+   Terminal.Newline(2);
 
    Terminal.Draw;
    PRAGMA Debug(Debug_Message("First terminal draw done."));

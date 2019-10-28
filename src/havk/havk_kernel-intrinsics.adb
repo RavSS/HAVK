@@ -25,7 +25,7 @@ IS
          -- architectures or newer.
          "SHL %0, CL;",
          Outputs  => num'asm_output("+r", Shifted),
-         Inputs   => num'asm_input("g", Shift_By),
+         Inputs   => num'asm_input("g",  Shift_By),
          Clobber  => "rcx, cc", -- Carry flag gets modified.
          Volatile => true);
       RETURN Shifted;
@@ -44,7 +44,7 @@ IS
          "MOV RCX, %1;" &
          "SHR %0, CL;",
          Outputs  => num'asm_output("+r", Shifted),
-         Inputs   => num'asm_input("g", Shift_By),
+         Inputs   => num'asm_input("g",  Shift_By),
          Clobber  => "rcx, cc",
          Volatile => true);
       RETURN Shifted;
@@ -60,7 +60,8 @@ IS
          "BT %1, %2;",
          Outputs  => boolean'asm_output("=@ccc", Result), -- Changes flags.
          Inputs   => (num'asm_input("r", Value),
-                     num'asm_input("r", Bit)),
+                      num'asm_input("r",  Bit)),
+         Clobber  => "cc",
          Volatile => true);
       RETURN Result;
    END BT;
@@ -69,23 +70,38 @@ IS
       Port     : IN num;
       Value    : IN num)
    IS
+      TYPE  word IS MOD 2 ** 16
+      WITH
+         Size => 16;
+
+      TYPE  byte IS MOD 2 **  8
+      WITH
+         Size =>  8;
    BEGIN
       Asm(
          "OUTB %1, %0;",
-         Inputs   => (u8'asm_input("a", u8(Value)),
-                     u16'asm_input("Nd", u16(Port))),
+         Inputs   => (byte'asm_input("a",  byte(Value)),
+                      word'asm_input("Nd", word(Port))),
          Volatile => true);
    END OUTB;
 
    FUNCTION INB(
-      Port    : IN num)
-   RETURN num   IS
-      Read    : u8 := 0;
+      Port     : IN num)
+   RETURN num    IS
+      TYPE word  IS MOD 2 ** 16
+      WITH
+         Size => 16;
+
+      TYPE byte  IS MOD 2 **  8
+      WITH
+         Size =>  8;
+
+      Read : byte := 0;
    BEGIN
       Asm(
          "INB %0, %1;",
-         Outputs  => u8'asm_output("=a", Read),
-         Inputs   => u16'asm_input("Nd", u16(Port)),
+         Outputs  => byte'asm_output("=a",      Read),
+         Inputs   => word'asm_input("Nd", word(Port)),
          Volatile => true);
       RETURN num(Read);
    END INB;

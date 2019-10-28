@@ -18,13 +18,19 @@ IS
    -- exceptions, but instead come directly after them.
    PROCEDURE Remap;
 
-   -- Sends an End Of Interrupt to both PICs regardless if the slave PIC was
-   -- utilized. This is put into a NASM routine for higher performance,
-   -- as I doubt GCC will inline a similiar native Ada procedure.
-   PROCEDURE End_Of_Interrupt
+   -- Resets the master PIC only.
+   PROCEDURE Master_Reset
    WITH
-      Import        => true,
-      Inline        => true,
-      Convention    => NASM,
-      External_Name => "pic_eoi";
+      Inline_Always => true;
+
+   -- TODO: Very odd GCC glitch where if the optimisation is set to O2, then
+   -- inlining a function that has two `OUTB` instructions causes an error
+   -- where the ISR is trying to call itself (or at least GCC says that).
+   -- It does not occur with the above procedure that only resets the master
+   -- PIC and only that... somehow. Also does not occur on O3, O1, O0, etc.
+   ----------------------------------------------------------------------------
+   -- Resets both the master PIC and the slave PIC.
+   PROCEDURE Dual_Reset
+   WITH
+      Inline        => false;
 END HAVK_Kernel.Interrupts.PIC;

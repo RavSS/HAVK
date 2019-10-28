@@ -1,4 +1,6 @@
 PACKAGE HAVK_Kernel.Graphics.Text IS
+   -- Stores textbox data in two dimensions. First index is for the line,
+   -- second index is for the column.
    TYPE textbox_data IS ARRAY(num RANGE <>, num RANGE <>) OF character;
 
    TYPE textbox(
@@ -50,8 +52,9 @@ PACKAGE HAVK_Kernel.Graphics.Text IS
       Object  : IN OUT textbox;
       Message : IN string);
 
-   PROCEDURE Next_Line(
-      Object  : IN OUT textbox)
+   PROCEDURE Newline(
+      Object  : IN OUT textbox;
+      Amount  : IN num := 1)
    WITH
       Inline => true;
 
@@ -60,6 +63,18 @@ PACKAGE HAVK_Kernel.Graphics.Text IS
 
    PROCEDURE Clear_All(
       Object  : IN OUT textbox)
+   WITH
+      Inline => true;
+
+   PROCEDURE Clear_Column(
+      Object  : IN OUT textbox;
+      Column  : IN num)
+   WITH
+      Inline => true;
+
+   PROCEDURE Clear_Line(
+      Object  : IN OUT textbox;
+      Line    : IN num)
    WITH
       Inline => true;
 END HAVK_Kernel.Graphics.Text;

@@ -64,9 +64,6 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
       END LOOP;
    END Last_Chance_Handler;
 
-   -- Just a wrapper for the last chance handler for now, as a
-   -- symbol is created for the stack check fail if stack protection
-   -- is enabled during compilation.
    PROCEDURE Stack_Smash_Handler
    IS
       Message : CONSTANT string := "stack smashed" & character'val(0);
@@ -75,4 +72,15 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
       Last_Chance_Handler(Message'address, 0);
       -- Do not continue going.
    END Stack_Smash_Handler;
+
+   PROCEDURE Tears_In_Rain(
+      Message : IN string;
+      Line    : IN integer)
+   IS
+      Fatal_Message : CONSTANT string := Message & character'val(0);
+   BEGIN
+      -- TODO: After logging support has been added, use the functions here.
+      Last_Chance_Handler(Fatal_Message'address, Line);
+      -- Do not continue going.
+   END Tears_In_Rain;
 END HAVK_Kernel.Exceptions;

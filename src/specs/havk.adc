@@ -1,34 +1,43 @@
 PRAGMA License(GPL);
 
-PRAGMA Normalize_Scalars;
 PRAGMA Discard_Names;
+PRAGMA Normalize_Scalars;
 
--- TODO:This doesn't work properly and causes GNAT to raise a bug.
--- It would be really helpful to make "num" and "System.Address"
--- implicitly convert to each other.
+-- TODO: This GNAT extension doesn't work properly and causes GNAT to
+-- raise a bug in some instances. It would be really helpful to make
+-- "num" and "System.Address" implicitly convert to each other.
 PRAGMA Allow_Integer_Address;
 
 PRAGMA Assertion_Policy(CHECK);
-PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);
 PRAGMA Convention_Identifier(NASM, Assembler);
+PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);
 
-PRAGMA Restrictions(No_Enumeration_Maps);
-PRAGMA Restrictions(No_Protected_Types);
-PRAGMA Restrictions(No_Delay);
--- PRAGMA Restrictions(No_Recursion);
+PRAGMA Restrictions(No_Access_Parameter_Allocators);
 PRAGMA Restrictions(No_Allocators);
-PRAGMA Restrictions(No_Dispatch);
-PRAGMA Restrictions(No_Implicit_Heap_Allocations);
-PRAGMA Restrictions(No_Implicit_Task_Allocations);
--- PRAGMA Restrictions(No_Implicit_Conditionals);
--- PRAGMA Restrictions(No_Implicit_Loops);
-PRAGMA Restrictions(No_Obsolescent_Features);
-PRAGMA Restrictions(No_IO);
-PRAGMA Restrictions(Static_Storage_Size);
-PRAGMA Restrictions(No_Wide_Characters);
+PRAGMA Restrictions(No_Anonymous_Allocators);
+PRAGMA Restrictions(No_Calendar);
+PRAGMA Restrictions(No_Delay);
+PRAGMA Restrictions(No_Direct_Boolean_Operators);
+PRAGMA Restrictions(No_Dispatching_Calls);
+PRAGMA Restrictions(No_Dynamic_Attachment);
+PRAGMA Restrictions(No_Enumeration_Maps);
 PRAGMA Restrictions(No_Exception_Handlers);
 PRAGMA Restrictions(No_Exception_Propagation);
-PRAGMA Restrictions(No_Direct_Boolean_Operators);
+PRAGMA Restrictions(No_Exception_Registration);
 PRAGMA Restrictions(No_Finalization);
+PRAGMA Restrictions(No_Implicit_Dynamic_Code); -- Impacts `-mindirect-branch`?
+PRAGMA Restrictions(No_Implicit_Heap_Allocations);
+PRAGMA Restrictions(No_Implicit_Task_Allocations);
+PRAGMA Restrictions(No_IO);
+PRAGMA Restrictions(No_Local_Allocators);
+PRAGMA Restrictions(No_Nested_Finalization);
+PRAGMA Restrictions(No_Obsolescent_Features);
+PRAGMA Restrictions(No_Protected_Types);
+PRAGMA Restrictions(No_Relative_Delay);
+PRAGMA Restrictions(No_Streams);
+PRAGMA Restrictions(No_Task_Attributes_Package);
+PRAGMA Restrictions(No_Task_Termination);
 PRAGMA Restrictions(No_Tasking);
-PRAGMA Restrictions(No_Implicit_Dynamic_Code);
+PRAGMA Restrictions(No_Wide_Characters);
+PRAGMA Restrictions(Static_Priorities);
+PRAGMA Restrictions(Static_Storage_Size);

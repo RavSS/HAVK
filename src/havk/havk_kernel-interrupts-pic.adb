@@ -47,4 +47,17 @@ PACKAGE BODY HAVK_Kernel.Interrupts.PIC IS
       OUTB(Master_Data, 0);
       OUTB(Slave_Data,  0);
    END Remap;
+
+   PROCEDURE Master_Reset
+   IS
+   BEGIN
+      OUTB(Master_Command, Interrupt_End);
+   END Master_Reset;
+
+   PROCEDURE Dual_Reset
+   IS
+   BEGIN
+      OUTB(Master_Command, Interrupt_End);
+      OUTB(Slave_Command,  Interrupt_End);
+   END Dual_Reset;
 END HAVK_Kernel.Interrupts.PIC;

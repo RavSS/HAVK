@@ -1,10 +1,10 @@
 WITH
    GNAT.Source_Info,
    HAVK_Kernel.Exceptions,
-   System.Machine_Code;
+   HAVK_Kernel.Intrinsics;
 USE
    HAVK_Kernel.Exceptions,
-   System.Machine_Code;
+   HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
    PRAGMA Warnings(off, "formal parameter ""Stack_Frame"" is not referenced");
@@ -39,10 +39,9 @@ PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions IS
       PRAGMA Warnings(off, "variable ""RIP"" is not referenced");
       RIP : num := Stack_Frame.RIP;
    BEGIN
-      Asm(
-         "CLI;" &
-         "HLT;",
-         Volatile => true);
+      LOOP
+         HLT; -- Needs interrupts to be enabled.
+      END LOOP;
    END ISR_3_Handler;
 
    PROCEDURE ISR_4_Handler(

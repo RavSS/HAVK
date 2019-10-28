@@ -29,7 +29,8 @@ IS
       Reserved   AT 12 RANGE 0 .. 31;
    END RECORD;
 
-   -- Read: UEFI Specification, Version 2.8 - Page 166.
+   -- TODO: Maybe make this into a record, what is the "best Ada way" here?
+   -- READ: UEFI Specification, Version 2.8 - Page 166.
    -- Multiple attributes are allowed, they can be OR'd together.
    TYPE memory_attributes IS(
       uncacheable,              -- Memory region is not cacheable.
@@ -90,12 +91,12 @@ IS
       Memory_Attribute_Bitmask        AT 32 RANGE 0 .. 63;
    END RECORD;
 
-   TYPE memory_map      IS ARRAY(num RANGE <>) OF ALIASED memory_descriptor
+   TYPE memory_map       IS ARRAY(num RANGE <>) OF ALIASED memory_descriptor
    WITH
       Convention     => C,
       Component_Size => 320;
 
-   TYPE UEFI_arguments  IS RECORD
+   TYPE arguments IS RECORD
       -- Graphics related variables.
       Graphics_Mode_Current         : num   RANGE 0 .. 16#FFFFFFFF#;
       Graphics_Mode_Max             : num   RANGE 0 .. 16#FFFFFFFF#;
@@ -115,7 +116,7 @@ IS
    END RECORD
    WITH
       Convention => C;
-   FOR  UEFI_arguments USE RECORD
+   FOR arguments USE RECORD
       Graphics_Mode_Current           AT  0 RANGE 0 ..  31;
       Graphics_Mode_Max               AT  4 RANGE 0 ..  31;
       Framebuffer_Address             AT  8 RANGE 0 ..  63;
@@ -133,5 +134,5 @@ IS
    END RECORD;
 
    -- A pointer is passed by the UEFI bootloader.
-   TYPE access_UEFI_arguments IS ACCESS CONSTANT UEFI_arguments;
+   TYPE access_arguments IS NOT NULL ACCESS CONSTANT arguments;
 END HAVK_Kernel.UEFI;
