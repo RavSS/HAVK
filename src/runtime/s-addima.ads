@@ -2,11 +2,11 @@
 --                                                                          --
 --                         GNAT COMPILER COMPONENTS                         --
 --                                                                          --
---    S Y S T E M . S E C O N D A R Y _ S T A C K . S I N G L E _ T A S K   --
+--                  S Y S T E M . A D D R E S S _ I M A G E                 --
 --                                                                          --
---                                 B o d y                                  --
+--                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2005-2019, Free Software Foundation, Inc.         --
+--           Copyright (C) 1992-2019, Free Software Foundation, Inc.        --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -29,25 +29,15 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-pragma Restrictions (No_Elaboration_Code);
---  We want to guarantee the absence of elaboration code because the
---  binder does not handle references to this package.
+--  This is a GNAT specific addition which provides a useful debugging
+--  procedure that gives an (implementation dependent) string which
+--  identifies an address.
 
-package body System.Secondary_Stack.Single_Task is
-   -------------------
-   -- Get_Sec_Stack --
-   -------------------
-   function Get_Sec_Stack return SS_Stack_Ptr is
-   begin
-      --  If the pointer to the secondary stack is null then a stack has not
-      --  been allocated. A call to SS_Init will assign the binder generated
-      --  stack and will initialize it.
+--  This unit may be used directly from an application program by providing
+--  an appropriate WITH, and the interface can be expected to remain stable.
 
-      if Secondary_Stack = null then
-         SS_Init (Secondary_Stack);
-      end if;
-
-      return Secondary_Stack;
-   end Get_Sec_Stack;
-
-end System.Secondary_Stack.Single_Task;
+function System.Address_Image (A : Address) return String WITH SPARK_Mode;
+pragma Pure (System.Address_Image);
+--  Returns string (hexadecimal digits with upper case letters) representing
+--  the address (string is 8/16 bytes for 32/64-bit machines). 'First of the
+--  result = 1.

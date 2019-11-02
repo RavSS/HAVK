@@ -1,8 +1,11 @@
-PACKAGE HAVK_Kernel.Graphics.Text IS
+PACKAGE HAVK_Kernel.Graphics.Text
+IS
    -- Stores textbox data in two dimensions. First index is for the line,
    -- second index is for the column.
    TYPE textbox_data IS ARRAY(num RANGE <>, num RANGE <>) OF character;
 
+   -- This is the type used for showing textboxes and message boxes.
+   -- For now, it is used for terminal/commandline console display logic.
    TYPE textbox(
       Width             : num;
       Height            : num)
@@ -31,50 +34,64 @@ PACKAGE HAVK_Kernel.Graphics.Text IS
       Line_Separation   : num := 3;
       -- Where the textbox should be drawn on the framebuffer.
       Position          : num := 1;
-      -- An access variable to the default view for drawing.
-      Display           : ACCESS view;
    END RECORD;
 
-   PROCEDURE Draw_Character(
-      Object            : IN view;
-      Pixel_Start       : IN num;
-      Foreground_Colour : IN pixel;
-      Background_Colour : IN pixel;
-      ASCII             : IN character);
-
-   PROCEDURE Scroll_Down(
-      Object  : IN OUT textbox);
-
-   PROCEDURE Update_Cursor(
-      Object  : IN OUT textbox);
-
+   -- Adds a string into a textbox.
    PROCEDURE Print(
       Object  : IN OUT textbox;
-      Message : IN string);
+      Message : IN string;
+      Centre  : IN boolean := false);
 
+   -- Moves the cursor down a row while handling correct positioning.
    PROCEDURE Newline(
       Object  : IN OUT textbox;
       Amount  : IN num := 1)
    WITH
       Inline => true;
 
-   PROCEDURE Draw(
-      Object  : IN textbox);
+   -- Draws the textbox onto a framebuffer.
+   PROCEDURE Draw_On(
+      Object  : IN textbox;
+      Display : IN view);
 
+   -- Removes all characters from a textbox and replaces them with null.
    PROCEDURE Clear_All(
       Object  : IN OUT textbox)
    WITH
       Inline => true;
 
+   -- Removes all characters from a textbox's column.
    PROCEDURE Clear_Column(
       Object  : IN OUT textbox;
       Column  : IN num)
    WITH
       Inline => true;
 
+   -- Removes all characters from a textbox's row.
    PROCEDURE Clear_Line(
       Object  : IN OUT textbox;
       Line    : IN num)
    WITH
       Inline => true;
+PRIVATE
+   -- Shifts every row upwards and clears out the row at the bottom.
+   PROCEDURE Scroll_Down(
+      Object  : IN OUT textbox);
+
+   -- Refreshes the current data array index variables to where they should be
+   -- according to array bounds.
+   PROCEDURE Update_Cursor(
+      Object  : IN OUT textbox)
+   WITH
+      Post'class => Object.Current_Y_Index IN Object.Data'range(1) AND THEN
+                    Object.Current_X_Index IN Object.Data'range(2);
+
+   -- This draws a character onto the framebuffer type which is defined
+   -- in this very procedure's package parent.
+   PROCEDURE Draw_Character(
+      Buffer            : IN view;
+      Pixel_Start       : IN num;
+      Foreground_Colour : IN pixel;
+      Background_Colour : IN pixel;
+      ASCII             : IN character);
 END HAVK_Kernel.Graphics.Text;

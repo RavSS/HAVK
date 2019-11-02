@@ -5,7 +5,7 @@
 PACKAGE HAVK_Kernel.Paging
 IS
    -- READ: https://wiki.osdev.org/Page_Tables#48-bit_virtual_address_space
-   -- Also see "Figure 5-1. Virtual to Physical Address Translation-Long Mode"
+   -- See "Figure 5-1. Virtual to Physical Address Translation-Long Mode"
    -- in the AMD64 system programming manual. Also see "Figure 5-22. 2-Mbyte
    -- Page Translation-Long Mode" as I'm going to mainly use 2 MiB pages.
    -- 2 MiB page setup uses a 3 level paging structure.
@@ -104,7 +104,7 @@ IS
       Ignored_1         : boolean := false;
       -- If this is true for the directory pointer table entry, then instead
       -- of pointing to a page directory, it points to a 1 GiB physical page.
-      -- I doubt we will ever be needing that.
+      -- I doubt we will ever be needing that, so I have disallowed it.
       Huge              : boolean RANGE false .. false := false;
       -- There is no "global" field. This is another free set of bits.
       Ignored_2         : boolean := false;
@@ -161,7 +161,7 @@ IS
       Uncacheable       AT 0 RANGE  4 ..  4;
       Accessed          AT 0 RANGE  5 ..  5;
       Ignored_1         AT 0 RANGE  6 ..  6;
-      Zeroed            AT 0 RANGE  7 .. 11; -- Two MBZ (2) + (3) AVL.
+      Zeroed            AT 0 RANGE  7 .. 11; -- MBZ (2) + (3) AVL.
       Directory_Pointer AT 0 RANGE 12 .. 51;
       Ignored_3         AT 0 RANGE 52 .. 62;
       NX                AT 0 RANGE 63 .. 63;
@@ -257,35 +257,50 @@ IS
       Size     : IN num)
    RETURN num
    WITH
-      Inline        => true,
-      Pre           => Size > 0,
+      Inline => true,
+      Pre    => Size > 0,
       -- Always return at least one page for obvious reasons.
-      Post          => Size_To_Pages_Huge'result > 0;
+      Post   => Size_To_Pages_Huge'result > 0;
 
    -- Maps a virtual address to a physical address, huge entry.
    -- Requires all addresses passed to it as 2 MiB aligned.
    PROCEDURE Map_Address(
       Object           : IN OUT page_layout_huge;
       Virtual_Address  : IN num;
-      Physical_Address : IN num)
+      Physical_Address : IN num;
+      Present          : IN boolean :=  true;
+      Write_Access     : IN boolean := false;
+      User_Access      : IN boolean := false;
+      NX               : IN boolean :=  true)
    WITH
-      Pre => Virtual_Address = Align_Huge(Virtual_Address) AND THEN
-         Physical_Address = Align_Huge(Physical_Address);
+      Pre    => Virtual_Address  = Align_Huge(Virtual_Address) AND THEN
+                Physical_Address = Align_Huge(Physical_Address);
 
    -- Shortcut procedure for identity mapping a virtual address range to a
    -- physical address range. The range is determined by the size, which
    -- is then converted into 2 MiB physical pages. Requires all addresses
-   -- passed to it as 2 MiB aligned.
-   PROCEDURE Map_Linear_Address_Range(
+   -- passed to it as 2 MiB aligned. The range is linear.
+   PROCEDURE Map_Address_Range(
       Object           : IN OUT page_layout_huge;
       Virtual_Address  : IN num;
       Physical_Address : IN num;
-      Size             : IN num)
+      Size             : IN num;
+      Present          : IN boolean :=  true;
+      Write_Access     : IN boolean := false;
+      User_Access      : IN boolean := false;
+      NX               : IN boolean :=  true)
    WITH
+      Pre    => Virtual_Address  = Align_Huge(Virtual_Address) AND THEN
+                Physical_Address = Align_Huge(Physical_Address),
       Inline => true;
 
-   -- TODO: Can I avoid these "Symbol_*" variables without using an access
-   -- type? I'd like to not use those due to potential future SPARK rewrites.
+   PROCEDURE Page_Fault_Handler(
+      Error_Code       : IN num)
+   WITH
+      Pre    => Error_Code <= 16#FFFF_FFFF#, -- Error codes are 32-bits.
+      Inline => true;
+
+   -- TODO: Can I avoid these "Symbol_*" variables?
    Symbol_Kernel_Base  : CONSTANT System.Address
    WITH
       Import        => true,

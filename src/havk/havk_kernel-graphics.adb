@@ -17,17 +17,14 @@ IS
       Green    : IN num;
       Blue     : IN num)
    RETURN pixel  IS
-      USE HAVK_Kernel.UEFI;
       -- Green will always be in-between red and blue (for now).
-      Mid_Byte : CONSTANT num := SHL(Green, 8) AND 16#00FF00#;
+      Mid_Byte : CONSTANT num := SHL(Green, 8) AND 16#00_FF_00#;
       Value    : pixel;
    BEGIN
       IF    Object.Pixel_Format = BGR THEN
          Value := pixel(SHL(Red,  16) OR Mid_Byte OR Blue);
       ELSIF Object.Pixel_Format = RGB THEN
          Value := pixel(SHL(Blue, 16) OR Mid_Byte OR Red);
-      ELSE
-         Value := 16#DEADC0DE#; -- Incorrect format error.
       END IF;
 
       RETURN Value;
@@ -114,30 +111,12 @@ IS
       RETURN Index;
    END Calculate_Pixel;
 
-   FUNCTION Create_View(
-      Configuration : IN UEFI.arguments)
-   RETURN view        IS
-      New_View      : CONSTANT view :=
-      (
-         Framebuffer_Address => Configuration.Framebuffer_Address,
-         -- TODO: Convert size to 32 bit indices. Do this elsewhere.
-         Framebuffer_Size    => Configuration.Framebuffer_Size / 4,
-         Screen_Width        => Configuration.Horizontal_Resolution,
-         Screen_Height       => Configuration.Vertical_Resolution,
-         Pixel_Size          => Configuration.Pixels_Per_Scanline /
-            Configuration.Horizontal_Resolution,
-         Pixel_Format        => Configuration.Pixel_Format
-      );
-   BEGIN
-      RETURN New_View;
-   END Create_View;
-
    PROCEDURE Screen(
       Object : IN view'class;
       Index  : IN num;
       Data   : IN pixel)
    IS
-      Buffer : ALIASED framebuffer(0 .. Object.Framebuffer_Size)
+      Buffer : ALIASED framebuffer(0 .. Object.Framebuffer_Elements)
       WITH
          Import     => true,
          Convention => C,
@@ -145,4 +124,22 @@ IS
    BEGIN
       Buffer(Index) := Data; -- TODO: Hopefully a temporary slow solution.
    END Screen;
+
+   FUNCTION Create_View(
+      Configuration : IN UEFI.arguments)
+   RETURN view        IS
+      New_View      : CONSTANT view :=
+      (
+         Framebuffer_Address  => Configuration.Framebuffer_Address,
+         -- TODO: Convert size to 32 bit indices. Do this elsewhere, not here.
+         Framebuffer_Elements => Configuration.Framebuffer_Size / 4,
+         Screen_Width         => Configuration.Horizontal_Resolution,
+         Screen_Height        => Configuration.Vertical_Resolution,
+         Pixel_Size           => Configuration.Pixels_Per_Scanline /
+            Configuration.Horizontal_Resolution,
+         Pixel_Format         => Configuration.Pixel_Format
+      );
+   BEGIN
+      RETURN New_View;
+   END Create_View;
 END HAVK_Kernel.Graphics;

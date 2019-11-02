@@ -4,8 +4,10 @@
 !.gitignore
 
 !src
-src/gnatprove
 src/*/*.tmp
+src/gnatprove
+src/gnatinspect.db
+src/gnatdoc
 
 !ext
 ext/*

@@ -47,8 +47,16 @@ pragma Restrictions (No_Elaboration_Code);
 --  does not handle references to this package.
 
 package System.Secondary_Stack.Single_Task is
+   ----------------
+   -- Local Data --
+   ----------------
+   Secondary_Stack : SS_Stack_Ptr := null;
+   --  Pointer to the assigned secondary stack
+   --  ravss: Make the package at least compliant with SPARK global contracts.
 
-   function Get_Sec_Stack return SS_Stack_Ptr;
+   function Get_Sec_Stack return SS_Stack_Ptr
+   WITH
+      Global => (Input => Secondary_Stack);
    pragma Export (C, Get_Sec_Stack, "__gnat_get_secondary_stack");
    --  Return the pointer of the secondary stack to be used for single-threaded
    --  applications, as expected by System.Secondary_Stack.

@@ -8,7 +8,10 @@ USE
    HAVK_Kernel.Interrupts.IRQs,
    System.Machine_Code;
 
-PACKAGE BODY HAVK_Kernel.Interrupts IS
+PACKAGE BODY HAVK_Kernel.Interrupts
+WITH
+   SPARK_Mode => off -- `gnatprove` crashes on this package. Why? Who knows.
+IS
    PROCEDURE Prepare_GDT
    IS
       -- Prepare the GDT register's contents.
@@ -39,9 +42,9 @@ PACKAGE BODY HAVK_Kernel.Interrupts IS
       Exception_Type : IN IDT_gate_type;
       Ring           : IN num)
    IS
-      ISR_Address : CONSTANT num := Address_To_num(ISR);
+      ISR_Address    : CONSTANT num := Address_To_num(ISR);
    BEGIN
-      IDT(Index) :=
+      IDT(Index)     :=
       (
          ISR_Address_Low               => ISR_Address AND 16#FFFF#,
          CS_Selector                   => 16#8#, -- 0x8 is my DPL 0 CS.

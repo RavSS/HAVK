@@ -4,6 +4,8 @@ USE
    System.Machine_Code;
 
 PACKAGE BODY HAVK_Kernel.Intrinsics
+WITH
+   SPARK_Mode => off -- This entire package's body is centred around assembly.
 IS
    FUNCTION SHL(
       Value    : IN num;

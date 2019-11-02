@@ -1,7 +1,7 @@
 # Changelog for the HAVK operating system
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date at UTC +13:00 )
 
-### Tasklist - 2019-10-28
+### Tasklist - 2019-10-29
 - Start parsing the memory map provided by the UEFI bootloader and begin
 manipulating the page directory for memory management purposes.
 - Very specific resolutions like 1366x768 are bugged and unusable.
@@ -14,6 +14,8 @@ any other optimal solution. Making it non-primitive doesn't help at
 removing the overhead.
 - Reorganise the bootloader arguments structure and provide
 a consistent format that does away with some of UEFI's oddities.
+- Make the codebase properly compliant with SPARK. If there's time, attempt
+to do the same for the runtime system.
 
 ## UPCOMING - 2019-??-??
 ### Overall Changes
@@ -24,6 +26,13 @@ to physical addresses. It is not complete and has a default page size of
 with new kernel panic functionality.
 - Massive shift of code from the main procedure to an initialisation
 package for organisation purposes.
+- SPARK is now enabled nearly everywhere. Assumption violations are
+expected for now of SPARK mode, but they are slowly being worked on.
+- Addresses can be displayed in base-16/hexadecimal, which is integrated
+into the new page fault handler. As of now, it just sends debug information.
+- The UEFI descriptors can now have their memory region type determined
+after exiting boot services and they can be mapped appropriately, so
+bootloader arguments are not lost later on.
 
 ## 00-08-00 - 2019-07-10
 ### Overall Changes
