@@ -6,14 +6,18 @@ WITH
 
 PACKAGE HAVK_Kernel
 IS
-   -- These types are to be used when the size really does not matter.
    -- Because HAVK is a 64-bit kernel, I'll make the "default" types 64-bit.
-   TYPE num  IS MOD 2 ** 64; -- Natural number, assuming you include zero.
+
+   -- Natural number, assuming you include zero. This is to be used everywhere,
+   -- including for memory addresses that you do not expect to overlay or
+   -- import into variables/objects.
+   TYPE num  IS MOD 2 ** 64;
    TYPE nums IS ARRAY(num RANGE <>) OF num;
    FOR  num'size USE 64;
    PRAGMA Provide_Shift_Operators(num); -- GNAT shift intrinsics are provided.
 
-   TYPE int  IS RANGE -(2 ** 63) .. +(2 ** 63 - 1); -- Integer.
+   -- Simple 64-bit signed integer. Prefer using unsigned types instead.
+   TYPE int  IS RANGE -(2 ** 63) .. +(2 ** 63 - 1);
    TYPE ints IS ARRAY(num RANGE <>) OF int;
    FOR  int'size USE 64;
    PRAGMA Provide_Shift_Operators(int);

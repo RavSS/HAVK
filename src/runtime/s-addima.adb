@@ -2,11 +2,11 @@
 --                                                                          --
 --                         GNAT COMPILER COMPONENTS                         --
 --                                                                          --
---    S Y S T E M . S E C O N D A R Y _ S T A C K . S I N G L E _ T A S K   --
+--                  S Y S T E M . A D D R E S S _ I M A G E                 --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2005-2019, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -29,25 +29,44 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-pragma Restrictions (No_Elaboration_Code);
---  We want to guarantee the absence of elaboration code because the
---  binder does not handle references to this package.
+with Ada.Unchecked_Conversion;
 
-package body System.Secondary_Stack.Single_Task is
-   -------------------
-   -- Get_Sec_Stack --
-   -------------------
-   function Get_Sec_Stack return SS_Stack_Ptr is
-   begin
-      --  If the pointer to the secondary stack is null then a stack has not
-      --  been allocated. A call to SS_Init will assign the binder generated
-      --  stack and will initialize it.
+function System.Address_Image (A : Address) return String is
 
-      if Secondary_Stack = null then
-         SS_Init (Secondary_Stack);
-      end if;
+   Result  : String (1 .. 2 * Address'Size / Storage_Unit);
 
-      return Secondary_Stack;
-   end Get_Sec_Stack;
+   type Byte is mod 2 ** 8;
+   for Byte'Size use 8;
 
-end System.Secondary_Stack.Single_Task;
+   Hexdigs :
+     constant array (Byte range 0 .. 15) of Character := "0123456789ABCDEF";
+
+   type Bytes is array (1 .. Address'Size / Storage_Unit) of Byte;
+   for Bytes'Size use Address'Size;
+
+   function To_Bytes is new Ada.Unchecked_Conversion (Address, Bytes);
+
+   Byte_Sequence : constant Bytes := To_Bytes (A);
+
+   LE : constant := Standard'Default_Bit_Order;
+   BE : constant := 1 - LE;
+   --  Set to 1/0 for True/False for Little-Endian/Big-Endian
+
+   Start : constant Natural := BE * (1) + LE * (Bytes'Length);
+   Incr  : constant Integer := BE * (1) + LE * (-1);
+   --  Start and increment for accessing characters of address string
+
+   Ptr : Natural;
+   --  Scan address string
+
+begin
+   Ptr := Start;
+   for N in Bytes'Range loop
+      Result (2 * N - 1) := Hexdigs (Byte_Sequence (Ptr) / 16);
+      Result (2 * N)     := Hexdigs (Byte_Sequence (Ptr) mod 16);
+      Ptr := Ptr + Incr;
+   end loop;
+
+   return Result;
+
+end System.Address_Image;

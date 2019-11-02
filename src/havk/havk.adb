@@ -3,18 +3,16 @@ WITH
    HAVK_Kernel.UEFI,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text,
-   HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Initialise;
 USE
    HAVK_Kernel,
    HAVK_Kernel.Graphics,
-   HAVK_Kernel.Graphics.Text,
-   HAVK_Kernel.Intrinsics;
+   HAVK_Kernel.Graphics.Text;
 
 -- This is the main procedure, it is where HAVK starts itself after entry.
 PROCEDURE HAVK
 WITH
-   No_Return => true
+   No_Return     => true
 IS
    -- Access the arguments passed by HAVK's UEFI bootloader.
    Bootloader      : CONSTANT UEFI.access_arguments
@@ -23,10 +21,10 @@ IS
       Convention => NASM,
       Link_Name  => "bootloader.arguments";
 
-   Display         : ALIASED view := Create_View(Bootloader.ALL);
+   Display         : view := Create_View(Bootloader.ALL);
 
    -- The UEFI memory map. Assumes the descriptor size has been "fixed".
-   Map             : ALIASED UEFI.memory_map(0 .. Bootloader.Memory_Map_Size /
+   Map             : CONSTANT UEFI.memory_map(0 .. Bootloader.Memory_Map_Size /
       Bootloader.Memory_Map_Descriptor_Size)
    WITH
       Import     => true,
@@ -42,34 +40,33 @@ IS
    Terminal_Border : CONSTANT num := Display.Screen_Width / 4;
    Terminal_Start  : CONSTANT num := Display.Calculate_Pixel(
       Terminal_Border / 2, Terminal_Border / 2);
-
    Terminal        : textbox(
       (Display.Screen_Width  - Terminal_Border) / 10,
       (Display.Screen_Height - Terminal_Border) / 11);
 
    Welcome         : CONSTANT string := "WELCOME TO HAVK";
+   Date_Of_Build   : CONSTANT string := Initialise.HAVK_Build_Datetime;
 BEGIN
    -- Initialise the debugging message mechanism if debugging is enabled.
    PRAGMA Debug(Debug_Initialise);
    PRAGMA Debug(Debug_Message("Entered main kernel procedure."));
 
    Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
-
    Initialise.Descriptor_Tables;
-   Initialise.Default_Page_Layout(Display);
+   Initialise.Default_Page_Layout(Bootloader.ALL, Map);
 
    Initialise.PS2_Input;
 
    -- Set up the terminal.
    Terminal.Clear_All;
    Terminal.Position := Terminal_Start; -- Set the top-left corner of the box.
-   Terminal.Display  := Display'unchecked_access; -- Set the buffer to draw to.
-   Terminal.Background_Colour := Display.Create_Pixel(0, 0, 0);
+   Terminal.Background_Colour := Display.Create_Pixel(  0,  0, 0);
    Terminal.Foreground_Colour := Display.Create_Pixel(200, 55, 0);
 
-   -- Print the welcome message.
-   Terminal.Current_X_Index := Terminal.Data'last(2) / 2 - Welcome'length / 2;
-   Terminal.Print(Welcome);
+   -- Print the welcome message and date of the current build's compilation.
+   Terminal.Print(Welcome,       Centre => true);
+   Terminal.Newline;
+   Terminal.Print(Date_Of_Build, Centre => true);
    Terminal.Newline(2);
 
    -- Print the font test.
@@ -77,19 +74,21 @@ BEGIN
    Terminal.Newline;
 
    -- TODO: Needs work.
-   Terminal.Print("MEMORY MAP ENUMERATION:");
+   Terminal.Print("MEMORY MAP ENUMERATION:" & character'val(0));
    Terminal.Newline;
    Terminal.Print("   MEMORY DESCRIPTORS:" & num'image(Map'length));
+   Terminal.Newline;
+   Terminal.Print("   INSTALLED RAM SIZE:" & num'image((
+      Map(Map'last).Start_Address_Physical'address +
+      Map(Map'last).Number_Of_Pages * 4096) / 1024 / 1024) &
+      " MEBIBYTES");
    Terminal.Newline(2);
 
-   Terminal.Draw;
+   Terminal.Draw_On(Display);
    PRAGMA Debug(Debug_Message("First terminal draw done."));
 
-   Initialise.Input_Key_Test(Terminal);
-   Initialise.Seconds_Count(Terminal);
+   Initialise.Input_Key_Test(Terminal, Display);
 
    PRAGMA Debug(Debug_Message("Reached the end of the HAVK procedure."));
-   LOOP
-      HLT;
-   END LOOP;
+   Initialise.Seconds_Count(Terminal,  Display);
 END HAVK;

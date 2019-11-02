@@ -26,7 +26,7 @@ IS
 
    -- GCC wants the handlers to take in a pointer
    -- to the interrupt stack frame as a parameter.
-   TYPE access_interrupt        IS ACCESS CONSTANT interrupt;
+   TYPE access_interrupt        IS NOT NULL ACCESS CONSTANT interrupt;
 
    -- https://wiki.osdev.org/Global_Descriptor_Table
    TYPE GDT_access              IS RECORD
@@ -126,7 +126,7 @@ IS
       call_64_bit,                 -- 80386 32-Bit      Call Gate (Redefined).
       interrupt_64_bit,            -- 80386 32-Bit Interrupt Gate (Redefined).
       trap_64_bit);                -- 80386 32-Bit      Trap Gate (Redefined).
-   FOR IDT_gate_type USE(          -- Commonly a 64-bit interrupt is utilized.
+   FOR IDT_gate_type USE(          -- Only a 64-bit interrupt can be utilised.
    -- call_16_bit         =>  4,   -- 0b0100, 0x4,  4,   Illegal in Long Mode.
    -- task_32_bit         =>  5,   -- 0b0101, 0x5,  5,   Illegal in Long Mode.
    -- interrupt_16_bit    =>  6,   -- 0b0110, 0x6,  6,   Illegal in Long Mode.
@@ -445,7 +445,8 @@ IS
             Granularity             => false
          ),
          Start_Address_High         => SHR(TSS_address, 24)),
-         -- 64-bit extension starts here:
+         -- TODO: 64-bit extension starts here. Is this even correct?
+         -- Might be responsible for causing a crash on AMD processors.
          Start_Address_Extended     => SHR(TSS_address, 32),
          Reserved_1                 => 0,
          Zeroed                     => 0,
@@ -455,10 +456,8 @@ IS
    WITH
       Volatile => true; -- For the "accessed" bit, which the CPU can change.
 
-   -- TODO: Store IRQ 0 interrupts here temporarily.
+   -- TODO: Store IRQ 0 interrupts here temporarily in a counter.
    -- No idea what the timer's frequency is, so I can't exactly
    -- count seconds right now.
-   Ticker : num := 0
-   WITH
-      Volatile => true;
+   Ticker : num := 0;
 END HAVK_Kernel.Interrupts;

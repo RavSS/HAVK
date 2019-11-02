@@ -7,20 +7,26 @@ It is influenced by Unix, but it is not necessarily a Unix clone.
 There are a few mandatory software requirements:
 1. GNAT Community. GCC can compile Ada, and the package contains the
 GNAT Project Manager tools. There's a script inside the "ext" folder which
-you can utilize.
+you can utilize to obtain GNAT Community 2019.
 2. GNU Make. This is pretty obvious.
 3. GNU-EFI. The bootloader I created uses UEFI to boot HAVK, not BIOS.
 4. GNU Mtools & GNU Parted. Used for creating a hard drive image.
+5. NASM. All x86(-64) assembly is assembled with this assembler.
 
 Clone this repository, install those requirements, and enter `make`
 to create a hard drive image inside "build" called "HAVK.img". Then, simply
 `dd` it to a USB flash drive or install QEMU (`qemu-x86-64`) to emulate
 HAVK in a VM by performing `make qemu`.
 
+Note that HAVK can only be (easily) compiled on GNU/Linux. The Windows version
+of GNAT Community 2019 unfortunately lacks x86-64 ELF support for its linker,
+as it was not compiled with emulation for it.
+
 ### Hardware requirements
-There's two hardware requirements, but they are both critical right now:
-1. UEFI firmware that isn't bugged and acts according to the specification.
-2. A PS/2 controller that is emulated by the system properly, as a USB
+There's three hardware requirements, but they are both critical right now:
+1. An x86-64 system that has a display, a monitor, and boots using UEFI.
+2. UEFI firmware that isn't bugged and acts according to the specification.
+3. A PS/2 controller that is emulated by the system properly, as a USB
 controller would take forever to program (see the GNU Hurd microkernel).
 
 Having a serial port (COM1, preferably) on your hardware would help in
@@ -48,4 +54,5 @@ The OSDev Wiki helps greatly with general overviews:
 https://wiki.osdev.org
 
 ### License
-GPLv3. Applies to everything unless stated otherwise or is external software.
+GPLv3. Applies to everything unless stated otherwise or is not code.
+This repository contains OVMF compiled firmware and GNU-EFI objects.

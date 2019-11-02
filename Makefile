@@ -258,9 +258,8 @@ uefi-gdb:
 
 .PHONY: proof
 proof: $(BUILD_DIR)
-	-gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) -j 0 -k \
+	-@gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) -j 0 -k \
 		--assumptions --pedantic --level=4
-	-@rm -r $(SRC_DIR)gnatprove $(SRC_DIR)build
 
 .PHONY: stats
 stats:

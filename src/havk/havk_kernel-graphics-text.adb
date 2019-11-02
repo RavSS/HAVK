@@ -5,9 +5,10 @@ USE
    HAVK_Kernel.Font,
    HAVK_Kernel.Intrinsics;
 
-PACKAGE BODY HAVK_Kernel.Graphics.Text IS
+PACKAGE BODY HAVK_Kernel.Graphics.Text
+IS
    PROCEDURE Draw_Character(
-      Object            : IN view;
+      Buffer            : IN view;
       Pixel_Start       : IN num;
       Foreground_Colour : IN pixel;
       Background_Colour : IN pixel;
@@ -21,19 +22,19 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
          X_Line := Framefont(I, Y);
 
          -- Move down a scanline if Y is more than 0.
-         Pixel_Location := Pixel_Start + Y * Object.Screen_Width;
+         Pixel_Location := Pixel_Start + Y * Buffer.Screen_Width;
 
          -- Reverse the loop due to how I've stored the font data.
          -- Check "HAVK_Kernel.Font" for bit order information.
          FOR X IN REVERSE num RANGE 0 .. Framefont_Width - 1 LOOP
             -- Move to the next pixel by incrementing
             -- the pixel location.
-            Pixel_Location := Pixel_Location + Object.Pixel_Size;
+            Pixel_Location := Pixel_Location + Buffer.Pixel_Size;
 
             IF BT(X_Line, X) THEN
-               Object.Screen(Pixel_Location, Foreground_Colour);
+               Buffer.Screen(Pixel_Location, Foreground_Colour);
             ELSE
-               Object.Screen(Pixel_Location, Background_Colour);
+               Buffer.Screen(Pixel_Location, Background_Colour);
             END IF;
          END LOOP;
 
@@ -44,12 +45,14 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
       Object : IN OUT textbox)
    IS
    BEGIN
+      -- Shift every line upwards.
       FOR Y IN Object.Data'first(1) .. Object.Data'last(1) - 1 LOOP
          FOR X IN Object.Data'range(2) LOOP
             Object.Data(Y, X) := Object.Data(Y + 1, X);
          END LOOP;
       END LOOP;
 
+      -- Now blank out the last line.
       FOR X IN Object.Data'range(2) LOOP
          Object.Data(Object.Data'last(1), X) := character'val(0);
       END LOOP;
@@ -59,22 +62,31 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
       Object : IN OUT textbox)
    IS
    BEGIN
-      IF Object.Current_X_Index >  Object.Data'last(2) THEN
+      IF Object.Current_X_Index  > Object.Data'last(2) THEN
          Object.Current_X_Index := Object.Data'first(2);
          Object.Current_Y_Index := Object.Current_Y_Index + 1;
       END IF;
 
-      IF Object.Current_Y_Index >  Object.Data'last(1) THEN
+      IF Object.Current_Y_Index  > Object.Data'last(1) THEN
          Object.Scroll_Down;
          Object.Current_Y_Index := Object.Data'last(1);
       END IF;
    END Update_Cursor;
 
+   -- TODO: In the debug build, this procedure somehow ends up adding a
+   -- random character to the end of the data array inside the textbox.
+   -- The address of "Message" seems to be that very character. No clue.
    PROCEDURE Print(
       Object  : IN OUT textbox;
-      Message : IN string)
+      Message : IN string;
+      Centre  : IN boolean := false)
    IS
    BEGIN
+      IF Centre AND THEN Message'length /= 0 THEN
+         Object.Current_X_Index := Object.Data'last(2) / 2 -
+            Message'length / 2;
+      END IF;
+
       FOR I IN Message'range LOOP
          Update_Cursor(Object);
 
@@ -97,20 +109,21 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
       END LOOP;
    END Newline;
 
-   PROCEDURE Draw(
-      Object          : IN textbox)
+   PROCEDURE Draw_On(
+      Object          : IN textbox;
+      Display         : IN view)
    IS
       Current_Pixel   : num := Object.Position;
       Row_Separation  : CONSTANT num := Object.Line_Separation +
          Framefont_Height;
-      Next_Row        : CONSTANT num := Object.Display.Screen_Width *
-         Object.Display.Pixel_Size * Row_Separation;
+      Next_Row        : CONSTANT num := Display.Screen_Width *
+         Display.Pixel_Size * Row_Separation;
       Next_Column     : CONSTANT num := Framefont_Width + Object.Kerning;
    BEGIN
       FOR Y IN Object.Data'range(1) LOOP
          FOR X IN Object.Data'range(2) LOOP
             -- Don't even bother going over something that is not visible,
-            -- like for example a new-line or a null character. The drawable
+            -- like for example a newline or a null character. The drawable
             -- ASCII characters start at 33, from the exclamation mark.
             -- This should grant a performance increase. Do still draw
             -- spaces (32) though, or else there would be a gap between
@@ -120,7 +133,7 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
                character'pos(Object.Data(Y, X)) =  0
             THEN
                Draw_Character(
-                  Object.Display.ALL,
+                  Display,
                   Current_Pixel,
                   Object.Foreground_Colour,
                   Object.Background_Colour,
@@ -132,7 +145,7 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
 
          Current_Pixel := Object.Position + Y * Next_Row;
       END LOOP;
-   END Draw;
+   END Draw_On;
 
    PROCEDURE Clear_All(
       Object : IN OUT textbox)
@@ -150,6 +163,10 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
       Column  : IN num)
    IS
    BEGIN
+      IF Column NOT IN Object.Data'range(2) THEN
+         RETURN;
+      END IF;
+
       FOR Y IN Object.Data'range(1) LOOP
          Object.Data(Y, Column) := character'val(0);
       END LOOP;
@@ -160,6 +177,10 @@ PACKAGE BODY HAVK_Kernel.Graphics.Text IS
       Line    : IN num)
    IS
    BEGIN
+      IF Line NOT IN Object.Data'range(1) THEN
+         RETURN;
+      END IF;
+
       FOR X IN Object.Data'range(2) LOOP
          Object.Data(Line, X) := character'val(0);
       END LOOP;

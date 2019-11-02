@@ -604,7 +604,7 @@ VOID get_memory_map(struct uefi_arguments *arguments, EFI_HANDLE image_handle)
 	arguments->memory_map = NULL;
 	arguments->memory_map_key = 0;
 	arguments->memory_map_size = 0;
-	arguments->memory_map_descriptor_size = 0;
+	arguments->memory_map_descriptor_size = 0; // Don't use `sizeof()`.
 	arguments->memory_map_descriptor_version = 0;
 
 	// TODO: Figure out the memory map's size some proper way.
@@ -638,14 +638,6 @@ VOID get_memory_map(struct uefi_arguments *arguments, EFI_HANDLE image_handle)
 		&arguments->memory_map_descriptor_version);
 	while (attempt == EFI_BUFFER_TOO_SMALL);
 	ERROR_CHECK(attempt);
-
-	// TODO: "Fix" the wrong descriptor size. It's not 48, it's 40 bytes.
-	// There is 32 bits of padding after the first 32 bit variable, yet
-	// the structure detailed in the UEFI Specification (Version 2.8
-	// 2.8, Page 165) indicates no padding whatsoever. See the Ada code
-	// for more, specifically in "HAVK_Kernel.UEFI".
-	if (arguments->memory_map_descriptor_size == 48)
-		arguments->memory_map_descriptor_size -= 8;
 
 	// Finally exit UEFI and its boot services. A valid fresh memory map
 	// is mandatory or else this will completely fail to succeed.

@@ -1,5 +1,6 @@
 PRAGMA License(GPL);
 
+PRAGMA SPARK_Mode(on);
 PRAGMA Discard_Names;
 PRAGMA Normalize_Scalars;
 

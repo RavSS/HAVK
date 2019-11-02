@@ -21,29 +21,56 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
    END Descriptor_Tables;
 
    PROCEDURE Default_Page_Layout(
-      Display : IN view)
+      Bootloader : IN UEFI.arguments;
+      Map        : IN UEFI.memory_map)
    IS
+      USE
+         HAVK_Kernel.Paging,
+         HAVK_Kernel.UEFI;
+
       Aligned_Kernel_Base      : CONSTANT num :=
          Paging.Align_Huge(Paging.Kernel_Base);
+
       Aligned_Framebuffer_Base : CONSTANT num :=
-         Paging.Align_Huge(Display.Framebuffer_Address);
+         Paging.Align_Huge(Bootloader.Framebuffer_Address);
    BEGIN
       PRAGMA Debug(Debug_Message("Paging structure size:" &
-         num'image(Kernel_Paging_Layout'size / 8 / 1024) & " KiB"));
+         num'image(Kernel_Paging_Layout'size / 8 / 1024)  & " KiB"));
 
       -- TODO: Identity map the first 2 MiB page, can't remember why it is
       -- needed. Something to do with the UEFI bootloader's memory allocations?
       Kernel_Paging_Layout.Map_Address(0, 0);
 
       -- Identity map the kernel.
-      Kernel_Paging_Layout.Map_Linear_Address_Range(
+      Kernel_Paging_Layout.Map_Address_Range(
          Aligned_Kernel_Base, Aligned_Kernel_Base,
-         Paging.Kernel_Size);
+         Paging.Kernel_Size,
+         Write_Access => true,
+         NX           => false);
 
-      -- Identity map the framebuffer address space.
-      Kernel_Paging_Layout.Map_Linear_Address_Range(
+      -- Identity map the framebuffer address space. Finer granularity
+      -- would be nice here so the entire range does not need to
+      -- be marked executable.
+      Kernel_Paging_Layout.Map_Address_Range(
          Aligned_Framebuffer_Base, Aligned_Framebuffer_Base,
-         Display.Framebuffer_Size * 4);
+         Bootloader.Framebuffer_Size,
+         Write_Access => true,
+         NX           => false);
+
+      -- Identity map the loader data sent to us by the UEFI bootloader.
+      -- TODO: It might be easier to just directly copy them into the stack...
+      FOR I IN Map'range LOOP
+         IF Map(I).Memory_Region_Type = loader_data THEN
+            Kernel_Paging_Layout.Map_Address_Range(
+               Align_Huge(Map(I).Start_Address_Physical),
+               Align_Huge(Map(I).Start_Address_Physical),
+               Map(I).Number_Of_Pages * 16#1000#,
+               Write_Access => true,
+               NX           => false);
+            PRAGMA Debug(Debug_Message("Memory descriptor" & num'image(I) &
+               " is UEFI loader data."));
+         END IF;
+      END LOOP;
 
       -- Finally, load the CR3 register with the highest level directory.
       Kernel_Paging_Layout.Load;
@@ -57,7 +84,8 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
       Box_Size : CONSTANT num := 20; -- Hardcoded box size.
    BEGIN
       -- Clear the screen before we draw anything new.
-      Display.Draw_Fill(0, Display.Framebuffer_Size, 0);
+      Display.Draw_Fill(0, Display.Framebuffer_Elements, 0);
+
       -- Draw the boxes so a grid is shown across the screen in some shape.
       FOR Y IN num RANGE 0 .. (Display.Screen_Height / Box_Size) - 1 LOOP
          FOR X IN num RANGE 0 .. (Display.Screen_Width / Box_Size) - 1 LOOP
@@ -68,6 +96,7 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
                Box_Size - 1);
          END LOOP;
       END LOOP;
+
       PRAGMA Debug(Debug_Message("Grid test drawn to the main framebuffer."));
    END Grid_Test;
 
@@ -108,6 +137,24 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
       Terminal.Newline;
    END Font_Test;
 
+   FUNCTION HAVK_Build_Datetime
+   RETURN string
+   IS
+      FUNCTION Compilation_ISO_Date -- Format: "YYYY-MM-DD"
+      RETURN String
+      WITH
+         Import     => true,
+         Convention => Intrinsic;
+
+      FUNCTION Compilation_Time     -- Format:   "HH:MM:SS"
+      RETURN String
+      WITH
+         Import     => true,
+         Convention => Intrinsic;
+   BEGIN
+      RETURN (Compilation_ISO_Date & "T" & Compilation_Time);
+   END HAVK_Build_Datetime;
+
    PROCEDURE PS2_Input
    IS
    BEGIN
@@ -123,7 +170,8 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
    END PS2_Input;
 
    PROCEDURE PS2_Scancode_Test(
-      Terminal : IN OUT textbox)
+      Terminal : IN OUT textbox;
+      Display  : IN view)
    IS
    BEGIN
       LOOP
@@ -132,11 +180,13 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
          Terminal.Print("     "); -- Clear the first 5 characters.
          Terminal.Current_X_Index := Terminal.Data'first(2);
          Terminal.Print(num'image(INB(16#60#)));
+         Terminal.Draw_On(Display);
       END LOOP;
    END PS2_Scancode_Test;
 
    PROCEDURE Input_Key_Test(
-      Terminal : IN OUT textbox)
+      Terminal : IN OUT textbox;
+      Display  : IN view)
    IS
       -- TODO: Store the key state here, don't fetch the latest one on each
       -- of the `Get_*` functions, or else a race occurs and there can be
@@ -152,7 +202,7 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
          Terminal.Current_X_Index := Terminal.Data'first(2);
 
          Terminal.Print(Get_Key & " - " & Get_Key_Name);
-         Terminal.Draw;
+         Terminal.Draw_On(Display);
          HLT;
       END LOOP;
 
@@ -165,7 +215,8 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
    END Input_Key_Test;
 
    PROCEDURE Seconds_Count(
-      Terminal : IN OUT textbox)
+      Terminal : IN OUT textbox;
+      Display  : IN view)
    IS
    BEGIN
       Terminal.Print("INACCURATE SECONDS COUNT: ");
@@ -173,7 +224,7 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
       PRAGMA Debug(Debug_Message("Endless seconds count beginning."));
 
       LOOP -- Endless loop showcasing interrupts.
-         HLT; -- Don't burn the CPU.
+         PAUSE; -- Don't burn the CPU.
          Terminal.Current_X_Index := 1;
 
          -- This will count seconds, but if I remember correctly it depends on
@@ -181,7 +232,7 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
          -- runtime service function `GetTime()`'s capabilities structure nor
          -- have I programmed the legacy PIT to my settings.
          Terminal.Print(num'image(Ticker / 100));
-         Terminal.Draw;
+         Terminal.Draw_On(Display);
       END LOOP;
    END Seconds_Count;
 END HAVK_Kernel.Initialise;
