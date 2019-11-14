@@ -35,9 +35,9 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
          Debug_Message("Crashed - """ & C_String & ":" & Line'img & """!");
       END Debug_Crash;
    BEGIN
+      Asm("CLI;", Volatile => true);
+      PRAGMA Debug(Debug_Crash);
       LOOP
-         Asm("CLI;", Volatile => true);
-         PRAGMA Debug(Debug_Crash);
          Asm(  -- Works for now as a quick indicator.
             "MOV RAX, %0;" &
             "MOV RBX, %0;" &
@@ -54,7 +54,7 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
             "MOV R13, %0;" &
             "MOV R14, %0;" &
             "MOV R15, %0;" &
-            "HLT;",
+            "PAUSE;",
             Inputs   => (num'Asm_Input("g", Mnemonic),
                         System.Address'Asm_Input("g", Source_Location),
                         integer'Asm_Input("g", Line)),
@@ -80,6 +80,7 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
       Fatal_Message : CONSTANT string := Message & character'val(0);
    BEGIN
       -- TODO: After logging support has been added, use the functions here.
+      PRAGMA Debug(Debug_Message("Manual kernel panic called."));
       Last_Chance_Handler(Fatal_Message'address, Line);
       -- Do not continue going.
    END Tears_In_Rain;

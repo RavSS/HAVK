@@ -5,16 +5,16 @@ WITH
    HAVK_Kernel.PS2;
 USE
    HAVK_Kernel.Input,
-   HAVK_Kernel.Interrupts,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.PS2;
 
-PACKAGE BODY HAVK_Kernel.Initialise IS
+PACKAGE BODY HAVK_Kernel.Initialise
+IS
    PROCEDURE Descriptor_Tables
    IS
    BEGIN
-      Prepare_GDT;
-      Prepare_IDT;
+      Interrupts.Prepare_GDT;
+      Interrupts.Prepare_IDT;
       PRAGMA Debug(Debug_Message("Descriptor tables prepared."));
       STI;
       PRAGMA Debug(Debug_Message("Interrupts enabled."));
@@ -27,48 +27,51 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
       USE
          HAVK_Kernel.Paging,
          HAVK_Kernel.UEFI;
-
-      Aligned_Kernel_Base      : CONSTANT num :=
-         Paging.Align_Huge(Paging.Kernel_Base);
-
-      Aligned_Framebuffer_Base : CONSTANT num :=
-         Paging.Align_Huge(Bootloader.Framebuffer_Address);
    BEGIN
-      PRAGMA Debug(Debug_Message("Paging structure size:" &
-         num'image(Kernel_Paging_Layout'size / 8 / 1024)  & " KiB"));
+      PRAGMA Debug(Debug_Message("Paging structure size with padding:" &
+         num'image(Kernel_Paging_Layout'size / 8192) & " KiB"));
 
-      -- TODO: Identity map the first 2 MiB page, can't remember why it is
-      -- needed. Something to do with the UEFI bootloader's memory allocations?
-      Kernel_Paging_Layout.Map_Address(0, 0);
+      -- TODO: Identity map the first page. Don't know why is this needed, but
+      -- the CPU goes haywire without it.
+      Kernel_Paging_Layout.Map_Address(
+         0,
+         0,
+         Page_Size    => huge_page,
+         Write_Access =>      true,
+         NX           =>    false);
 
-      -- Identity map the kernel.
+      -- Map the higher-half virtual address to the physical one.
       Kernel_Paging_Layout.Map_Address_Range(
-         Aligned_Kernel_Base, Aligned_Kernel_Base,
-         Paging.Kernel_Size,
-         Write_Access => true,
-         NX           => false);
+         Align(Kernel_Base,          huge_page),
+         Align(Kernel_Physical_Base, huge_page),
+         Kernel_Size,
+         Page_Size    => huge_page,
+         Write_Access =>      true,
+         NX           =>    false);
 
-      -- Identity map the framebuffer address space. Finer granularity
-      -- would be nice here so the entire range does not need to
-      -- be marked executable.
+      -- Identity-map the framebuffer address space.
       Kernel_Paging_Layout.Map_Address_Range(
-         Aligned_Framebuffer_Base, Aligned_Framebuffer_Base,
+         Align(Bootloader.Framebuffer_Address, huge_page),
+         Align(Bootloader.Framebuffer_Address, huge_page),
          Bootloader.Framebuffer_Size,
-         Write_Access => true,
-         NX           => false);
+         Page_Size    => huge_page,
+         Write_Access =>      true,
+         NX           =>    false);
 
-      -- Identity map the loader data sent to us by the UEFI bootloader.
-      -- TODO: It might be easier to just directly copy them into the stack...
+      -- Identity-map the loader and MMIO regions sent to us by the UEFI
+      -- bootloader. One of the MMIO regions is basically guaranteed to be
+      -- just below 4 GiB, as it is the APIC. I will be accessing it through
+      -- the modern x2APIC way (MSR and not MMIO), so I will not map it here.
+      -- TODO: It may be easier to copy the map's data onto our local stack...
       FOR I IN Map'range LOOP
          IF Map(I).Memory_Region_Type = loader_data THEN
             Kernel_Paging_Layout.Map_Address_Range(
-               Align_Huge(Map(I).Start_Address_Physical),
-               Align_Huge(Map(I).Start_Address_Physical),
-               Map(I).Number_Of_Pages * 16#1000#,
-               Write_Access => true,
-               NX           => false);
-            PRAGMA Debug(Debug_Message("Memory descriptor" & num'image(I) &
-               " is UEFI loader data."));
+               Align(Map(I).Start_Address_Physical, huge_page),
+               Align(Map(I).Start_Address_Physical, huge_page),
+               Map(I).Number_Of_Pages * page'enum_rep,
+               Page_Size    => huge_page,
+               Write_Access =>      true,
+               NX           =>    false);
          END IF;
       END LOOP;
 
@@ -159,7 +162,7 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
    IS
    BEGIN
       PRAGMA Debug(Debug_Message("Attempting to initialise PS/2 controller."));
-      PS2.Controller_Initialise;
+      PS2.Controller_Setup;
 
       IF PS2.Controller_State /= functional THEN
          PRAGMA Debug(Debug_Message("PS/2 controller is inoperable - """ &
@@ -193,23 +196,21 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
       -- an erroneous difference in the output if the user is fast enough
       -- or their system is slow enough.
    BEGIN
-      Terminal.Print("PS/2 KEYPRESS TEST, PRESS ENTER TO EXIT: ");
+      Terminal.Print("PS/2 KEYPRESS TEST, PRESS ENTER TO EXIT:");
       Terminal.Newline;
       PRAGMA Debug(Debug_Message("PS/2 key test has started."));
 
       WHILE Get_Key /= character'val(10) LOOP
          Terminal.Clear_Line(Terminal.Current_Y_Index);
          Terminal.Current_X_Index := Terminal.Data'first(2);
-
-         Terminal.Print(Get_Key & " - " & Get_Key_Name);
+         Terminal.Print("   " & Get_Key & " - " & Get_Key_Name);
          Terminal.Draw_On(Display);
-         HLT;
       END LOOP;
 
       Terminal.Current_X_Index := Terminal.Data'first(2);
-      Terminal.Print("ENTER KEY SUCCESSFULLY PRESSED.");
-      Terminal.Newline;
-      Terminal.Newline;
+      Terminal.Print("   ENTER KEY SUCCESSFULLY PRESSED.");
+      Terminal.Newline(2);
+      Terminal.Draw_On(Display);
 
       PRAGMA Debug(Debug_Message("PS/2 key test ended."));
    END Input_Key_Test;
@@ -224,14 +225,14 @@ PACKAGE BODY HAVK_Kernel.Initialise IS
       PRAGMA Debug(Debug_Message("Endless seconds count beginning."));
 
       LOOP -- Endless loop showcasing interrupts.
-         PAUSE; -- Don't burn the CPU.
+         HLT; -- Don't burn the CPU.
          Terminal.Current_X_Index := 1;
 
          -- This will count seconds, but if I remember correctly it depends on
          -- the timer's frequency, which I have not retrieved from the UEFI
          -- runtime service function `GetTime()`'s capabilities structure nor
          -- have I programmed the legacy PIT to my settings.
-         Terminal.Print(num'image(Ticker / 100));
+         Terminal.Print(num'image(Interrupts.Ticker / 100));
          Terminal.Draw_On(Display);
       END LOOP;
    END Seconds_Count;

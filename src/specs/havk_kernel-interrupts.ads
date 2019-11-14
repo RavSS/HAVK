@@ -1,6 +1,6 @@
 WITH
-   HAVK_Kernel.Intrinsics,
-   System;
+   System,
+   HAVK_Kernel.Intrinsics;
 USE
    HAVK_Kernel.Intrinsics;
 
@@ -21,7 +21,7 @@ IS
       SS     : num;
    END RECORD
    WITH
-      Alignment => 16, -- I believe the stack frame needs 16 byte alignment?
+      Alignment =>  128, -- I believe the stack frame needs 16-byte alignment?
       Pack      => true;
 
    -- GCC wants the handlers to take in a pointer
@@ -48,7 +48,7 @@ IS
       -- Needs to be set for the code or data segments and only disabled for
       -- system segments e.g. a TSS.
       Descriptor_Type         : boolean;
-      -- There's only 3 privilege rings for IA-32/AMD64, so two bits
+      -- There's only 3 privilege rings for IA-32e/AMD64, so two bits
       -- are required to store it.
       Privilege_Ring          : num RANGE 0 .. 3;
       -- This must always be 1, or else the selector doesn't exist.
@@ -67,6 +67,7 @@ IS
    END RECORD;
 
    TYPE GDT_flags               IS RECORD
+      -- This is actually an "Available" field, but we shall ignore it.
       Zeroed                  : num  RANGE 0 .. 0;
       -- Clearly must be set to one as this is for x86-64.
       Long_Descriptor_Size    : boolean;
@@ -423,14 +424,14 @@ IS
       Descriptor_TSS64              => (Descriptor_TSS =>
       (
          End_Address_Low            => TSS'size, -- Must be 104 bytes.
-         Start_Address_Low          => TSS_address AND 16#FFFF#,
-         Start_Address_Middle       => SHR(TSS_address, 16),
+         Start_Address_Low          => TSS_address          AND 16#FFFF#,
+         Start_Address_Middle       => SHR(TSS_address, 16) AND 16#FF#,
          Segment_Access             => -- Must be 0x89.
          (
-            Accessed                => true,
-            Readable_Or_Writable    => false,
+            Accessed                => true, -- Must be true.
+            Readable_Or_Writable    => false, -- Represents the "busy" bit.
             Direction_Or_Conforming => false,
-            Executable              => true,
+            Executable              => true, -- Must be true.
             Descriptor_Type         => false,
             Privilege_Ring          => 0,
             Present                 => true
@@ -440,14 +441,14 @@ IS
          Flags                      =>
          (
             Zeroed                  => 0,
-            Long_Descriptor_Size    => true, -- TODO: Is this actually valid?
+            Long_Descriptor_Size    => false, -- False even for a 64-bit TSS.
             Legacy_Descriptor_Size  => false,
             Granularity             => false
          ),
-         Start_Address_High         => SHR(TSS_address, 24)),
+         Start_Address_High         => SHR(TSS_address, 24)  AND 16#FF#),
          -- TODO: 64-bit extension starts here. Is this even correct?
          -- Might be responsible for causing a crash on AMD processors.
-         Start_Address_Extended     => SHR(TSS_address, 32),
+         Start_Address_Extended     => SHR(TSS_address, 32)  AND 16#FFFFFFFF#,
          Reserved_1                 => 0,
          Zeroed                     => 0,
          Reserved_2                 => 0

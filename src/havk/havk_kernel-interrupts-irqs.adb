@@ -1,6 +1,6 @@
 WITH
    HAVK_Kernel.Interrupts.PIC,
-   HAVK_Kernel.PS2;
+   HAVK_Kernel.PS2.Keyboard;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
    PRAGMA Warnings(off, "formal parameter ""Stack_Frame"" is not referenced");
@@ -17,8 +17,10 @@ PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
    PROCEDURE ISR_33_Handler( -- Keyboard.
       Stack_Frame : IN access_interrupt)
    IS
+      USE
+         HAVK_Kernel.PS2.Keyboard;
    BEGIN
-      PS2.Keyboard_Interrupt_Manager;
+      Interrupt_Manager;
       PIC.Master_Reset;
    END ISR_33_Handler;
 

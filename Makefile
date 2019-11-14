@@ -66,7 +66,7 @@ EFI_SRC_DIR=$(SRC_DIR)uefi/
 EFI_CRT0=$(EFI_SRC_DIR)crt0-efi-x86_64.o
 EFI_LINK=$(EFI_SRC_DIR)elf_x86_64_efi.lds
 
-EFI_C_STD=-std=c11
+EFI_C_STD=-std=c11 # Intel ASM syntax does not work with GNU-EFI functionality.
 EFI_C_WARN=-Wall -Wextra
 EFI_C_OPT=-nostdlib -fpic -fno-stack-protector -fno-strict-aliasing \
 	-fno-builtin -fshort-wchar -mno-red-zone
@@ -80,13 +80,24 @@ EFI_C_FLAGS=$(EFI_C_STD) $(EFI_C_WARN) $(EFI_C_OPT) $(EFI_C_INC) \
 # in it. For better analyzing, it's wise to use the same optimization level
 # for both of the bootloader application's files.
 ifeq ("$(BUILD)", "Debug")
-	EFI_C_OPT+= -O0 -ggdb3
+	EFI_C_OPT+= -Og -ggdb3
 else
 	EFI_C_OPT+= -O2 -g0
 endif
 
+# The offset values below are estimations.
+EFI_TEXT_SECTION_OFFSET=0x3000
+EFI_DATA_SECTION_OFFSET=0xC000
+
 ifeq ("$(DEBUG_LEVEL)", "2")
 	EFI_C_DEF+= -D HAVK_GDB_DEBUG
+	EFI_C_DEF+= -D TEXT_OFFSET=$(EFI_TEXT_SECTION_OFFSET)
+	EFI_C_DEF+= -D DATA_OFFSET=$(EFI_DATA_SECTION_OFFSET)
+endif
+
+ifneq ("$(EFI_IMAGE_BASE)", "")
+	EFI_TEXT_SECTION=$$(( $(EFI_IMAGE_BASE) + $(EFI_TEXT_SECTION_OFFSET)))
+	EFI_DATA_SECTION=$$(($(EFI_IMAGE_BASE) + $(EFI_DATA_SECTION_OFFSET)))
 endif
 
 EFI_LD_OPT=-nostdlib -Bsymbolic -shared -no-undefined -znocombreloc
@@ -96,11 +107,11 @@ EFI_LD_FLAGS=$(EFI_LD_OPT) $(EFI_LD_INC) $(EFI_CRT0)
 
 GDB_REMOTE_DEBUG_PORT=40404
 QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) \
-	-d guest_errors -m 1024 -cpu qemu64 -net none -no-reboot \
-	-no-shutdown
+	-d guest_errors -m 1024 -cpu qemu64,check -net none \
+	-no-reboot -no-shutdown
 
 ifeq ("$(INT)", "1")
-	QEMU_FLAGS+= -d int
+	QEMU_FLAGS+= -d int,cpu_reset
 endif
 
 EFI_NAME=boot
@@ -114,20 +125,20 @@ EFI_SO_FILE=$(BUILD_DIR)$(EFI_NAME).so
 # support FAT12, I've gone with FAT16 for now so I don't waste your space.
 FAT_SIZE=16
 IMAGE_BLOCK_SIZE=512
-IMAGE_SECTORS=6000
+IMAGE_SECTORS=10000
 
 # The bootable EFI system partition's sector details. I store the kernel
 # in there as well, because why not.
 ESP_SECTOR_START=50
-ESP_SECTOR_END=5000
-ESP_SECTOR_SIZE=4950
+ESP_SECTOR_END=9500
+ESP_SECTOR_SIZE=9550
 
-# Force kernel recompilation when debugging and consider warnings as errors.
-# Also control the optimization here so it's easier to tweak.
+# When debugging, consider warnings as errors and be more verbose.
+# Also control the optimisation here so it's easier to tweak.
 ifeq ("$(BUILD)", "Debug")
-	O?=0
+	O?=g
 	GPR_RTS_FLAGS=-we -k -d -O$(O)
-	GPR_KERNEL_FLAGS=-we -k -d -f -O$(O)
+	GPR_KERNEL_FLAGS=-we -k -d -O$(O)
 else
 	O?=2
 	GPR_RTS_FLAGS=-q -vP0 -O$(O)
@@ -146,6 +157,8 @@ $(BUILD_DIR):
 	@if [ ! -d "$@" ]; then mkdir $@; fi
 	@if [ ! -d "$(HAVK_ADALIB_DIR)" ]; then mkdir $(HAVK_ADALIB_DIR); fi
 
+# TODO: If any one of the runtime system's files are changed, a force or clean
+# build is necessary. This can be resolved.
 $(HAVK_ADAINCLUDE_DIR): | $(BUILD_DIR)
 	@if [ -d "$@" ]; then rm -r $@; fi
 	@mkdir $(HAVK_ADAINCLUDE_DIR)
@@ -235,15 +248,16 @@ gdb:
 	-@gdb $(HAVK_KERNEL) -q \
 		-ex "set confirm off" \
 		-ex "set architecture i386:x86-64:intel" \
+		-ex "set max-value-size 10485760" \
 		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \
 		-ex "continue"
 
 .PHONY: uefi-gdb
 uefi-gdb:
-	@if [ -z "$(UEFI_TEXT)" -o -z "$(UEFI_DATA)" ]; \
+	@if [ -z "$(EFI_IMAGE_BASE)" ]; \
 	then \
-		echo "Set both the UEFI_TEXT and UEFI_DATA variables to"; \
-		echo "the appropriate sections when calling Make for"; \
+		echo "Set the 'UEFI_IMAGE_BASE' variable to"; \
+		echo "the appropriate value when calling Make for"; \
 		echo "the UEFI GDB commands to work as intended."; \
 		exit 1; \
 	fi
@@ -251,9 +265,11 @@ uefi-gdb:
 	-@gdb $(HAVK_BOOTLOADER) -q \
 		-ex "set confirm off" \
 		-ex "set architecture i386:x86-64:intel" \
-		-ex "add-symbol-file $(HAVK_BOOTLOADER).debug $(UEFI_TEXT) \
-			-s .data $(UEFI_DATA)" \
+		-ex "set max-value-size 10485760" \
+		-ex "add-symbol-file $(HAVK_BOOTLOADER).debug \
+			$(EFI_TEXT_SECTION) -s .data $(EFI_DATA_SECTION)" \
 		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \
+		-ex "set gdb_ready=1" \
 		-ex "continue"
 
 .PHONY: proof

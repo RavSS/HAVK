@@ -21,14 +21,6 @@
 	#define HAVK_LOCATION L"\\HAVK\\HAVK.elf"
 #endif
 
-// HAVK is going to expect itself at a higher address, even when it will be
-// placed at e.g. 0x100000. See the x86 BIOS C version of HAVK for something
-// similiar, which has itself placed at virtual address 0xC0100000, but is
-// actually at physical address 0x100000 or something close to it.
-#ifndef HAVK_VIRTUAL_MEMORY_BASE
-	#define HAVK_VIRTUAL_MEMORY_BASE 0x0
-#endif
-
 #define CRITICAL_FAILURE() do\
 {\
 	Print(L"FAILED TO BOOT HAVK\r\n");\
@@ -61,8 +53,6 @@ while (0)
 	ERROR_CHECK(ret);\
 }\
 while (0)
-
-#define BUF_SIZE (sizeof(CHAR16) * 32)
 
 // I did these quickly, so something could be wrong, but it works for me.
 // https://en.wikipedia.org/wiki/Executable_and_Linkable_Format
@@ -133,10 +123,35 @@ struct uefi_arguments
 	UINT32 memory_map_descriptor_version;
 } __attribute__((packed));
 
+// Can't modify the default page structure, so I need to make my own.
+// See the "HAVK_Kernel.Paging" Ada package for the idea of this.
+// Only suitable for huge (2 MiB) pages. Don't pass this to HAVK.
+// A limitation of this structure is that it requires one huge block, as
+// the page level objects are right next to each other.
+struct uefi_page_structure
+{
+	#define HUGE_PAGE_SIZE 0x200000
+	#define HUGE_PAGE_ALIGN(x) ((x) - ((x) % HUGE_PAGE_SIZE))
+	#define HUGE_PAGE_SHIFT 21
+	#define HUGE_PAGE_MASK 511
+	#define HUGE_PAGE_POINTER 3 // Present, writable, user access.
+	#define HUGE_PAGE_PRESENT 131 // Present, writable, user access, huge.
+	#define SIZE_TO_HUGE_PAGES(x) \
+		(((x) >> HUGE_PAGE_SHIFT) + ((x) & HUGE_PAGE_MASK ? 1 : 0))
+
+	UINT64 map[512] ALIGN(EFI_PAGE_SIZE);
+	UINT64 pointers[512][512] ALIGN(EFI_PAGE_SIZE);
+	UINT64 table[512][512] ALIGN(EFI_PAGE_SIZE);
+} __attribute__((packed)); // Just to save any space at all.
+
 // Global variables.
 EFI_STATUS ret = EFI_SUCCESS; // Return status from UEFI functions.
 EFI_STATUS attempt = EFI_SUCCESS; // Secondary return status variable.
-CHAR16 *buf = NULL; // Initialize later, needs manual allocation.
+CHAR16 buffer[sizeof(CHAR16) * 32] = {0}; // Temporary character buffer.
+EFI_LOADED_IMAGE *image = NULL; // Also must be retrieved before utilisation.
+EFI_VIRTUAL_ADDRESS havk_virtual_entry = 0;
+EFI_PHYSICAL_ADDRESS havk_physical_entry = 0;
+UINT64 havk_memory_size = 0; // Used for mapping the entire kernel.
 
 // EFI GUIDs. These are the ones I'm using so far.
 EFI_GUID simple_file_system_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
@@ -149,43 +164,47 @@ EFI_FILE_PROTOCOL *root_directory;
 EFI_FILE_PROTOCOL *havk;
 EFI_GRAPHICS_OUTPUT_PROTOCOL *graphics_output_protocol;
 
-// Debug specific functions, variables, etc.
-#if HAVK_GDB_DEBUG
-	BOOLEAN gdb_ready = FALSE;
-
+// GDB debug specific functions, variables, etc. This relies on the Makefile.
+#ifdef HAVK_GDB_DEBUG
 	// Spinlock that must be modified by GDB to let it continue.
 	#define GDB_BREAKPOINT() do\
 	{\
-		gdb_ready = FALSE;\
-		while(!gdb_ready)\
-			__asm__ volatile("PAUSE;");\
+		CONST VOLATILE BOOLEAN gdb_ready = FALSE;\
+		while (!gdb_ready) __builtin_ia32_pause();\
 	}\
 	while (0)
 
-	EFIAPI
-	VOID get_bootloader_base(EFI_HANDLE image_handle)
-	{
-		EFI_LOADED_IMAGE *image_loaded = NULL;
+	#define BREAK() GDB_BREAKPOINT()
 
-		UEFI(BS->HandleProtocol, 3,
-			image_handle,
-			&LoadedImageProtocol,
-			&image_loaded);
+	EFIAPI
+	VOID setup_debug_session(VOID)
+	{
+		CONST EFI_PHYSICAL_ADDRESS text_section_base
+			= (EFI_PHYSICAL_ADDRESS) image->ImageBase
+			+ TEXT_OFFSET;
+		CONST EFI_PHYSICAL_ADDRESS data_section_base
+			= (EFI_PHYSICAL_ADDRESS) image->ImageBase
+			+ DATA_OFFSET;
 
 		Print(L"! BOOTLOADER IMAGE BASE: 0x%X\r\n",
-			image_loaded->ImageBase);
+			image->ImageBase);
 		Print(L"! ESTIMATIONS FOR SECTIONS:\r\n");
 		Print(L"        ! BOOTLOADER TEXT BASE: 0x%X\r\n",
-			image_loaded->ImageBase + 0x3000);
+			text_section_base);
 		Print(L"        ! BOOTLOADER DATA BASE: 0x%X\r\n",
-			image_loaded->ImageBase + 0xC000);
+			data_section_base);
+		Print(L"! EXECUTE `make uefi-gdb EFI_IMAGE_BASE=0x%X`"
+			" TO BEGIN\r\n",
+			image->ImageBase);
 
 		GDB_BREAKPOINT();
 	}
+#else
+	#define BREAK() // Defined, but does nothing to stay compatible.
 #endif
 
 EFIAPI
-VOID welcome(VOID)
+VOID welcome(EFI_HANDLE image_handle)
 {
 	// Set the colours for the text.
 	UEFI(ST->ConOut->SetAttribute, 2,
@@ -201,6 +220,19 @@ VOID welcome(VOID)
 	UEFI(ST->ConOut->ClearScreen, 1,
 		ST->ConOut);
 
+	// Disable the watchdog timer just in-case.
+	UEFI(BS->SetWatchdogTimer, 4,
+		0,
+		0,
+		0,
+		NULL);
+
+	// Retrieve the loaded image. Useful for things that are later shown.
+	UEFI(BS->HandleProtocol, 3,
+		image_handle,
+		&LoadedImageProtocol,
+		&image);
+
 	// Print the version notification in the centre of the screen.
 	PrintAt(40 - 8, 1, L"NOW BOOTING HAVK\r\n");
 	PrintAt(40 - 8, 2, L"VERSION %s\r\n\r\n", HAVK_VERSION);
@@ -208,19 +240,6 @@ VOID welcome(VOID)
 	#ifdef HAVK_GDB_DEBUG
 		Print(L"! COMPILED WITH GDB SPECIFIC DEBUGGING FUNCTIONS\r\n");
 	#endif
-}
-
-EFIAPI
-EFI_HANDLE get_sfs_handle_default(EFI_HANDLE image_handle)
-{
-	EFI_LOADED_IMAGE *image_loaded = NULL;
-
-	UEFI(BS->HandleProtocol, 3,
-		image_handle,
-		&LoadedImageProtocol,
-		&image_loaded);
-
-	return image_loaded->DeviceHandle;
 }
 
 EFIAPI
@@ -258,9 +277,9 @@ EFI_HANDLE get_sfs_handle(VOID)
 	else
 	{
 		Print(L"ENTER THE HANDLE NUMBER (1 to %llu)", handles_found);
-		Input(L": ", buf, BUF_SIZE);
+		Input(L": ", buffer, sizeof(buffer));
 		Print(L"\r\n");
-		handle_selected = Atoi(buf) - 1;
+		handle_selected = Atoi(buffer) - 1;
 	}
 
 	return handles[handle_selected];
@@ -333,20 +352,18 @@ VOID read_file_header(struct elf64_file_header *havk_file_header)
 		&elf64_file_header_size,
 		*&havk_file_header);
 
-	// Check for the ELF magic numbers. Less confusing to just do
-	// straight comparisons instead of using `StrnCmp` or `strncmpa`
-	// thanks to the irregular character sizes.
-	if (havk_file_header->identity[0] != 0x7F
-		|| havk_file_header->identity[1] != 0x45
-		|| havk_file_header->identity[2] != 0x4C
-		|| havk_file_header->identity[3] != 0x46)
+	// Check for the ELF magic numbers.
+	if (strncmpa(havk_file_header->identity, (UINT8 *)"\x7F" "ELF", 3))
 	{
 		Print(L"ELF MAGIC NUMBERS ARE MISSING OR CORRUPTED\r\n");
 		CRITICAL_FAILURE();
 	}
 
-	Print(L"HAVK ENTRY POSITION: 0x%X\r\n",
-		havk_file_header->entry_address);
+	// The entry address will always be the virtual one and in
+	// the file header.
+	havk_virtual_entry = havk_file_header->entry_address;
+
+	Print(L"HAVK VIRTUAL ENTRY ADDRESS: 0x%llX\r\n", havk_virtual_entry);
 }
 
 EFIAPI
@@ -373,6 +390,18 @@ VOID read_program_headers(struct elf64_file_header *havk_file_header,
 		havk,
 		&havk_program_headers_size,
 		*havk_program_headers);
+
+	// Obtain the physical entry address. This is always the first
+	// segment marked LOAD.
+	for (UINTN i = 0; i < havk_file_header->program_header_entries; i++)
+	{
+		if (havk_program_headers[i]->type == 1)
+		{
+			havk_physical_entry
+				= havk_program_headers[i]->physical_address;
+			break;
+		}
+	}
 }
 
 EFIAPI
@@ -388,8 +417,7 @@ VOID load_havk(struct elf64_file_header *havk_file_header,
 			continue;
 
 		EFI_PHYSICAL_ADDRESS segment_physical_address
-			= havk_program_headers[i].physical_address
-			- HAVK_VIRTUAL_MEMORY_BASE;
+			= havk_program_headers[i].physical_address;
 
 		// Allocate a page to store the segment.
 		UEFI(BS->AllocatePages, 4,
@@ -400,12 +428,8 @@ VOID load_havk(struct elf64_file_header *havk_file_header,
 
 		// Zero out the segment's memory space just in case.
 		// Really only required for the BSS segment, but do it anyway.
-		// `ZeroMem()` exists as a shortcut, but it requires a cast
-		// as it doesn't take in a "EFI_PHYSICAL_ADDRESS" type.
-		uefi_call_wrapper(BS->SetMem, 3, // Returns nothing.
-			segment_physical_address,
-			havk_program_headers[i].memory_size,
-			0);
+		ZeroMem((VOID *)segment_physical_address,
+			havk_program_headers[i].memory_size);
 
 		// Go to the offset of the segment in the file.
 		UEFI(havk->SetPosition, 2,
@@ -418,9 +442,12 @@ VOID load_havk(struct elf64_file_header *havk_file_header,
 			&havk_program_headers[i].size,
 			segment_physical_address);
 
-		Print(L"HAVK SEGMENT ADDRESS: 0x%X (%llu KIBIBYTES)\r\n",
+		Print(L"HAVK PHYSICAL SEGMENT ADDRESS: 0x%X "
+			"(%llu KIBIBYTES)\r\n",
 			segment_physical_address,
 			havk_program_headers[i].memory_size / 1024);
+
+		havk_memory_size += havk_program_headers[i].memory_size;
 	}
 
 	// Free the program headers' memory. Since I allocated it without
@@ -504,14 +531,14 @@ UINTN read_screen_resolutions(EFI_HANDLE gop_handle)
 		else
 			Print(L"%llu", i);
 
-		SPrint(buf, BUF_SIZE, L": %ux%u",
+		SPrint(buffer, sizeof(buffer), L": %ux%u",
 			queried_mode_information->HorizontalResolution,
 			queried_mode_information->VerticalResolution);
-		Print(buf);
+		Print(buffer);
 
 		// Instead of relying on tabs (which don't work everywhere),
 		// format it with spaces.
-		UINTN display_length = StrnLen(buf, BUF_SIZE);
+		UINTN display_length = StrnLen(buffer, sizeof(buffer));
 		for (UINTN x = display_length; x < 13; x++)
 			Print(L"\x20");
 
@@ -532,11 +559,19 @@ VOID set_screen_resolution(UINTN max_graphics_mode)
 
 	do // Now handle the inputted graphics mode from the user.
 	{
+		// Ignore this option when debugging, as the resolution
+		// probably doesn't matter and this directive saves some time.
+		#ifdef HAVK_GDB_DEBUG
+			selected_mode = 1;
+			Print(L"GRAPHICS MODE AUTOMATICALLY SELECTED.\r\n");
+			continue;
+		#endif
+
 		Print(L"ENTER THE GRAPHICS MODE (1 to %u)", max_graphics_mode);
 
-		Input(L": ", buf, BUF_SIZE);
+		Input(L": ", buffer, sizeof(buffer));
 		Print(L"\r\n");
-		selected_mode = Atoi(buf);
+		selected_mode = Atoi(buffer);
 
 		if (selected_mode < 1 || selected_mode > max_graphics_mode)
 			Print(L"GRAPHICS MODE IS OUT OF RANGE\r\n");
@@ -593,6 +628,8 @@ VOID get_graphics_information(struct uefi_arguments *arguments)
 		+ arguments->framebuffer_size);
 }
 
+// This also exits boot services, or else the memory map would quickly become
+// invalid for exiting boot services and also inaccurate.
 EFIAPI
 VOID get_memory_map(struct uefi_arguments *arguments, EFI_HANDLE image_handle)
 {
@@ -646,6 +683,88 @@ VOID get_memory_map(struct uefi_arguments *arguments, EFI_HANDLE image_handle)
 		arguments->memory_map_key);
 }
 
+// `malloc()` that returns an address which is page-aligned to 0x1000 (4 KiB).
+// The highest level of the page structure must be aligned, so that is used
+// to align the page structure, where the first member of the struct itself
+// is the highest level (the map/PML4). `AllocatePool()` and its zeroed
+// shortcut variant both return an 8-KiB aligned value if I remember correctly.
+EFIAPI
+VOID *page_malloc(UINT64 size)
+{
+	CONST EFI_PHYSICAL_ADDRESS zeroed_pool = (EFI_PHYSICAL_ADDRESS)
+		AllocateZeroPool(size + EFI_PAGE_SIZE);
+
+	return (VOID *)((zeroed_pool + 1 + EFI_PAGE_MASK) & ~EFI_PAGE_MASK);
+}
+
+// This maps the kernel's virtual space. Instead of creating a new dictionary,
+// I've just reused the UEFI dictionary. This must be called after the boot
+// services have ended, not before.
+EFIAPI
+VOID map_address_range(struct uefi_page_structure *structure,
+	EFI_VIRTUAL_ADDRESS virtual, EFI_PHYSICAL_ADDRESS physical,
+	UINT64 size)
+{
+	// This is a very rushed and less detailed version of the functionality
+	// inside "HAVK_Kernel.Paging". I've done this quick.
+
+	virtual = HUGE_PAGE_ALIGN(virtual);
+	physical = HUGE_PAGE_ALIGN(physical);
+	size = size ? SIZE_TO_HUGE_PAGES(size) : SIZE_TO_HUGE_PAGES(1);
+
+	for (UINT64 i = 0; i < size; ++i)
+	{
+		#define increment(x) ((x) + HUGE_PAGE_SIZE * i)
+
+		CONST UINT16 map_offset
+			= (increment(virtual) >> 39)
+			& HUGE_PAGE_MASK;
+		CONST UINT16 pointer_offset
+			= (increment(virtual) >> 30)
+			& HUGE_PAGE_MASK;
+		CONST UINT16 table_offset
+			= (increment(virtual) >> 21)
+			& HUGE_PAGE_MASK;
+
+		structure->map[map_offset]
+			= (UINT64) &structure->pointers[map_offset]
+			| HUGE_PAGE_POINTER;
+
+		structure->pointers[map_offset][pointer_offset]
+			= (UINT64) &structure->table[pointer_offset]
+			| HUGE_PAGE_POINTER;
+
+		structure->table[pointer_offset][table_offset]
+			= increment(physical)
+			| HUGE_PAGE_PRESENT;
+
+		#undef increment
+	}
+}
+
+// After the the UEFI boot services have ended, we then obtain
+// the right to mess with the MMU. Unfortunately, the UEFI page
+// structure is only mapped to a virtual address which I cannot
+// write to (modify), at least for x86-64 on OVMF with QEMU.
+// These are the default mappings for now. Not bothered to precisely
+// map UEFI loader data, the kernel will do it soon enough.
+EFIAPI
+VOID default_mappings(struct uefi_page_structure *structure)
+{
+	// I've given up trying to map every important thing one by one.
+	// I've just mapped 0 to 4 GiB entirely. UEFI does this anyway, but
+	// adds special pages (essentially restrictions) for certain ranges.
+	map_address_range(structure, 0, 0, 0x100000000);
+
+	// Finally map the kernel itself.
+	map_address_range(structure,
+		havk_virtual_entry,
+		havk_physical_entry,
+		havk_memory_size);
+
+	Print(L"TEMPORARY PAGE STRUCTURE ADDRESS: 0x%llX\r\n", structure);
+}
+
 EFIAPI
 EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
@@ -654,23 +773,22 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	// wrapper or the shortcut functions found in "efilib.h".
 	// See all references to "AllocatePool" for the general idea.
 	InitializeLib(image_handle, system_table);
-	buf = AllocatePool(BUF_SIZE + sizeof(CHAR16));
-
-	struct uefi_arguments *arguments = NULL;
-	struct elf64_file_header havk_file_header;
-	struct elf64_program_header *havk_program_headers = NULL;
-
-	welcome();
+	welcome(image_handle);
 
 	#if HAVK_GDB_DEBUG
-		get_bootloader_base(image_handle);
+		setup_debug_session();
 	#endif
+
+	struct elf64_file_header havk_file_header = {0};
+	struct elf64_program_header *havk_program_headers = NULL;
+	struct uefi_arguments *arguments = NULL;
+	struct uefi_page_structure *page_structure ALIGN(EFI_PAGE_SIZE) = NULL;
 
 	// TODO: For now, just find the device where the bootloader is
 	// also located. This should save a lot of time guessing, but I aim
 	// to revise this in the future for more user options.
-	//open_havk(get_sfs_handle());
-	open_havk(get_sfs_handle_default(image_handle));
+	/* open_havk(get_sfs_handle()); */
+	open_havk(image->DeviceHandle);
 	read_havk_size();
 
 	read_file_header(&havk_file_header);
@@ -681,41 +799,45 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 
 	set_screen_resolution(read_screen_resolutions(get_gop_handle()));
 
-	// Free the input string buffer pool, as it is not needed now, and
-	// then allocate a new pool for the arguments. Must be done in order.
-	FreePool(buf);
+	// Allocate pools only after HAVK has been loaded, or else I find that
+	// a pool gets allocated to where HAVK would be copied into later on.
 	arguments = AllocatePool(sizeof(struct uefi_arguments));
+	get_graphics_information(arguments);
+
+	// Now prepare the temporary page mappings so we can have
+	// a higher-half kernel.
+	page_structure = page_malloc(sizeof(struct uefi_page_structure));
+	default_mappings(page_structure);
+
 	Print(L"PREPARING TO ENTER HAVK\r\n");
 
 	// TODO: Get ACPI tables etc. before the memory map.
-	get_graphics_information(arguments);
-	get_memory_map(arguments, image_handle); // UEFI services end here.
+	get_memory_map(arguments, image_handle);
+	// UEFI boot services have ended. Can't e.g. `Print()` anymore.
 
-	#if HAVK_GDB_DEBUG
-		GDB_BREAKPOINT();
-	#endif
+	// TODO: Set this up for the runtime services inside the OS if they
+	// are desired. You can only do it once, apparently.
+	/* UEFI(RT->SetVirtualAddressMap, 4,
+		arguments->memory_map_size,
+		arguments->memory_map_descriptor_size,
+		arguments->memory_map_descriptor_version,
+		arguments->memory_map); */
 
-	// TODO: This crashes the bootloader on a real system's UEFI firmware.
-	// I have no idea why, but I would like to use the runtime services,
-	// which I am quite sure this is necessary for. Does not freeze
-	// the TianoCore UEFI implementation running in QEMU or Bochs.
-	//
-	//UEFI(RT->SetVirtualAddressMap, 4,
-	//	arguments->memory_map_size,
-	//	arguments->memory_map_descriptor_size,
-	//	arguments->memory_map_descriptor_version,
-	//	arguments->memory_map);
+	// The last stop for the debugger before the session becomes pointless.
+	BREAK();
 
 	// I want to pass the memory map etc. to HAVK, so instead of using
 	// inline assembly, I can just tell GCC to use the System V ABI way
 	// of passing arguments to our assembly entry function which is
-	// using the ELF format and adheres to the System V ABI.
+	// using the ELF format and adheres to the System V ABI. It is the
+	// kernel's responsibility to switch the paging structure.
 	__attribute__((sysv_abi))
-	void (*enter_havk) (struct uefi_arguments *arguments, UINT64 magic)
-		= (void *) havk_file_header.entry_address;
+	VOID (*enter_havk) (struct uefi_arguments *arguments,
+		UINT64 magic, struct uefi_page_structure *page_structure)
+		= (VOID *)havk_physical_entry;
 
 	// Now we leave at last.
-	enter_havk(arguments, BOOTLOADER_MAGIC);
+	enter_havk(arguments, BOOTLOADER_MAGIC, page_structure);
 
 	return EFI_SUCCESS;
 }

@@ -1,9 +1,13 @@
+-- This package controls the state of input, regardless of origin.
 PACKAGE HAVK_Kernel.Input
 IS
+   -- The name (string) of the keys can only be 32 characters long. This is
+   -- a poor man's unbounded string replacement, but it works.
    SUBTYPE key_string IS string(1 .. 32);
 
+   -- A simple key-press packet.
    TYPE key_state IS RECORD
-      -- The name of a key like "PAUSE".
+      -- The name of a key like "SPACEBAR".
       Key_Name          : key_string;
       -- Same as the above, but for the shifted version, like "BREAK".
       Key_Name_Shifted  : key_string;
@@ -21,27 +25,27 @@ IS
 
    -- Pads out the fixed string.
    FUNCTION Key_String_Format(
-      Unformatted : IN string)
+      Unformatted       : IN string)
    RETURN key_string
    WITH
       Inline => true,
       Pre    => Unformatted'length <= key_string'length;
 
-   -- See the "Last_Key_State" variable for this function's purpose.
-   FUNCTION Get_Key_State
-   RETURN key_state
+   -- Purpose is the same as the above function's purpose.
+   PROCEDURE Set_Key_State(
+      Name              : IN key_string;
+      Name_Shifted      : IN key_string;
+      ASCII             : IN character;
+      ASCII_Shifted     : IN character;
+      Printable         : IN boolean;
+      Break             : IN boolean;
+      Shifted           : IN boolean)
    WITH
       Inline => true;
 
-   -- Purpose is the same as the above function's purpose.
-   PROCEDURE Set_Key_State(
-      Name          : key_string;
-      Name_Shifted  : key_string;
-      ASCII         : character;
-      ASCII_Shifted : character;
-      Printable     : boolean;
-      Break         : boolean;
-      Shifted       : boolean)
+   -- See the "Last_Key_State" variable for this function's purpose.
+   FUNCTION Get_Key_State
+   RETURN key_state
    WITH
       Inline => true;
 
@@ -59,7 +63,7 @@ IS
 
 PRIVATE
    -- This is private so every single part of the record needs to be
-   -- updated on every single key update.
+   -- updated on every single key update while being untouchable externally.
    Last_Key_State : key_state :=
    (
       Key_Name          => (OTHERS => character'val(0)),

@@ -57,7 +57,7 @@ PACKAGE HAVK_Kernel.Initialise IS
    RETURN string;
 
    -- The default paging layout.
-   Kernel_Paging_Layout : Paging.page_layout_huge;
+   Kernel_Paging_Layout : Paging.page_layout;
 PRIVATE
    -- Bootloader magic number.
    Magic : CONSTANT num

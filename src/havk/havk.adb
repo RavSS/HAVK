@@ -23,7 +23,7 @@ IS
 
    Display         : view := Create_View(Bootloader.ALL);
 
-   -- The UEFI memory map. Assumes the descriptor size has been "fixed".
+   -- The UEFI memory map, which is an array of memory (region) descriptors.
    Map             : CONSTANT UEFI.memory_map(0 .. Bootloader.Memory_Map_Size /
       Bootloader.Memory_Map_Descriptor_Size)
    WITH
@@ -66,8 +66,12 @@ BEGIN
    -- Print the welcome message and date of the current build's compilation.
    Terminal.Print(Welcome,       Centre => true);
    Terminal.Newline;
-   Terminal.Print(Date_Of_Build, Centre => true);
+   Terminal.Print("COMPILED AT " & Date_Of_Build, Centre => true);
    Terminal.Newline(2);
+
+   -- Show the magic number value.
+   Initialise.See_Magic(Terminal);
+   Terminal.Newline;
 
    -- Print the font test.
    Initialise.Font_Test(Terminal);
@@ -77,11 +81,6 @@ BEGIN
    Terminal.Print("MEMORY MAP ENUMERATION:" & character'val(0));
    Terminal.Newline;
    Terminal.Print("   MEMORY DESCRIPTORS:" & num'image(Map'length));
-   Terminal.Newline;
-   Terminal.Print("   INSTALLED RAM SIZE:" & num'image((
-      Map(Map'last).Start_Address_Physical'address +
-      Map(Map'last).Number_Of_Pages * 4096) / 1024 / 1024) &
-      " MEBIBYTES");
    Terminal.Newline(2);
 
    Terminal.Draw_On(Display);
