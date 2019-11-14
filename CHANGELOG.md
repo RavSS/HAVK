@@ -1,12 +1,13 @@
 # Changelog for the HAVK operating system
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date at UTC +13:00 )
 
+-------------------------
 ### Tasklist - 2019-11-15
 - Very specific resolutions like 1366x768 are bugged and unusable.
 - Implement a logging utility to store kernel information.
 - If there's a lot of keys pressed too fast, the keyboard shift state
 often becomes stuck in reverse.
-- Unoptimised `Screen(Index, Pixel)` function as I cannot figure out
+- Unoptimised `Object.Screen(Index, Pixel)` function as I cannot figure out
 how to add a non-local address aliased array into a tagged record, or
 any other optimal solution. Making it non-primitive doesn't help at
 removing the overhead.
@@ -25,7 +26,11 @@ compiled with GCC's `-mcmodel=kernel` but not `-mcmodel=large`. For now,
 the "Final" build is compiled with the former, as debug functionality is
 irrelevant to that build's purpose.
 
-## UPCOMING - 2019-??-??
+-------------------------
+## UPCOMING - 20??-??-??
+
+-------------------------
+## 00-09-00 - 2019-11-15
 ### Overall Changes
 - The page structure is now controllable and HAVK can map virtual addresses
 to physical addresses. A limited amount of page entries are available.
@@ -34,8 +39,8 @@ This functionality is also included in the UEFI bootloader.
 with new kernel panic functionality.
 - Massive shift of code from the main procedure to an initialisation
 package for organisation purposes, along with other package maintenance.
-- SPARK is now enabled nearly everywhere. Assumption violations are
-expected for now of SPARK mode, but they are slowly being worked on.
+- SPARK is now enabled nearly everywhere. SPARK rule violations are
+expected for now of SPARK mode, but they will be slowly worked on.
 - Addresses can be displayed in base-16/hexadecimal, which is integrated
 into the new page fault handler. As of now, it just sends debug information.
 - The UEFI descriptors can now have their memory region type determined
@@ -49,6 +54,7 @@ of the 64-bit address space.
 is now more stable overall and does not crash on higher optimisations, as
 the entry function now respects the System V ABI properly without bugs.
 
+-------------------------
 ## 00-08-00 - 2019-07-10
 ### Overall Changes
 - Framefont now supports digits/numbers and a few symbols, meaning
@@ -79,6 +85,7 @@ progress messages.
 into proper number types due to an expansion of the runtime system.
 - Trimmed down read-me and made it more to the point.
 
+-------------------------
 ## 00-07-00 - 2019-06-16
 ### Overall Changes
 - HAVK can boot on a bare metal machine and can inaccurately count seconds.
@@ -104,6 +111,7 @@ managed accordingly by `gprbuild` (the GNAT Project Manager).
 - It is time to get serious about version control, this will be the
 last batch commit. All versions will now be tagged instead of committed.
 
+-------------------------
 ## 00-06-00 - 2019-05-05
 ### Overall Changes
 - A working terminal is now present, it is buffered, and it must be redrawn
@@ -131,6 +139,7 @@ entirely done using GNU Parted (`parted`), GNU Mtools (`mmd`, `mcopy`),
 `dd`, and `mkfs.fat`. The size of the filesystem and EFI partition is
 controlled through the Makefile.
 
+-------------------------
 ## 00-05-00 - 2019-04-14
 ### Overall Changes
 - A "video map" along with a memory map is now passed to the Ada program.
@@ -155,6 +164,7 @@ mnemonic value for quick lazy error detection in QEMU's monitor console.
 - The style guide for Ada is still being decided, but I've gone with all
 uppercase for keywords, mixed-case for variables, and lowercase for types.
 
+-------------------------
 ## 00-04-00 - 2019-04-07
 ### Platform Shift
 - HAVK will now target x86-64. For the sake of security, it will
@@ -189,6 +199,7 @@ has been depreciated. The last thing that was being worked on was a frame
 allocator for the memory manager. A language translation from C to Ada
 is now the next goal for the kernel as it is now.
 
+-------------------------
 ## 00-03-00 - 2019-02-15
 ### Overall Changes
 - GDT (with TSS) set up, Ring 3 entrance is technically possible.
@@ -204,17 +215,20 @@ Only Scan code set 2 support only as of now.
 - Redid "README.md".
 - Makefile tweaks. Bochs RC file included.
 
+-------------------------
 ## 00-02-00 - 2019-01-23
 ### Overall Changes
 - Enabled paging.
 - Further developed terminal operations and features.
 - Much better and complex Makefile, more coherent build system overall.
 
+-------------------------
 ## 00-01-00 - 2019-01-18
 ### Overall Changes
 - Completely redid terminal functions.
 - Restructured build directory and Makefile.
 
+-------------------------
 ## 00-00-00 - 2019-01-18
 ### Initialized
 - Based on OSDev Wiki's basic i386 bare-bones example with my Makefile.
