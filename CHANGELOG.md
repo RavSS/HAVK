@@ -1,9 +1,7 @@
 # Changelog for the HAVK operating system
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date at UTC +13:00 )
 
-### Tasklist - 2019-10-29
-- Start parsing the memory map provided by the UEFI bootloader and begin
-manipulating the page directory for memory management purposes.
+### Tasklist - 2019-11-15
 - Very specific resolutions like 1366x768 are bugged and unusable.
 - Implement a logging utility to store kernel information.
 - If there's a lot of keys pressed too fast, the keyboard shift state
@@ -16,16 +14,26 @@ removing the overhead.
 a consistent format that does away with some of UEFI's oddities.
 - Make the codebase properly compliant with SPARK. If there's time, attempt
 to do the same for the runtime system.
+- Potentially stop using NASM and transition to GAS, as it is included
+with GNAT and is a GNU tool. Less dependencies are usually nicer to have.
+- Create a CPUID package so things like 1-GiB pages can be used without fear.
+- Quickly refresh the GPR file for HAVK's runtime, as the main project file
+has deviated somewhat.
+- Begin to create a solution for PS/2 mouse capabilities. Low priority.
+- Figure out why GDB acts erratic when debugging with HAVK that is
+compiled with GCC's `-mcmodel=kernel` but not `-mcmodel=large`. For now,
+the "Final" build is compiled with the former, as debug functionality is
+irrelevant to that build's purpose.
 
 ## UPCOMING - 2019-??-??
 ### Overall Changes
 - The page structure is now controllable and HAVK can map virtual addresses
-to physical addresses. It is not complete and has a default page size of
-2 MiB to save time and kernel file space for now.
+to physical addresses. A limited amount of page entries are available.
+This functionality is also included in the UEFI bootloader.
 - Expanded the Last Chance Handler to send crash information to COM1, along
 with new kernel panic functionality.
 - Massive shift of code from the main procedure to an initialisation
-package for organisation purposes.
+package for organisation purposes, along with other package maintenance.
 - SPARK is now enabled nearly everywhere. Assumption violations are
 expected for now of SPARK mode, but they are slowly being worked on.
 - Addresses can be displayed in base-16/hexadecimal, which is integrated
@@ -33,6 +41,13 @@ into the new page fault handler. As of now, it just sends debug information.
 - The UEFI descriptors can now have their memory region type determined
 after exiting boot services and they can be mapped appropriately, so
 bootloader arguments are not lost later on.
+- Fixed the task state segment (TSS) descriptor at higher address locations
+and corrected it for x86-64.
+- HAVK is now a higher-half kernel that is virtually positioned at -2 GiB
+of the 64-bit address space.
+- Few instances of stack corruption were resolved, meaning that the kernel
+is now more stable overall and does not crash on higher optimisations, as
+the entry function now respects the System V ABI properly without bugs.
 
 ## 00-08-00 - 2019-07-10
 ### Overall Changes

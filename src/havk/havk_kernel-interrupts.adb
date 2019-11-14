@@ -1,12 +1,13 @@
 WITH
+   System.Machine_Code,
    HAVK_Kernel.Interrupts.Exceptions,
    HAVK_Kernel.Interrupts.IRQs,
    HAVK_Kernel.Interrupts.PIC,
-   System.Machine_Code;
+   HAVK_Kernel.Paging;
 USE
+   System.Machine_Code,
    HAVK_Kernel.Interrupts.Exceptions,
-   HAVK_Kernel.Interrupts.IRQs,
-   System.Machine_Code;
+   HAVK_Kernel.Interrupts.IRQs;
 
 PACKAGE BODY HAVK_Kernel.Interrupts
 WITH
@@ -42,7 +43,8 @@ IS
       Exception_Type : IN IDT_gate_type;
       Ring           : IN num)
    IS
-      ISR_Address    : CONSTANT num := Address_To_num(ISR);
+      ISR_Address    : CONSTANT num := Address_To_num(ISR) -
+         Paging.Kernel_Virtual_Base;
    BEGIN
       IDT(Index)     :=
       (

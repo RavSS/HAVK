@@ -9,12 +9,12 @@ fi
 
 cd $1
 
-./configure --enable-debugger --enable-smp --enable-3dnow \
+./configure --enable-3dnow \
 	--enable-x86-64 --enable-x86-debugger --enable-avx \
 	--enable-svm --enable-long-phy-address \
 	--enable-sb16 --enable-gameport \
 	--enable-clgd54xx --enable-pci --enable-usb \
-	--enable-idle-hack --enable-all-optimizations \
+	--enable-gdb-stub --enable-all-optimizations \
 	--enable-usb-ohci
 
 make -j`nproc --all`

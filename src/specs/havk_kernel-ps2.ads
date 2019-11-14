@@ -42,13 +42,13 @@ IS
    Scancode_Set_Options  : CONSTANT num := 16#F0#;
 
    TYPE PS2_configuration  IS RECORD
-      Port_1_Enabled     : boolean; -- Enables port 1.
-      Port_2_Enabled     : boolean; -- Enables port 2 if present.
-      System_POST_Pass   : boolean; -- If the system passed POST (always true).
+      Port_1_Enabled     : boolean;          -- Enables port 1.
+      Port_2_Enabled     : boolean;          -- Enables port 2 if present.
+      System_POST_Pass   : boolean;          -- Technically always true.
       Zeroed_1           : num RANGE 0 .. 0; -- Always zero.
-      Port_1_Clock       : boolean; -- Enables port 1's clock signal.
-      Port_2_Clock       : boolean; -- Enables port 2's clock signal.
-      Port_1_Translation : boolean; -- Translate AT to XT for the keyboard.
+      Port_1_Clock       : boolean;          -- Enables port 1's clock signal.
+      Port_2_Clock       : boolean;          -- Enables port 2's clock signal.
+      Port_1_Translation : boolean;          -- Translate AT to XT for port 1.
       Zeroed_2           : num RANGE 0 .. 0; -- Always zero.
    END RECORD;
    FOR  PS2_configuration USE RECORD
@@ -86,7 +86,7 @@ IS
    TYPE PS2_typematics     IS RECORD
       -- Controls the repeat rate for the key resends.
       Repeat_Rate        : num RANGE 0 .. 16#1F#;
-      -- Key resend delays : 0 = 250 ms, 1 = 500 ms, 2 = 750 ms, 3 = 1000 ms.
+      -- Key resend delays: 0 = 250 ms, 1 = 500 ms, 2 = 750 ms, 3 = 1000 ms.
       Delay_Rate         : num RANGE 0 .. 3;
       -- Always zeroed out.
       Zeroed             : num RANGE 0 .. 0;
@@ -113,16 +113,6 @@ IS
    WITH
       Inline_Always => true;
 
-   PROCEDURE Controller_Initialise;
+   PROCEDURE Controller_Setup;
 
-   PROCEDURE Keyboard_Interrupt_Manager
-   WITH
-      Inline_Always => true;
-
-   PROCEDURE Scancode_Set_2(
-      Scancode     : IN num;
-      Shifted      : IN boolean;
-      Break        : IN boolean)
-   WITH
-      Inline_Always => true;
 END HAVK_Kernel.PS2;

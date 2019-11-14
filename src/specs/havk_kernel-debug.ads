@@ -46,4 +46,34 @@ IS
    PROCEDURE Breakpoint
    WITH
       Inline_Always => true;
+
+   -- Returns the current file of where this function was called.
+   FUNCTION File
+   RETURN string
+   WITH
+      Import     => true,
+      Convention => Intrinsic;
+
+   -- Returns the current line number of where this procedure was called.
+   FUNCTION Line
+   RETURN positive
+   WITH
+      Import     => true,
+      Convention => Intrinsic;
+
+   -- Returns the current file and current line number of where this procedure
+   -- was called in a "file:line" string format.
+   FUNCTION Source_Location
+   RETURN string
+   WITH
+      Import     => true,
+      Convention => Intrinsic;
+
+   -- Returns the current package/procedure/function name of where this
+   -- procedure was called depending on what encloses it.
+   FUNCTION Enclosing_Entity
+   RETURN string
+   WITH
+      Import     => true,
+      Convention => Intrinsic;
 END HAVK_Kernel.Debug;
