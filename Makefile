@@ -1,11 +1,11 @@
 ###############################################################################
-######################### HAVK - An Operating System. #########################
+##################### HAVK - An Operating System & Kernel. ####################
 ###############################################################################
 NAME:=HAVK
-VERSION=UPCOMING
+VERSION=00-09-00
 
 # Currently, there are two build levels: "Final" and "Debug". Case sensitive.
-BUILD?=Debug
+BUILD?=Final
 
 # This only has any effect when the build is Debug. As of now, this
 # only controls the additional test functions added in to the UEFI bootloader,
