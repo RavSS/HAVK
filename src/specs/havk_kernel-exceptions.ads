@@ -30,6 +30,7 @@ IS
    -- PS/2 input or a UEFI boot service bit block transfer only framebuffer.
    PROCEDURE Tears_In_Rain(
       Message : IN string;
+      File    : IN string;
       Line    : IN integer)
    WITH
       Export     => true,

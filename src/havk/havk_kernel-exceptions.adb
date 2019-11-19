@@ -14,7 +14,9 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
 
       PROCEDURE Debug_Crash
       WITH
-         Inline => true;
+         Inline    => true,
+         No_Return => true;
+
       PROCEDURE Debug_Crash
       IS
          FUNCTION strlen(
@@ -33,34 +35,37 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
             Address       => Source_Location;
       BEGIN
          Debug_Message("Crashed - """ & C_String & ":" & Line'img & """!");
+         LOOP
+            Asm(  -- Works for now as a quick indicator.
+               "MOV RAX, %0;" &
+               "MOV RBX, %0;" &
+               "MOV RCX, %0;" &
+               "MOV RDX, %0;" &
+               "MOV RSI, %1;" & -- Character array of source file's name.
+               "MOV EDI, %2;" & -- Line destination in the source file.
+               "MOV RSP, %0;" &
+               "MOV R8,  %0;" &
+               "MOV R9,  %0;" &
+               "MOV R10, %0;" &
+               "MOV R11, %0;" &
+               "MOV R12, %0;" &
+               "MOV R13, %0;" &
+               "MOV R14, %0;" &
+               "MOV R15, %0;" &
+               "PAUSE;",
+               Inputs   => (num'Asm_Input("g", Mnemonic),
+                           System.Address'Asm_Input("g", Source_Location),
+                           integer'Asm_Input("g", Line)),
+               Clobber  => "rax, rbx, rcx, rdx, rsi, edi, rsp," &
+                           "r8,  r9,  r10, r11, r12, r13, r14, r15",
+               Volatile => true);
+         END LOOP;
       END Debug_Crash;
    BEGIN
       Asm("CLI;", Volatile => true);
       PRAGMA Debug(Debug_Crash);
-      LOOP
-         Asm(  -- Works for now as a quick indicator.
-            "MOV RAX, %0;" &
-            "MOV RBX, %0;" &
-            "MOV RCX, %0;" &
-            "MOV RDX, %0;" &
-            "MOV RSI, %1;" & -- Pointer to source file name (C-style string).
-            "MOV EDI, %2;" & -- Line destination in the source file.
-            "MOV RSP, %0;" &
-            "MOV R8,  %0;" &
-            "MOV R9,  %0;" &
-            "MOV R10, %0;" &
-            "MOV R11, %0;" &
-            "MOV R12, %0;" &
-            "MOV R13, %0;" &
-            "MOV R14, %0;" &
-            "MOV R15, %0;" &
-            "PAUSE;",
-            Inputs   => (num'Asm_Input("g", Mnemonic),
-                        System.Address'Asm_Input("g", Source_Location),
-                        integer'Asm_Input("g", Line)),
-            Clobber  => "rax, rbx, rcx, rdx, rsi, edi, rsp," &
-                        "r8,  r9,  r10, r11, r12, r13, r14, r15",
-            Volatile => true);
+      LOOP -- Halting loop only for final version so Bochs with GDB works.
+         Asm("HLT; CLI;", Volatile => true);
       END LOOP;
    END Last_Chance_Handler;
 
@@ -75,9 +80,11 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
 
    PROCEDURE Tears_In_Rain(
       Message : IN string;
+      File    : IN string;
       Line    : IN integer)
    IS
-      Fatal_Message : CONSTANT string := Message & character'val(0);
+      Fatal_Message : CONSTANT string := Message & " - " & File &
+         character'val(0);
    BEGIN
       -- TODO: After logging support has been added, use the functions here.
       PRAGMA Debug(Debug_Message("Manual kernel panic called."));

@@ -1,6 +1,7 @@
 WITH
    HAVK_Kernel.Interrupts.PIC,
-   HAVK_Kernel.PS2.Keyboard;
+   HAVK_Kernel.PS2.Keyboard,
+   HAVK_Kernel.PS2.Mouse;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
    PRAGMA Warnings(off, "formal parameter ""Stack_Frame"" is not referenced");
@@ -96,10 +97,13 @@ PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
       PIC.Dual_Reset;
    END ISR_43_Handler;
 
-   PROCEDURE ISR_44_Handler(
+   PROCEDURE ISR_44_Handler( -- Mouse.
       Stack_Frame : IN access_interrupt)
    IS
+      USE
+         HAVK_Kernel.PS2.Mouse;
    BEGIN
+      Interrupt_Manager;
       PIC.Dual_Reset;
    END ISR_44_Handler;
 

@@ -28,6 +28,9 @@ irrelevant to that build's purpose.
 
 -------------------------
 ## UPCOMING - 20??-??-??
+### Overall Changes
+- Increased PS/2 controller error-checking capabilities while adding
+support for potential mouse input handling.
 
 -------------------------
 ## 00-09-00 - 2019-11-15

@@ -19,6 +19,7 @@ IS
       Inline_Always => true;
 
    -- Does a bit test on a specific value and returns true for a set bit etc.
+   -- The second argument refers to the bits in the first argument from zero.
    -- Note that the BT instruction might be slow when factoring in
    -- CPU micro-operations, and it's slow in itself to call a function, but
    -- it's much clearer to use it instead of messing around with GNAT's shifts

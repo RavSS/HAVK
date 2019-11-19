@@ -62,7 +62,7 @@ IS
       Stack_Frame : IN access_interrupt);
    PRAGMA Machine_Attribute(ISR_43_Handler, "interrupt");
 
-   -- IRQ 12 - Spare IRQ.
+   -- IRQ 12 - PS/2 mouse.
    PROCEDURE ISR_44_Handler(
       Stack_Frame : IN access_interrupt);
    PRAGMA Machine_Attribute(ISR_44_Handler, "interrupt");

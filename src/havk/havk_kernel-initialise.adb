@@ -2,11 +2,12 @@ WITH
    HAVK_Kernel.Input,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Exceptions,
+   HAVK_Kernel.Debug,
    HAVK_Kernel.PS2;
 USE
    HAVK_Kernel.Input,
-   HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.PS2;
+   HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Initialise
 IS
@@ -144,13 +145,13 @@ IS
    RETURN string
    IS
       FUNCTION Compilation_ISO_Date -- Format: "YYYY-MM-DD"
-      RETURN String
+      RETURN string
       WITH
          Import     => true,
          Convention => Intrinsic;
 
       FUNCTION Compilation_Time     -- Format:   "HH:MM:SS"
-      RETURN String
+      RETURN string
       WITH
          Import     => true,
          Convention => Intrinsic;
@@ -160,13 +161,18 @@ IS
 
    PROCEDURE PS2_Input
    IS
+      USE
+         HAVK_Kernel.PS2;
    BEGIN
       PRAGMA Debug(Debug_Message("Attempting to initialise PS/2 controller."));
-      PS2.Controller_Setup;
+      Setup;
 
-      IF PS2.Controller_State /= functional THEN
-         PRAGMA Debug(Debug_Message("PS/2 controller is inoperable - """ &
-            PS2.Controller_State'img & ""));
+      IF Check_Condition /= functional THEN
+         PRAGMA Debug(Debug_Message("PS/2 controller is inoperable -" &
+            controller_condition'image(Check_Condition) & "."));
+
+         Exceptions.Tears_In_Rain("Non-working PS/2 controller detected",
+            Debug.File, Debug.Line);
       ELSE
          PRAGMA Debug(Debug_Message("PS/2 controller is initialised."));
       END IF;

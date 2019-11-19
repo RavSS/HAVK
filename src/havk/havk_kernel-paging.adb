@@ -229,7 +229,7 @@ IS
          " - " & Present_Field & Write_Field));
 
       PRAGMA Debug(Tears_In_Rain(
-         "Unexpected page fault as of this stage in development - " &
+         "Unexpected page fault as of this stage in development",
          Debug.File, Debug.Line));
    END Page_Fault_Handler;
 END HAVK_Kernel.Paging;

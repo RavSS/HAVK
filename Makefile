@@ -2,14 +2,19 @@
 ##################### HAVK - An Operating System & Kernel. ####################
 ###############################################################################
 NAME:=HAVK
-VERSION=00-09-00
 
 # Currently, there are two build levels: "Final" and "Debug". Case sensitive.
-BUILD?=Final
+BUILD?=Debug
+
+ifeq ("$(BUILD)", "Debug")
+	VERSION=UPCOMING
+else
+	VERSION=$(shell git describe --abbrev=0 --tags)
+endif
 
 # This only has any effect when the build is Debug. As of now, this
 # only controls the additional test functions added in to the UEFI bootloader,
-# and there is two levels: 1 for compiler related switches, 2 for code changes.
+# and there is two levels: 1 for compiler-related switches, 2 for code changes.
 DEBUG_LEVEL?=1
 
 GNAT_DIR:=./com/gnatgpl_linux/bin/
@@ -17,13 +22,13 @@ BUILD_DIR:=./build/
 SRC_DIR:=./src/
 
 # Not the best solution, but should stop anyone from running the Makefile
-# outside its directory, as that could be dangerous. Looks for "src".
+# outside its directory, as that could be dangerous. Looks for SRC_DIR's path.
 ifeq ("$(wildcard $(SRC_DIR))", "")
 	$(error Only run the Makefile from the root directory of HAVK's source)
 endif
 
 # Add the GNAT GPL bin folder to the beginning of the path for `gprbuild`.
-# This "overrides" any current `gnat` tools you may have for `gprbuild`.
+# This "overrides" any current GNAT tools you may have for `gprbuild`.
 # Eliminate this line if you want to use your own GNAT installation.
 export PATH:=$(PATH):$(shell pwd)/$(GNAT_DIR)
 

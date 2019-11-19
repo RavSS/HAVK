@@ -55,8 +55,6 @@ BEGIN
    Initialise.Descriptor_Tables;
    Initialise.Default_Page_Layout(Bootloader.ALL, Map);
 
-   Initialise.PS2_Input;
-
    -- Set up the terminal.
    Terminal.Clear_All;
    Terminal.Position := Terminal_Start; -- Set the top-left corner of the box.
@@ -86,6 +84,8 @@ BEGIN
    Terminal.Draw_On(Display);
    PRAGMA Debug(Debug_Message("First terminal draw done."));
 
+   -- Prepare primitive forms of input via PS/2.
+   Initialise.PS2_Input;
    Initialise.Input_Key_Test(Terminal, Display);
 
    PRAGMA Debug(Debug_Message("Reached the end of the HAVK procedure."));

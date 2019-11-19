@@ -12,12 +12,12 @@ IS
       Codes : ARRAY(num RANGE 1 .. 3) OF num RANGE 0 .. 16#FF# :=
          (OTHERS => 0);
    BEGIN
-      CASE Current_Scancode_Set IS
-         WHEN 1 => -- TODO: Set 1 is unimplemented.
+      CASE PS2.Input_Controller.Current_Scancode_Set IS
+         WHEN set_1 => -- TODO: Set 1 is unimplemented.
             NULL;
 
-         WHEN 2 => -- TODO: Set 2 is mostly implemented.
-            Codes(1) := INB(IO_Data_Port);
+         WHEN set_2 => -- TODO: Set 2 is mostly implemented.
+            Codes(1) := INB(data'enum_rep);
 
             IF Codes(1) = 16#12#      THEN -- TODO: Can get stuck in reverse.
                IF Current_Shift_State THEN
@@ -27,19 +27,19 @@ IS
                END IF;
             ELSIF Codes(1) /= 16#E0#  THEN -- TODO: Handle the special keys.
                IF Codes(1) /= 16#F0#  THEN -- Handle the break.
-                  Codes(2) := INB(IO_Data_Port);
+                  Codes(2) := INB(data'enum_rep);
                   Scancode_Set_2(Codes(2), Current_Shift_State, false);
                ELSE
-                  Codes(2) := INB(IO_Data_Port);
+                  Codes(2) := INB(data'enum_rep);
                   Scancode_Set_2(Codes(2), Current_Shift_State, true);
                END IF;
             END IF;
 
-         WHEN 3 => -- TODO: Set 3 is unimplemented.
+         WHEN set_3 => -- TODO: Set 3 is unimplemented.
             NULL;
       END CASE;
 
-      Controller_Flush;
+      PS2.Input_Controller.Flush;
    END Interrupt_Manager;
 
    PROCEDURE Scancode_Set_2( -- TODO: This is not fully complete, I believe.
