@@ -67,7 +67,7 @@ IS
       Stack_Frame   : IN access_interrupt)
    IS
    BEGIN
-      Debug_Message("Invalid opcode at: " & Stack_Frame.RIP'img & '.');
+      Log("Invalid opcode at: " & Stack_Frame.RIP'img & ".", fatal);
       Last_Chance_Handler(ISR_6_Handler'address, GNAT.Source_Info.Line);
    END ISR_6_Handler;
 
@@ -122,8 +122,7 @@ IS
       Error_Code    : IN num)
    IS
    BEGIN
-      PRAGMA Debug(Debug_Message(
-         "ISR 13: General protection fault triggered."));
+      Log("ISR 13: General protection fault triggered.", warning);
    END ISR_13_Handler;
 
    PROCEDURE ISR_14_Handler( -- Page fault.

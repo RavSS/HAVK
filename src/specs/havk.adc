@@ -1,12 +1,9 @@
 PRAGMA License(GPL);
 
 PRAGMA SPARK_Mode(on);
-PRAGMA Discard_Names;
 PRAGMA Normalize_Scalars;
 
--- TODO: This GNAT extension doesn't work properly and causes GNAT to
--- raise a bug in some instances. It would be really helpful to make
--- "num" and "System.Address" implicitly convert to each other.
+-- TODO: This GNAT extension is somewhat buggy and can cause GNAT to crash.
 PRAGMA Allow_Integer_Address;
 
 PRAGMA Assertion_Policy(CHECK);

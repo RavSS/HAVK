@@ -15,13 +15,10 @@ PACKAGE BODY HAVK_Kernel.Debug IS
    IS
       -- Strings for indicating to the receiver what they're getting and
       -- where it ends. Useful for regular expressions on the receiver's side.
-      Info_Start : CONSTANT string(1 .. 18) := "DEBUG MESSAGE: << ";
-      Info_Ender : CONSTANT string(1 ..  3) := " >>";
+      Info_Start : CONSTANT string := "DEBUG MESSAGE: << ";
+      Info_Ender : CONSTANT string := " >>";
    BEGIN
-      Debugger.Print(Info_Start);
-      Debugger.Print(Info);
-      Debugger.Print(Info_Ender);
-      Debugger.Print(Debugger.Line_Ender);
+      Debugger.Print(Info_Start & Info & Info_Ender & Debugger.Line_Ender);
    END Message;
 
    PROCEDURE Breakpoint

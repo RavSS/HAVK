@@ -223,13 +223,12 @@ IS
          Outputs  => System.Address'asm_output("=r", Fault_Address),
          Volatile => true);
 
-      PRAGMA Debug(Debug_Message(
+      Log(
          "ISR 14: Page fault triggered - Error code:" & Error_Code'img &
          " - Fault address: 0x" & System.Address_Image(Fault_Address)  &
-         " - " & Present_Field & Write_Field));
+         " - " & Present_Field & Write_Field, warning);
 
-      PRAGMA Debug(Tears_In_Rain(
-         "Unexpected page fault as of this stage in development",
-         Debug.File, Debug.Line));
+      Tears_In_Rain("Unexpected page fault as of this stage in development",
+         Debug.File, Debug.Line);
    END Page_Fault_Handler;
 END HAVK_Kernel.Paging;

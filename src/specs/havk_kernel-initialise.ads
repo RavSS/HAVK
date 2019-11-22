@@ -7,7 +7,8 @@ USE
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 
-PACKAGE HAVK_Kernel.Initialise IS
+PACKAGE HAVK_Kernel.Initialise
+IS
    -- Prepares the descriptor tables, which is necessary for interrupts.
    PROCEDURE Descriptor_Tables;
 
@@ -30,7 +31,7 @@ PACKAGE HAVK_Kernel.Initialise IS
    PROCEDURE Font_Test(
       Terminal   : IN OUT textbox);
 
-   -- Outputs the PS/2 scancodes to the textbox.
+   -- Outputs the PS/2 scancodes to the textbox. Does not return as of now.
    PROCEDURE PS2_Scancode_Test(
       Terminal   : IN OUT textbox;
       Display    : IN view);
@@ -55,6 +56,9 @@ PACKAGE HAVK_Kernel.Initialise IS
    -- running version of the kernel was compiled and built.
    FUNCTION HAVK_Build_Datetime
    RETURN string;
+
+   -- Initialises any debug utilities.
+   PROCEDURE Debugger;
 
    -- The default paging layout.
    Kernel_Paging_Layout : Paging.page_layout;

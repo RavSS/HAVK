@@ -88,13 +88,9 @@ entry:
 	MOV WORD [RSP], 0x6 ; Bits 1 (reserved) and 2 (PF, even parity) set.
 	POPFQ ; Clean 8-bytes off the stack and into the RFLAGS register.
 
-	; I've kept the `main` routine and have stopped doing its
-	; job manually, as it now (with the current kernel) generates a lot
-	; more instructions than just calling `ada_init` and `_ada_havk`.
-	EXTERN main
-
 	; Begin to enter HAVK.
-	CALL main
+	EXTERN havk
+	CALL havk
 
 	; HAVK should never exit like this, so this should never be reached.
 	; It should handle a shutdown properly.

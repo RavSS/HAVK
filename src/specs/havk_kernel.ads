@@ -27,10 +27,32 @@ IS
       Source => System.Address,
       Target => num);
 
-   -- The `Debug_*()` calls are just wrappers for the "HAVK_Kernel.Debug"
-   -- package. Mostly so I don't have to "WITH" it everywhere.
-   PROCEDURE Debug_Initialise;
+   -- A type that describes certain levels of urgency. This is mainly used
+   -- for logging purposes as of now.
+   TYPE urgency IS(
+      trivial, -- A log that does not really matter at all in the long run.
+      nominal, -- Of little urgency. Should be used for meaningful logs.
+      warning, -- Self-explanatory. All warnings should be issued with this.
+      fatal);  -- The most serious level. Only use for actual errors.
 
-   PROCEDURE Debug_Message(
-      Message : IN string);
+   -- Stores a log in the kernel. Default log priority is trivial.
+   PROCEDURE Log(
+      Information : IN string;
+      Priority    : IN urgency := trivial);
+PRIVATE
+   -- This controls the maximum amount of log entries. Note that this is
+   -- static, it does not use heap allocation. This reserves around 30 KiB as
+   -- of now for logs.
+   TYPE log_entry_limit IS RANGE 1 .. 200;
+
+   -- A record of a log containing its specific details.
+   TYPE log_information IS RECORD
+      -- String description of the log's meaning. 150 characters max as of now.
+      Information : string(1 .. 150) := (OTHERS => character'val(0));
+      -- A field hinting at the type and context of the log.
+      Priority    : urgency          := trivial;
+   END RECORD;
+
+   Logs     : ARRAY(log_entry_limit) OF log_information;
+   Last_Log : log_entry_limit := log_entry_limit'first;
 END HAVK_Kernel;

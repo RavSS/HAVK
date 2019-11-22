@@ -1,9 +1,7 @@
 WITH
-   System.Machine_Code,
-   HAVK_Kernel;
+   System.Machine_Code;
 USE
-   System.Machine_Code,
-   HAVK_Kernel;
+   System.Machine_Code;
 
 PACKAGE BODY HAVK_Kernel.Exceptions IS
    PROCEDURE Last_Chance_Handler(
@@ -34,7 +32,7 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
             Convention    => C,
             Address       => Source_Location;
       BEGIN
-         Debug_Message("Crashed - """ & C_String & ":" & Line'img & """!");
+         Log("Crashed - """ & C_String & ":" & Line'img & """!", fatal);
          LOOP
             Asm(  -- Works for now as a quick indicator.
                "MOV RAX, %0;" &
@@ -73,7 +71,7 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
    IS
       Message : CONSTANT string := "stack smashed" & character'val(0);
    BEGIN
-      PRAGMA Debug(Debug_Message("The stack has been smashed."));
+      Log("The stack has been smashed.", fatal);
       Last_Chance_Handler(Message'address, 0);
       -- Do not continue going.
    END Stack_Smash_Handler;
@@ -86,8 +84,8 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
       Fatal_Message : CONSTANT string := Message & " - " & File &
          character'val(0);
    BEGIN
-      -- TODO: After logging support has been added, use the functions here.
-      PRAGMA Debug(Debug_Message("Manual kernel panic called."));
+      -- TODO: After logging has been fully completed, use the functions here.
+      Log("Manual kernel panic called.", fatal);
       Last_Chance_Handler(Fatal_Message'address, Line);
       -- Do not continue going.
    END Tears_In_Rain;

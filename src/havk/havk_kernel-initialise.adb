@@ -16,9 +16,9 @@ IS
    BEGIN
       Interrupts.Prepare_GDT;
       Interrupts.Prepare_IDT;
-      PRAGMA Debug(Debug_Message("Descriptor tables prepared."));
+      Log("Descriptor tables prepared.", nominal);
       STI;
-      PRAGMA Debug(Debug_Message("Interrupts enabled."));
+      Log("Interrupts enabled.");
    END Descriptor_Tables;
 
    PROCEDURE Default_Page_Layout(
@@ -29,8 +29,8 @@ IS
          HAVK_Kernel.Paging,
          HAVK_Kernel.UEFI;
    BEGIN
-      PRAGMA Debug(Debug_Message("Paging structure size with padding:" &
-         num'image(Kernel_Paging_Layout'size / 8192) & " KiB"));
+      Log("Paging structure size with padding:" &
+         num'image(Kernel_Paging_Layout'size / 8192) & " KiB");
 
       -- TODO: Identity map the first page. Don't know why is this needed, but
       -- the CPU goes haywire without it.
@@ -78,7 +78,7 @@ IS
 
       -- Finally, load the CR3 register with the highest level directory.
       Kernel_Paging_Layout.Load;
-      PRAGMA Debug(Debug_Message("Self-described page directories loaded."));
+      Log("Self-described page directories loaded.", nominal);
    END Default_Page_Layout;
 
    PROCEDURE Grid_Test(
@@ -101,7 +101,7 @@ IS
          END LOOP;
       END LOOP;
 
-      PRAGMA Debug(Debug_Message("Grid test drawn to the main framebuffer."));
+      Log("Grid test drawn to the main framebuffer.");
    END Grid_Test;
 
    PROCEDURE See_Magic(
@@ -111,13 +111,13 @@ IS
       -- Inform if the magic number is wrong or corrupted.
       IF    Magic = 16#55_45_46_49# THEN
          Terminal.Print("BOOT METHOD: UEFI");
-         PRAGMA Debug(Debug_Message("Successful UEFI boot."));
+         Log("Successful UEFI boot.");
       ELSIF Magic = 16#42_49_4F_53# THEN
          Terminal.Print("BOOT METHOD: BIOS"); -- If I bother with it.
-         PRAGMA Debug(Debug_Message("Successful BIOS boot."));
+         Log("Successful BIOS boot.");
       ELSE
          Terminal.Print("BOOT METHOD: UNKNOWN");
-         PRAGMA Debug(Debug_Message("Unsuccessful boot via unknown method."));
+         Log("Unsuccessful boot via unknown method.");
       END IF;
    END See_Magic;
 
@@ -164,17 +164,17 @@ IS
       USE
          HAVK_Kernel.PS2;
    BEGIN
-      PRAGMA Debug(Debug_Message("Attempting to initialise PS/2 controller."));
+      Log("Attempting to initialise PS/2 controller.");
       Setup;
 
       IF Check_Condition /= functional THEN
-         PRAGMA Debug(Debug_Message("PS/2 controller is inoperable -" &
-            controller_condition'image(Check_Condition) & "."));
+         Log("PS/2 controller is inoperable -" &
+            controller_condition'image(Check_Condition) & ".", fatal);
 
          Exceptions.Tears_In_Rain("Non-working PS/2 controller detected",
             Debug.File, Debug.Line);
       ELSE
-         PRAGMA Debug(Debug_Message("PS/2 controller is initialised."));
+         Log("PS/2 controller is initialised.", nominal);
       END IF;
    END PS2_Input;
 
@@ -204,7 +204,7 @@ IS
    BEGIN
       Terminal.Print("PS/2 KEYPRESS TEST, PRESS ENTER TO EXIT:");
       Terminal.Newline;
-      PRAGMA Debug(Debug_Message("PS/2 key test has started."));
+      Log("PS/2 key test has started.");
 
       WHILE Get_Key /= character'val(10) LOOP
          Terminal.Clear_Line(Terminal.Current_Y_Index);
@@ -218,7 +218,7 @@ IS
       Terminal.Newline(2);
       Terminal.Draw_On(Display);
 
-      PRAGMA Debug(Debug_Message("PS/2 key test ended."));
+      Log("PS/2 key test ended.");
    END Input_Key_Test;
 
    PROCEDURE Seconds_Count(
@@ -228,7 +228,8 @@ IS
    BEGIN
       Terminal.Print("INACCURATE SECONDS COUNT: ");
       Terminal.Newline;
-      PRAGMA Debug(Debug_Message("Endless seconds count beginning."));
+      Log("End of HAVK procedure reached. Endless seconds count beginning.",
+         nominal);
 
       LOOP -- Endless loop showcasing interrupts.
          HLT; -- Don't burn the CPU.
@@ -242,4 +243,10 @@ IS
          Terminal.Draw_On(Display);
       END LOOP;
    END Seconds_Count;
+
+   PROCEDURE Debugger
+   IS
+   BEGIN
+      PRAGMA Debug(Debug.Initialise);
+   END Debugger;
 END HAVK_Kernel.Initialise;

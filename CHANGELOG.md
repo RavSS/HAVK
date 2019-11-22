@@ -2,9 +2,8 @@
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date at UTC +13:00 )
 
 -------------------------
-### Tasklist - 2019-11-15
+### Tasklist - 2019-11-22
 - Very specific resolutions like 1366x768 are bugged and unusable.
-- Implement a logging utility to store kernel information.
 - If there's a lot of keys pressed too fast, the keyboard shift state
 often becomes stuck in reverse.
 - Unoptimised `Object.Screen(Index, Pixel)` function as I cannot figure out
@@ -25,12 +24,17 @@ has deviated somewhat.
 compiled with GCC's `-mcmodel=kernel` but not `-mcmodel=large`. For now,
 the "Final" build is compiled with the former, as debug functionality is
 irrelevant to that build's purpose.
+- After implementing more OS functionality, implement LAPIC and IOAPIC
+features by parsing some of the ACPI tables. Required for SMT support.
 
 -------------------------
 ## UPCOMING - 20??-??-??
 ### Overall Changes
 - Increased PS/2 controller error-checking capabilities while adding
 support for potential mouse input handling.
+- New global `Log()` procedure replaces old debug pragmas. Arbitrary 
+information can now be stored in the kernel space for checking the kernels 
+status or for seeing if there has been any errors raised.
 
 -------------------------
 ## 00-09-00 - 2019-11-15

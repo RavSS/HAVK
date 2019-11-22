@@ -127,6 +127,7 @@ package System is
    Default_Priority : constant Priority := 15;
 
 private
+   Run_Time_Name : constant String := "HAVK Runtime System";
 
    type Address is mod Memory_Size;
    Null_Address : constant Address := 0;
@@ -153,7 +154,7 @@ private
    Frontend_Layout           : constant Boolean := False;
    Machine_Overflows         : constant Boolean := False;
    Machine_Rounds            : constant Boolean := True;
-   Preallocated_Stacks       : constant Boolean := False;
+   Preallocated_Stacks       : constant Boolean := True;
    Signed_Zeros              : constant Boolean := True;
    Stack_Check_Default       : constant Boolean := True;
    Stack_Check_Probes        : constant Boolean := True;
@@ -165,7 +166,7 @@ private
    Support_Long_Shifts       : constant Boolean := True;
    Always_Compatible_Rep     : constant Boolean := True;
    Suppress_Standard_Library : constant Boolean := True;
-   Use_Ada_Main_Program_Name : constant Boolean := False;
+   Use_Ada_Main_Program_Name : constant Boolean := True;
    Frontend_Exceptions       : constant Boolean := False;
    ZCX_By_Default            : constant Boolean := True;
 

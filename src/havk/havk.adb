@@ -48,8 +48,10 @@ IS
    Date_Of_Build   : CONSTANT string := Initialise.HAVK_Build_Datetime;
 BEGIN
    -- Initialise the debugging message mechanism if debugging is enabled.
-   PRAGMA Debug(Debug_Initialise);
-   PRAGMA Debug(Debug_Message("Entered main kernel procedure."));
+   -- As of now, this only sends information over a serial connection.
+   PRAGMA Debug(Initialise.Debugger);
+
+   Log("Entered main kernel procedure.");
 
    Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
    Initialise.Descriptor_Tables;
@@ -62,7 +64,7 @@ BEGIN
    Terminal.Foreground_Colour := Display.Create_Pixel(200, 55, 0);
 
    -- Print the welcome message and date of the current build's compilation.
-   Terminal.Print(Welcome,       Centre => true);
+   Terminal.Print(Welcome, Centre => true);
    Terminal.Newline;
    Terminal.Print("COMPILED AT " & Date_Of_Build, Centre => true);
    Terminal.Newline(2);
@@ -82,12 +84,11 @@ BEGIN
    Terminal.Newline(2);
 
    Terminal.Draw_On(Display);
-   PRAGMA Debug(Debug_Message("First terminal draw done."));
+   Log("First terminal draw done.");
 
    -- Prepare primitive forms of input via PS/2.
    Initialise.PS2_Input;
    Initialise.Input_Key_Test(Terminal, Display);
 
-   PRAGMA Debug(Debug_Message("Reached the end of the HAVK procedure."));
    Initialise.Seconds_Count(Terminal,  Display);
 END HAVK;

@@ -12,6 +12,14 @@ IS
       Codes : ARRAY(num RANGE 1 .. 3) OF num RANGE 0 .. 16#FF# :=
          (OTHERS => 0);
    BEGIN
+      IF
+         PS2.Input_Controller.Port_1_Device /= standard_keyboard AND
+         THEN PS2.Input_Controller.Port_2_Device /= standard_keyboard
+      THEN
+         PS2.Input_Controller.Flush;
+         RETURN;
+      END IF;
+
       CASE PS2.Input_Controller.Current_Scancode_Set IS
          WHEN set_1 => -- TODO: Set 1 is unimplemented.
             NULL;

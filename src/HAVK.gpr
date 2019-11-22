@@ -269,15 +269,6 @@ IS
       FOR Default_Switches("Ada") USE(
          -- Static GNAT run-time.
          "-static",
-         -- I've reverted this from much earlier as the `main` function seems
-         -- to do some additional instructions before the call to `ada_init`
-         -- upon recent inspection. Uncomment the latter two arguments and
-         -- modify the entry assembly routine if you want to revert it. Also,
-         -- if I rename the `main` function to something else, then `gnatbind`
-         -- whines about it and there's no way to silence that "warning" from
-         -- here, as it's not even counted as a real warning for some reason.
-         -- "-MHAVK", -- "-n", "-Lada_havk_",
-         ----------------------------------------------------------------------
          -- Check if the source files actually exist and are findable,
          -- otherwise, raise an error.
          "-s", "-E",

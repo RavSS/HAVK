@@ -118,8 +118,8 @@ IS
                THEN Response_Byte /= failure'enum_rep              AND
                THEN Response_Byte /= data_resend'enum_rep
             THEN
-               PRAGMA Debug(Debug_Message("Unexpected PS/2 input byte" &
-                  Response_Byte'img & "."));
+               Log("Unexpected PS/2 input byte" & Response_Byte'img & ".",
+                  warning);
                RETURN failure;
             ELSE
                RETURN Byte_To_Response(Response_Byte);
@@ -145,28 +145,28 @@ IS
    RETURN boolean IS
    BEGIN
       -- First, test the PS/2 controller itself.
-      PRAGMA Debug(Debug_Message("Testing PS/2 controller."));
+      Log("Testing PS/2 controller.", nominal);
       IF
          NOT Object.Send_Controller_Command(test_controller_begin) OR
          ELSE Object.Receive(data) /= test_controller_pass
       THEN
          Object.Current_Condition := unreliable;
-         PRAGMA Debug(Debug_Message("Error: PS/2 controller test failure."));
+         Log("PS/2 controller test failure.", fatal);
          RETURN false;
       END IF;
-      PRAGMA Debug(Debug_Message("PS/2 controller test successful."));
+      Log("PS/2 controller test successful.", nominal);
 
       -- Secondly, test the first PS/2 data port for a device.
-      PRAGMA Debug(Debug_Message("Testing PS/2 port 1."));
+      Log("Testing PS/2 port 1.");
       IF
          NOT Object.Send_Controller_Command(test_port_1_begin) OR
          ELSE Object.Receive(data) /= test_port_pass
       THEN
          Object.Current_Condition := unreliable;
-         PRAGMA Debug(Debug_Message("Error: PS/2 port 1 test failure."));
+         Log("PS/2 port 1 test failure.", fatal);
          RETURN false;
       END IF;
-      PRAGMA Debug(Debug_Message("PS/2 port 1 test successful."));
+      Log("PS/2 port 1 test successful.", nominal);
 
       -- Finally, determine if we have a second port and check the port 2 clock
       -- if it is enabled already by the system. See the configuration record.
@@ -174,21 +174,21 @@ IS
          Object.Send_Controller_Command(configuration_read) AND
          THEN BT(INB(data'enum_rep), 5) -- `Receive()` cannot handle this.
       THEN
-         PRAGMA Debug(Debug_Message("Testing PS/2 port 2."));
+         Log("Testing PS/2 port 2.");
          IF
             NOT Object.Send_Controller_Command(test_port_2_begin) OR
             ELSE Object.Receive(data) /= test_port_pass
          THEN
             -- Since the previous port worked, we will ignore this extra port.
-            PRAGMA Debug(Debug_Message("Warning: PS/2 port 2 test failure."));
+            Log("PS/2 port 2 test failure.", warning);
          ELSE
-            PRAGMA Debug(Debug_Message("PS/2 port 2 test successful."));
+            Log("PS/2 port 2 test successful.", nominal);
             Object.Current_Configuration.Port_2_Enabled := true;
             Object.Current_Configuration.Port_2_Clock   := true;
             Object.Port_2_Support := true;
          END IF;
       ELSE
-         PRAGMA Debug(Debug_Message("PS/2 controller cannot support port 2."));
+         Log("PS/2 controller cannot support port 2.", warning);
       END IF;
 
       -- Flush any incoming bytes left over from the tests and leave.
@@ -232,28 +232,28 @@ IS
       -- during runtime?
       CASE ID_Bytes(1) IS
          WHEN standard_keyboard'enum_rep    =>
-            PRAGMA Debug(Debug_Message("PS/2 port" & Port_No'img & " is a " &
-               standard_keyboard'img & "."));
+            Log("PS/2 port" & Port_No'img & " is a " &
+               standard_keyboard'img & ".", nominal);
             RETURN standard_keyboard;
          WHEN standard_mouse'enum_rep       =>
-            PRAGMA Debug(Debug_Message("PS/2 port" & Port_No'img & " is a " &
-               standard_mouse'img & "."));
+            Log("PS/2 port" & Port_No'img & " is a " &
+               standard_mouse'img & ".", nominal);
             Object.Mouse_Support := true;
             RETURN standard_mouse;
          WHEN mouse_with_scroll'enum_rep    =>
-            PRAGMA Debug(Debug_Message("PS/2 port" & Port_No'img & " is a " &
-               mouse_with_scroll'img & "."));
+            Log("PS/2 port" & Port_No'img & " is a " &
+               mouse_with_scroll'img & ".", nominal);
             Object.Mouse_Support := true;
             RETURN mouse_with_scroll;
          WHEN mouse_with_5_buttons'enum_rep =>
-            PRAGMA Debug(Debug_Message("PS/2 port" & Port_No'img & " is a " &
-               mouse_with_5_buttons'img & "."));
+            Log("PS/2 port" & Port_No'img & " is a " &
+               mouse_with_5_buttons'img & ".", nominal);
             Object.Mouse_Support := true;
             RETURN mouse_with_5_buttons;
          WHEN OTHERS                        =>
-            PRAGMA Debug(Debug_Message("PS/2 port" & Port_No'img & " is "   &
+            Log("PS/2 port" & Port_No'img & " is "   &
                unrecognised'img & " -" &
-               ID_Bytes(1)'img & ID_Bytes(2)'img & "."));
+               ID_Bytes(1)'img & ID_Bytes(2)'img & ".", warning);
             RETURN unrecognised;
       END CASE;
    END Identify_Device;
@@ -272,13 +272,13 @@ IS
          Address    => Configuration_Settings'address;
    BEGIN
       IF NOT Object.Send_Controller_Command(configuration_write) THEN
-         PRAGMA Debug(Debug_Message("Failed to write PS/2 configuration."));
+         Log("Failed to write PS/2 configuration.", fatal);
          RETURN false;
       END IF;
 
       IF NOT Object.Send_Data(Configuration_Byte, Verify => false) THEN
-         PRAGMA Debug(Debug_Message("Couldn't send configuration data to " &
-            "the PS/2 controller."));
+         Log("Couldn't send configuration data to the PS/2 controller.",
+            fatal);
          RETURN false;
       END IF;
 
@@ -303,21 +303,20 @@ IS
          Port_2 AND THEN (NOT Object.Port_2_Support OR
          ELSE Object.Port_2_Device /= standard_keyboard)
       THEN
-         PRAGMA Debug(Debug_Message("Attempt to set typematics on " &
-            "non-existent port 2 PS/2 keyboard."));
+         Log("Attempt to set typematics on non-existent port 2 PS/2 keyboard.",
+            warning);
          RETURN false;
       END IF;
 
       IF
          NOT Object.Send_Keyboard_Command(typematics_write, Port_2)
       THEN
-         PRAGMA Debug(Debug_Message("Failed to write PS/2 typematics."));
+         Log("Failed to write PS/2 typematics.", warning);
          RETURN false;
       END IF;
 
       IF NOT Object.Send_Data(Typematics_Byte) THEN
-         PRAGMA Debug(Debug_Message("Couldn't send typematics data to " &
-            "the PS/2 keyboard."));
+         Log("Couldn't send typematics data to the PS/2 keyboard.", warning);
          RETURN false;
       END IF;
 
@@ -333,8 +332,8 @@ IS
          Port_2 AND THEN (NOT Object.Port_2_Support OR
          ELSE Object.Port_2_Device /= standard_keyboard)
       THEN
-         PRAGMA Debug(Debug_Message("Attempt to change scancode set on " &
-            "non-existent port 2 PS/2 keyboard."));
+         Log("Attempt to change scancode set on non-existent port 2 " &
+            "PS/2 keyboard.", warning);
          RETURN false;
       END IF;
 
@@ -342,23 +341,20 @@ IS
          NOT Input_Controller.Send_Keyboard_Command(scancode_set_options,
             Port_2)
       THEN
-         PRAGMA Debug(Debug_Message("Failed to set keyboard scancode type."));
+         Log("Failed to set keyboard scancode type.", fatal);
          RETURN false;
       END IF;
-
-      PRAGMA Debug(Debug_Message("Switching to PS/2 scancode set" &
-         num'image(Input_Controller.Current_Scancode_Set'enum_rep) & "."));
 
       IF
          NOT Input_Controller.Send_Data(
             Input_Controller.Current_Scancode_Set'enum_rep)
       THEN
-         PRAGMA Debug(Debug_Message("Couldn't send set to PS/2 keyboard."));
+         Log("Couldn't send set to PS/2 keyboard.", fatal);
          RETURN false;
       END IF;
 
-      PRAGMA Debug(Debug_Message("PS/2 keyboard now using scancode set" &
-         num'image(Object.Current_Scancode_Set'enum_rep) & "."));
+      Log("PS/2 keyboard now using scancode set" &
+         num'image(Object.Current_Scancode_Set'enum_rep) & ".");
       RETURN true;
    END Send_Scancode_Set;
 
@@ -397,13 +393,13 @@ IS
 
       -- Disable both PS2 ports.
       IF NOT Input_Controller.Send_Controller_Command(port_1_disable) THEN
-         PRAGMA Debug(Debug_Message("Failed to disable PS/2 port 1."));
+         Log("Failed to disable PS/2 port 1.", fatal);
          Input_Controller.Current_Condition := unreliable;
          RETURN;
       END IF;
 
       IF NOT Input_Controller.Send_Controller_Command(port_2_disable) THEN
-         PRAGMA Debug(Debug_Message("Failed to disable PS/2 port 2."));
+         Log("Failed to disable PS/2 port 2.", fatal);
          RETURN;
       END IF;
 
@@ -412,7 +408,7 @@ IS
 
       -- Run the controller and port tests.
       IF NOT Input_Controller.Test THEN
-         PRAGMA Debug(Debug_Message("PS/2 controller failed test(s)."));
+         Log("PS/2 controller failed test(s).", fatal);
          RETURN;
       END IF;
 
@@ -420,12 +416,12 @@ IS
       -- disabling commands are the same byte. The difference between the
       -- two send functions here are to do with default ports.
       IF NOT Input_Controller.Send_Keyboard_Command(scanning_disable) THEN
-         PRAGMA Debug(Debug_Message("Failed to disable PS/2 port 1 data."));
+         Log("Failed to disable PS/2 port 1 data.", fatal);
          Input_Controller.Current_Condition := unreliable;
          RETURN;
       ELSIF Input_Controller.Port_2_Support THEN
          IF NOT Input_Controller.Send_Mouse_Command(reporting_disable) THEN
-            PRAGMA Debug(Debug_Message("Failed to disable PS/2 port 2 data."));
+            Log("Failed to disable PS/2 port 2 data.", fatal);
             Input_Controller.Current_Condition := unreliable;
             RETURN;
          END IF;
@@ -455,7 +451,7 @@ IS
 
       -- Enable the first PS2 port.
       IF NOT Input_Controller.Send_Controller_Command(port_1_enable) THEN
-         PRAGMA Debug(Debug_Message("Couldn't enable PS/2 port 1."));
+         Log("Couldn't enable PS/2 port 1.", fatal);
          Input_Controller.Current_Condition := unreliable;
          RETURN;
       END IF;
@@ -463,19 +459,19 @@ IS
       -- Enable the second PS2 port if it exists, but it's not vital.
       IF Input_Controller.Port_2_Support THEN
          IF NOT Input_Controller.Send_Controller_Command(port_1_enable) THEN
-            PRAGMA Debug(Debug_Message("Couldn't enable PS/2 port 2."));
+            Log("Couldn't enable PS/2 port 2.", fatal);
             Input_Controller.Port_2_Support := false; -- Unreliable port 2.
          END IF;
       END IF;
 
       -- Now re-enable scanning and/or reporting.
       IF NOT Input_Controller.Send_Keyboard_Command(scanning_enable) THEN
-         PRAGMA Debug(Debug_Message("Failed to enable PS/2 port 1 data."));
+         Log("Failed to enable PS/2 port 1 data.", fatal);
          Input_Controller.Current_Condition := unreliable;
          RETURN;
       ELSIF Input_Controller.Port_2_Support THEN
          IF NOT Input_Controller.Send_Mouse_Command(reporting_enable) THEN
-            PRAGMA Debug(Debug_Message("Failed to enable PS/2 port 2 data."));
+            Log("Failed to enable PS/2 port 2 data.", fatal);
             Input_Controller.Port_2_Support := false; -- Unreliable port 2.
             RETURN;
          END IF;
