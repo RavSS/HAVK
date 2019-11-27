@@ -3,7 +3,10 @@ WITH
    HAVK_Kernel.PS2.Keyboard,
    HAVK_Kernel.PS2.Mouse;
 
-PACKAGE BODY HAVK_Kernel.Interrupts.IRQs IS
+PACKAGE BODY HAVK_Kernel.Interrupts.IRQs
+WITH
+   SPARK_Mode => off -- General access types utilised.
+IS
    PRAGMA Warnings(off, "formal parameter ""Stack_Frame"" is not referenced");
    PRAGMA Warnings(off, "formal parameter ""Error_Code"" is not referenced");
 

@@ -10,6 +10,8 @@ USE
    HAVK_Kernel.Exceptions;
 
 PACKAGE BODY HAVK_Kernel.Paging
+WITH
+   SPARK_Mode => off -- See the package specification for the "enum_rep" issue.
 IS
    FUNCTION Align(
       Address   : IN num;

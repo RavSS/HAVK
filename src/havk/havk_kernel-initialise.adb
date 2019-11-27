@@ -1,15 +1,18 @@
 WITH
-   HAVK_Kernel.Input,
+   HAVK_Kernel.User_Input,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Exceptions,
    HAVK_Kernel.Debug,
    HAVK_Kernel.PS2;
 USE
-   HAVK_Kernel.Input,
+   HAVK_Kernel.User_Input,
    HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Initialise
+WITH
+   -- See paging package specification ("enum_rep" issue).
+   SPARK_Mode => off
 IS
    PROCEDURE Descriptor_Tables
    IS
@@ -82,7 +85,7 @@ IS
    END Default_Page_Layout;
 
    PROCEDURE Grid_Test(
-      Display  : IN OUT view;
+      Display  : IN view;
       Colour   : IN pixel)
    IS
       Box_Size : CONSTANT num := 20; -- Hardcoded box size.
@@ -178,38 +181,45 @@ IS
       END IF;
    END PS2_Input;
 
-   PROCEDURE PS2_Scancode_Test(
-      Terminal : IN OUT textbox;
-      Display  : IN view)
-   IS
-   BEGIN
-      LOOP
-         HLT;
-         Terminal.Current_X_Index := Terminal.Data'first(2);
-         Terminal.Print("     "); -- Clear the first 5 characters.
-         Terminal.Current_X_Index := Terminal.Data'first(2);
-         Terminal.Print(num'image(INB(16#60#)));
-         Terminal.Draw_On(Display);
-      END LOOP;
-   END PS2_Scancode_Test;
-
    PROCEDURE Input_Key_Test(
       Terminal : IN OUT textbox;
       Display  : IN view)
    IS
-      -- TODO: Store the key state here, don't fetch the latest one on each
-      -- of the `Get_*` functions, or else a race occurs and there can be
-      -- an erroneous difference in the output if the user is fast enough
-      -- or their system is slow enough.
+      Formatted_Key      : character;
+      Formatted_Key_Name : key_string;
    BEGIN
-      Terminal.Print("PS/2 KEYPRESS TEST, PRESS ENTER TO EXIT:");
+      -- If the last key pressed was the enter key, then wait for it to change.
+      WHILE Get_Key = character'val(10) LOOP
+         Terminal.Current_X_Index := Terminal.Data'first(2);
+         Terminal.Print("PRESS ANY KEY TO BEGIN THE PS/2 INPUT TEST.");
+         Terminal.Draw_On(Display);
+      END LOOP;
+
+      Terminal.Print("PS/2 INPUT TEST, PRESS ENTER TO EXIT:");
       Terminal.Newline;
       Log("PS/2 key test has started.");
 
       WHILE Get_Key /= character'val(10) LOOP
-         Terminal.Clear_Line(Terminal.Current_Y_Index);
          Terminal.Current_X_Index := Terminal.Data'first(2);
-         Terminal.Print("   " & Get_Key & " - " & Get_Key_Name);
+         Terminal.Clear_Line(Terminal.Current_Y_Index);
+
+         CLI; -- Avoid a race condition of the key state changing during print.
+
+         -- Change null to a space so it draws.
+         Formatted_Key      := (IF Key_Is_Visible THEN Get_Key ELSE ' ');
+         Formatted_Key_Name := Get_Key_Name;
+
+         FOR I IN Formatted_Key_Name'range LOOP
+            IF Formatted_Key_Name(I)  = character'val(0) THEN
+               Formatted_Key_Name(I) := ' '; -- Change nulls to spaces again.
+            END IF;
+         END LOOP;
+
+         Terminal.Print("   " & Formatted_Key & " - " & Formatted_Key_Name);
+
+         STI; -- Enable interrupts again for the next iteration or exit.
+         HLT; -- Slow down the processor to limit heat and power just in case.
+
          Terminal.Draw_On(Display);
       END LOOP;
 
@@ -249,4 +259,28 @@ IS
    BEGIN
       PRAGMA Debug(Debug.Initialise);
    END Debugger;
+
+   FUNCTION Get_Arguments
+   RETURN UEFI.arguments IS
+      Bootloader_Arguments : ACCESS CONSTANT UEFI.arguments
+      WITH
+         Import     => true,
+         Convention => NASM,
+         Link_Name  => "bootloader.arguments";
+   BEGIN
+      RETURN Bootloader_Arguments.ALL;
+   END Get_Arguments;
+
+   FUNCTION Get_Memory_Map
+   RETURN UEFI.memory_map IS
+      Bootloader      : CONSTANT UEFI.arguments := Get_Arguments;
+      Map             : CONSTANT UEFI.memory_map(0 ..
+         Bootloader.Memory_Map_Size / Bootloader.Memory_Map_Descriptor_Size)
+      WITH
+         Import     => true,
+         Convention => C,
+         Address    => Bootloader.Memory_Map_Address;
+   BEGIN
+      RETURN Map;
+   END Get_Memory_Map;
 END HAVK_Kernel.Initialise;

@@ -7,6 +7,13 @@
 -- page map covers 256 TiB (48 bits).
 
 PACKAGE HAVK_Kernel.Paging
+WITH
+   -- The version of `gnatprove` supplied with GNAT GPL/CE 2019 had its last
+   -- update at 2019-05-17, but support for "enum_rep" only made it in a commit
+   -- which came just a few days later. Unfortunately, this means "enum_rep" is
+   -- a violation of SPARK for the current version. I don't think there's any
+   -- way to ignore legality rule errors.
+   SPARK_Mode => off
 IS
    -- READ: https://wiki.osdev.org/Page_Tables#48-bit_virtual_address_space
    -- See "Figure 5-1. Virtual to Physical Address Translation-Long Mode"
@@ -285,8 +292,8 @@ IS
       User_Access      : IN boolean            := false;
       NX               : IN boolean            :=  true)
    WITH
-      Pre    => Virtual_Address  = Align( Virtual_Address, Page_Size) AND THEN
-                Physical_Address = Align(Physical_Address, Page_Size);
+      Pre'class => Virtual_Address = Align(Virtual_Address, Page_Size) AND THEN
+                   Physical_Address = Align(Physical_Address, Page_Size);
 
    -- Shortcut procedure for identity mapping a virtual address range to a
    -- physical address range. The range is determined by the size, which
@@ -304,9 +311,9 @@ IS
       User_Access      : IN boolean            := false;
       NX               : IN boolean            :=  true)
    WITH
-      Pre    => Virtual_Address  = Align( Virtual_Address, Page_Size) AND THEN
-                Physical_Address = Align(Physical_Address, Page_Size),
-      Inline => true;
+      Pre'class => Virtual_Address = Align(Virtual_Address, Page_Size) AND THEN
+                   Physical_Address = Align(Physical_Address, Page_Size),
+      Inline    => true;
 
    PROCEDURE Page_Fault_Handler(
       Error_Code       : IN num)
@@ -314,35 +321,29 @@ IS
       Pre    => Error_Code <= 16#FFFF_FFFF#, -- Error codes are 32-bits.
       Inline => true;
 
-   -- TODO: Can I avoid these "Symbol_*" variables?
-   Symbol_Kernel_Base          : CONSTANT System.Address
+   Kernel_Base          : CONSTANT num
    WITH
       Import        => true,
-      External_Name => "kernel_base";
+      Convention    => NASM,
+      External_Name => "kernel_base_address";
 
-   Symbol_Kernel_End           : CONSTANT System.Address
+   Kernel_End           : CONSTANT num
    WITH
       Import        => true,
-      External_Name => "kernel_end";
+      Convention    => NASM,
+      External_Name => "kernel_end_address";
 
-   Symbol_Kernel_Virtual_Base  : CONSTANT System.Address
+   Kernel_Virtual_Base  : CONSTANT num
    WITH
       Import        => true,
-      External_Name => "kernel_virtual_base";
+      Convention    => NASM,
+      External_Name => "kernel_virtual_base_address";
 
-   Symbol_Kernel_Physical_Base : CONSTANT System.Address
+   Kernel_Physical_Base : CONSTANT num
    WITH
       Import        => true,
-      External_Name => "kernel_physical_base";
+      Convention    => NASM,
+      External_Name => "kernel_physical_base_address";
 
-   Kernel_Base                 : CONSTANT num :=
-      Address_To_num(Symbol_Kernel_Base'address);
-   Kernel_End                  : CONSTANT num :=
-      Address_To_num(Symbol_Kernel_End'address);
-   Kernel_Virtual_Base         : CONSTANT num :=
-      Address_To_num(Symbol_Kernel_Virtual_Base'address);
-   Kernel_Physical_Base        : CONSTANT num :=
-      Address_To_num(Symbol_Kernel_Physical_Base'address);
-   Kernel_Size                 : CONSTANT num :=
-      Kernel_End - Kernel_Base;
+   Kernel_Size          : CONSTANT num := Kernel_End - Kernel_Base;
 END HAVK_Kernel.Paging;

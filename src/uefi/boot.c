@@ -137,7 +137,7 @@ struct uefi_page_structure
 	#define HUGE_PAGE_POINTER 3 // Present, writable, user access.
 	#define HUGE_PAGE_PRESENT 131 // Present, writable, user access, huge.
 	#define SIZE_TO_HUGE_PAGES(x) \
-		(((x) >> HUGE_PAGE_SHIFT) + ((x) & HUGE_PAGE_MASK ? 1 : 0))
+		(((x) >> HUGE_PAGE_SHIFT) + (((x) & HUGE_PAGE_MASK) ? 1 : 0))
 
 	UINT64 map[512] ALIGN(EFI_PAGE_SIZE);
 	UINT64 pointers[512][512] ALIGN(EFI_PAGE_SIZE);
@@ -145,9 +145,10 @@ struct uefi_page_structure
 } __attribute__((packed)); // Just to save any space at all.
 
 // Global variables.
+#define BUFFER_SIZE (sizeof(CHAR16) * 16) // Temporary input buffer size.
+CHAR16 buffer[BUFFER_SIZE + sizeof(CHAR16)] = {0}; // Temporary input buffer.
 EFI_STATUS ret = EFI_SUCCESS; // Return status from UEFI functions.
 EFI_STATUS attempt = EFI_SUCCESS; // Secondary return status variable.
-CHAR16 buffer[sizeof(CHAR16) * 32] = {0}; // Temporary character buffer.
 EFI_LOADED_IMAGE *image = NULL; // Also must be retrieved before utilisation.
 EFI_VIRTUAL_ADDRESS havk_virtual_entry = 0;
 EFI_PHYSICAL_ADDRESS havk_physical_entry = 0;
@@ -277,7 +278,7 @@ EFI_HANDLE get_sfs_handle(VOID)
 	else
 	{
 		Print(L"ENTER THE HANDLE NUMBER (1 to %llu)", handles_found);
-		Input(L": ", buffer, sizeof(buffer));
+		Input(L": ", buffer, BUFFER_SIZE);
 		Print(L"\r\n");
 		handle_selected = Atoi(buffer) - 1;
 	}
@@ -419,12 +420,30 @@ VOID load_havk(struct elf64_file_header *havk_file_header,
 		EFI_PHYSICAL_ADDRESS segment_physical_address
 			= havk_program_headers[i].physical_address;
 
-		// Allocate a page to store the segment.
-		UEFI(BS->AllocatePages, 4,
+		// Try to allocate a page in order to store the segment.
+		// Need custom error handling, so my wrapper is not used here.
+		ret = uefi_call_wrapper(BS->AllocatePages, 4,
 			AllocateAddress,
 			EfiLoaderData, // TODO: Correct memory type, I think?
 			EFI_SIZE_TO_PAGES(havk_program_headers[i].memory_size),
 			&segment_physical_address);
+
+		// TODO: This bootloader's ELF loader cannot relocate anything.
+		// This is a huge issue and needs to be addressed before the
+		// kernel starts getting really big. If you're here because
+		// the bootloader failed to allocate an address, then make sure
+		// that address isn't in the higher-half, or else something
+		// went wrong during linkage of HAVK's kernel file.
+		if (ret == EFI_NOT_FOUND)
+		{
+			Print(L"COULD NOT ALLOCATE ENOUGH MEMORY AT 0x%llX "
+				"(%llu KIBIBYTES)\r\n",
+				segment_physical_address,
+				havk_program_headers[i].memory_size / 1024);
+			CRITICAL_FAILURE();
+		}
+
+		ERROR_CHECK(ret); // Check if anything else went wrong.
 
 		// Zero out the segment's memory space just in case.
 		// Really only required for the BSS segment, but do it anyway.
@@ -442,7 +461,7 @@ VOID load_havk(struct elf64_file_header *havk_file_header,
 			&havk_program_headers[i].size,
 			segment_physical_address);
 
-		Print(L"HAVK PHYSICAL SEGMENT ADDRESS: 0x%X "
+		Print(L"HAVK PHYSICAL SEGMENT ADDRESS: 0x%llX "
 			"(%llu KIBIBYTES)\r\n",
 			segment_physical_address,
 			havk_program_headers[i].memory_size / 1024);
@@ -523,6 +542,13 @@ UINTN read_screen_resolutions(EFI_HANDLE gop_handle)
 			sizeof(queried_mode_information),
 			&queried_mode_information);
 
+		// Don't bother showing non-framebuffer resolutions. Even
+		// if the user specifies its mode, later code logic should
+		// query it again and state why it was not shown. Anything
+		// higher than this enumeration is also unsupported.
+		if (queried_mode_information->PixelFormat >= PixelBltOnly)
+			continue;
+
 		// What follows is just pretty printing. Specific spaces are
 		// in their hexidecimal representation for easier viewing.
 
@@ -531,14 +557,14 @@ UINTN read_screen_resolutions(EFI_HANDLE gop_handle)
 		else
 			Print(L"%llu", i);
 
-		SPrint(buffer, sizeof(buffer), L": %ux%u",
+		SPrint(buffer, BUFFER_SIZE, L": %ux%u",
 			queried_mode_information->HorizontalResolution,
 			queried_mode_information->VerticalResolution);
 		Print(buffer);
 
 		// Instead of relying on tabs (which don't work everywhere),
 		// format it with spaces.
-		UINTN display_length = StrnLen(buffer, sizeof(buffer));
+		UINTN display_length = StrnLen(buffer, BUFFER_SIZE);
 		for (UINTN x = display_length; x < 13; x++)
 			Print(L"\x20");
 
@@ -555,6 +581,7 @@ UINTN read_screen_resolutions(EFI_HANDLE gop_handle)
 EFIAPI
 VOID set_screen_resolution(UINTN max_graphics_mode)
 {
+	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *selected_mode_information;
 	UINTN selected_mode = 0;
 
 	do // Now handle the inputted graphics mode from the user.
@@ -569,12 +596,49 @@ VOID set_screen_resolution(UINTN max_graphics_mode)
 
 		Print(L"ENTER THE GRAPHICS MODE (1 to %u)", max_graphics_mode);
 
-		Input(L": ", buffer, sizeof(buffer));
+		Input(L": ", buffer, BUFFER_SIZE);
 		Print(L"\r\n");
 		selected_mode = Atoi(buffer);
 
 		if (selected_mode < 1 || selected_mode > max_graphics_mode)
+		{
 			Print(L"GRAPHICS MODE IS OUT OF RANGE\r\n");
+			continue;
+		}
+
+		// Now validate the graphics mode's settings.
+		UEFI(graphics_output_protocol->QueryMode, 4,
+			graphics_output_protocol,
+			selected_mode - 1,
+			sizeof(selected_mode_information),
+			&selected_mode_information);
+
+		// Don't use any resolutions where a direct framebuffer is not
+		// granted, as the bit block transfer function is only
+		// usable during UEFI's boot services. Anything higher than
+		// the BLT enumeration is also invalid as of writing this,
+		// along with the pixel bitmask format.
+		switch (selected_mode_information->PixelFormat)
+		{
+			case PixelBitMask:
+				// TODO: I intend to support pixel bitmasks,
+				// but most systems return BGR or RGB, so it
+				// seems to not be a high priority.
+				Print(L"GRAPHICS MODE %lld USES AN UNSUPPORTED"
+					" PIXEL FORMAT\r\n", selected_mode);
+				selected_mode = 0;
+				break;
+			case PixelBltOnly:
+			case PixelFormatMax:
+				Print(L"GRAPHICS MODE %lld DOES NOT GIVE A "
+					"FRAMEBUFFER\r\n", selected_mode);
+				selected_mode = 0;
+				break;
+			default:
+				Print(L"GRAPHICS MODE %lld IS VALID\r\n",
+					selected_mode);
+				break;
+		}
 	}
 	while (selected_mode < 1 || selected_mode > max_graphics_mode);
 

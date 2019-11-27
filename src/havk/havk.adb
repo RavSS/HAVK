@@ -12,24 +12,15 @@ USE
 -- This is the main procedure, it is where HAVK starts itself after entry.
 PROCEDURE HAVK
 WITH
-   No_Return     => true
+   No_Return     => true,
+   SPARK_Mode    => off -- My `gnatprove` version can't process "enum_rep".
 IS
-   -- Access the arguments passed by HAVK's UEFI bootloader.
-   Bootloader      : CONSTANT UEFI.access_arguments
-   WITH
-      Import     => true,
-      Convention => NASM,
-      Link_Name  => "bootloader.arguments";
-
-   Display         : view := Create_View(Bootloader.ALL);
-
+   -- Retrieve the arguments passed by HAVK's UEFI bootloader.
+   Bootloader      : CONSTANT UEFI.arguments  := Initialise.Get_Arguments;
    -- The UEFI memory map, which is an array of memory (region) descriptors.
-   Map             : CONSTANT UEFI.memory_map(0 .. Bootloader.Memory_Map_Size /
-      Bootloader.Memory_Map_Descriptor_Size)
-   WITH
-      Import     => true,
-      Convention => C,
-      Address    => Bootloader.Memory_Map_Address;
+   Map             : CONSTANT UEFI.memory_map := Initialise.Get_Memory_Map;
+   -- Get an object which describes the system display.
+   Display         : CONSTANT view            := Get_Display(Bootloader);
 
    -- The terminal where I will display things to the user concerning the
    -- current system like warnings, errors, info, etc.
@@ -55,11 +46,11 @@ BEGIN
 
    Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
    Initialise.Descriptor_Tables;
-   Initialise.Default_Page_Layout(Bootloader.ALL, Map);
+   Initialise.Default_Page_Layout(Bootloader, Map);
 
    -- Set up the terminal.
    Terminal.Clear_All;
-   Terminal.Position := Terminal_Start; -- Set the top-left corner of the box.
+   Terminal.Start_Position    := Terminal_Start;
    Terminal.Background_Colour := Display.Create_Pixel(  0,  0, 0);
    Terminal.Foreground_Colour := Display.Create_Pixel(200, 55, 0);
 
@@ -78,7 +69,7 @@ BEGIN
    Terminal.Newline;
 
    -- TODO: Needs work.
-   Terminal.Print("MEMORY MAP ENUMERATION:" & character'val(0));
+   Terminal.Print("MEMORY MAP ENUMERATION:");
    Terminal.Newline;
    Terminal.Print("   MEMORY DESCRIPTORS:" & num'image(Map'length));
    Terminal.Newline(2);

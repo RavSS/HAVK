@@ -291,6 +291,9 @@ IS
          -- The custom linker script to be used which defines the entry
          -- point to the assembly file turned object.
          "-T../src/linker.ld",
+         -- Don't generate a build ID. We have no need for this. Some versions
+         -- of `ld` make it automatically while others need it to be specified.
+         "-Wl,--build-id=none",
          -- Include the GCC library.
          "-lgcc", "-static-libgcc",
          -- The UEFI `AllocatePages()` function allocates pages of size 4 KiB.

@@ -4,9 +4,14 @@ USE
    HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.PS2
+WITH
+   -- As mentioned in the Paging package, GNAT GPL/CE 2019's `gnatprove` is
+   -- a version just 4 days older than 2019-09-21, which means it does not
+   -- support the "enum_rep" attribute. Remove this later on.
+   SPARK_Mode => off
 IS
    FUNCTION Ready_To_Receive(
-      Object    : IN OUT controller'class)
+      Object    : IN controller'class)
    RETURN boolean IS
       Current_Status_Byte : CONSTANT num := INB(command'enum_rep);
       Current_Status      : CONSTANT status
@@ -16,12 +21,18 @@ IS
          Size       => 8,
          Address    => Current_Status_Byte'address;
    BEGIN
-      Object.Last_Status := Current_Status;
-      RETURN Current_Status.Output_Ready;
+      IF
+              Object.Port_1_Device /= unrecognised OR
+         ELSE Object.Port_2_Device /= unrecognised
+      THEN
+         RETURN Current_Status.Output_Ready;
+      ELSE
+         RETURN false;
+      END IF;
    END Ready_To_Receive;
 
    FUNCTION Ready_To_Send(
-      Object    : IN OUT controller'class)
+      Object    : IN controller'class)
    RETURN boolean IS
       Current_Status_Byte : CONSTANT num := INB(command'enum_rep);
       Current_Status      : CONSTANT status
@@ -31,12 +42,18 @@ IS
          Size       => 8,
          Address    => Current_Status_Byte'address;
    BEGIN
-      Object.Last_Status := Current_Status;
-      RETURN NOT Current_Status.Input_Full; -- Invert it so it makes sense.
+      IF
+              Object.Port_1_Device /= unrecognised OR
+         ELSE Object.Port_2_Device /= unrecognised
+      THEN
+         RETURN NOT Current_Status.Input_Full; -- Invert it so it makes sense.
+      ELSE
+         RETURN false;
+      END IF;
    END Ready_To_Send;
 
    FUNCTION Send(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Port_Type : IN port;
       Byte      : IN num;
       Port_2    : IN boolean;
@@ -69,27 +86,27 @@ IS
    END Send;
 
    FUNCTION Send_Controller_Command(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Operation : IN controller_command)
    RETURN boolean IS
    (Object.Send(command, Operation'enum_rep, false, false));
 
    FUNCTION Send_Keyboard_Command(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Operation : IN keyboard_command;
       Port_2    : IN boolean := false)
    RETURN boolean IS
    (Object.Send(data, Operation'enum_rep, Port_2, true));
 
    FUNCTION Send_Mouse_Command(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Operation : IN mouse_command;
       Port_2    : IN boolean := true)
    RETURN boolean IS
    (Object.Send(data, Operation'enum_rep, Port_2, true));
 
    FUNCTION Send_Data(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Byte_Data : IN num;
       Port_2    : IN boolean := false;
       Verify    : IN boolean := true)
@@ -97,7 +114,7 @@ IS
    (Object.Send(data, Byte_Data, Port_2, Verify));
 
    FUNCTION Receive(
-      Object     : IN OUT controller;
+      Object     : IN controller;
       Port_Type  : IN port)
    RETURN response IS
       -- Temporary subtype to avoid a size warning.
@@ -131,94 +148,82 @@ IS
    END Receive;
 
    PROCEDURE Flush(
-      Object  : IN OUT controller)
+      Object  : IN controller)
    IS
-      Discard : num; -- Magic variable name for GNAT. See pragma "unmodified".
+      Discard : num; -- Magic variable name for GNAT. See pragma "Unmodified".
    BEGIN
       WHILE Object.Ready_To_Receive LOOP
          Discard := INB(data'enum_rep);
       END LOOP;
    END Flush;
 
-   FUNCTION Test(
-      Object  : IN OUT controller)
-   RETURN boolean IS
-   BEGIN
-      -- First, test the PS/2 controller itself.
-      Log("Testing PS/2 controller.", nominal);
-      IF
-         NOT Object.Send_Controller_Command(test_controller_begin) OR
-         ELSE Object.Receive(data) /= test_controller_pass
-      THEN
-         Object.Current_Condition := unreliable;
-         Log("PS/2 controller test failure.", fatal);
-         RETURN false;
-      END IF;
-      Log("PS/2 controller test successful.", nominal);
-
-      -- Secondly, test the first PS/2 data port for a device.
-      Log("Testing PS/2 port 1.");
-      IF
-         NOT Object.Send_Controller_Command(test_port_1_begin) OR
-         ELSE Object.Receive(data) /= test_port_pass
-      THEN
-         Object.Current_Condition := unreliable;
-         Log("PS/2 port 1 test failure.", fatal);
-         RETURN false;
-      END IF;
-      Log("PS/2 port 1 test successful.", nominal);
-
-      -- Finally, determine if we have a second port and check the port 2 clock
-      -- if it is enabled already by the system. See the configuration record.
-      IF
-         Object.Send_Controller_Command(configuration_read) AND
-         THEN BT(INB(data'enum_rep), 5) -- `Receive()` cannot handle this.
-      THEN
-         Log("Testing PS/2 port 2.");
-         IF
-            NOT Object.Send_Controller_Command(test_port_2_begin) OR
-            ELSE Object.Receive(data) /= test_port_pass
-         THEN
-            -- Since the previous port worked, we will ignore this extra port.
-            Log("PS/2 port 2 test failure.", warning);
-         ELSE
-            Log("PS/2 port 2 test successful.", nominal);
-            Object.Current_Configuration.Port_2_Enabled := true;
-            Object.Current_Configuration.Port_2_Clock   := true;
-            Object.Port_2_Support := true;
-         END IF;
-      ELSE
-         Log("PS/2 controller cannot support port 2.", warning);
-      END IF;
-
-      -- Flush any incoming bytes left over from the tests and leave.
-      -- Depends on the PS/2 controller's implementation.
-      Object.Flush;
-      RETURN true;
-   END Test;
-
    -- The device ID command and disable/enable scancode/reporting commands
    -- are the same across devices (0xFE, 0xF5, and 0xF4 respectively),
    -- but the device IDs themselves are not.
-   FUNCTION Identify_Device(
-      Object   : IN OUT controller;
-      Port_No  : IN num)
-   RETURN device IS
+   PROCEDURE Identify_Device(
+      Object  : IN OUT controller;
+      Port_2  : IN boolean)
+   IS
+      FUNCTION Identity_Resolve(
+         ID   : IN num) -- Only really need the first byte.
+      RETURN device
+      WITH
+         Inline => true;
+
+      FUNCTION Identity_Resolve(
+         ID   : IN num)
+      RETURN device IS
+         Port_Number : CONSTANT num := (IF Port_2 THEN 2 ELSE 1);
+      BEGIN
+         -- TOOD: Is there a way to properly image a passed enumeration
+         -- variable to its name during runtime? That would avoid all
+         -- the `Log()` repetition. Disabling the "Discard_Names" pragma
+         -- did not do anything noticeable when I tried it.
+         CASE ID IS
+            WHEN standard_keyboard'enum_rep    =>
+               Log("PS/2 port" & Port_Number'img & " is a " &
+                  standard_keyboard'img & ".", nominal);
+               RETURN standard_keyboard;
+            WHEN standard_mouse'enum_rep       =>
+               Log("PS/2 port" & Port_Number'img & " is a " &
+                  standard_mouse'img & ".", nominal);
+               Object.Mouse_Support := true;
+               RETURN standard_mouse;
+            WHEN mouse_with_scroll'enum_rep    =>
+               Log("PS/2 port" & Port_Number'img & " is a " &
+                  mouse_with_scroll'img & ".", nominal);
+               Object.Mouse_Support := true;
+               RETURN mouse_with_scroll;
+            WHEN mouse_with_5_buttons'enum_rep =>
+               Log("PS/2 port" & Port_Number'img & " is a " &
+                  mouse_with_5_buttons'img & ".", nominal);
+               Object.Mouse_Support := true;
+               RETURN mouse_with_5_buttons;
+            WHEN OTHERS                        =>
+               Log("PS/2 port" & Port_Number'img & " is "   &
+                  unrecognised'img & ".", warning);
+               RETURN unrecognised;
+         END CASE;
+      END Identity_Resolve;
+
       -- Default values in this array are for the while loop.
-      ID_Bytes : nums(1 .. 2) := (data_acknowledged'enum_rep, 256);
+      ID_Bytes          : nums(1 .. 2) := (data_acknowledged'enum_rep, 256);
+      Identified_Device : device;
    BEGIN
       Object.Flush;
 
       IF
-         Port_No = 1 AND
+         NOT Port_2 AND
          THEN NOT Object.Send_Keyboard_Command(keyboard_identity)
       THEN
-         RETURN unrecognised;
+         Object.Port_1_Device := unrecognised;
+         RETURN;
       ELSIF
-         Port_No = 2 AND
+         Port_2 AND
          THEN NOT Object.Send_Mouse_Command(mouse_identity)
       THEN
-         RETURN unrecognised;
+         Object.Port_2_Device := unrecognised;
+         RETURN;
       END IF;
 
       WHILE ID_Bytes(1) = data_acknowledged'enum_rep LOOP
@@ -227,39 +232,25 @@ IS
 
       ID_Bytes(2) := INB(data'enum_rep);
       Object.Flush;
+      Identified_Device := Identity_Resolve(ID_Bytes(1));
 
-      -- TOOD: Is there a way to properly image an enumeration variable
-      -- during runtime?
-      CASE ID_Bytes(1) IS
-         WHEN standard_keyboard'enum_rep    =>
-            Log("PS/2 port" & Port_No'img & " is a " &
-               standard_keyboard'img & ".", nominal);
-            RETURN standard_keyboard;
-         WHEN standard_mouse'enum_rep       =>
-            Log("PS/2 port" & Port_No'img & " is a " &
-               standard_mouse'img & ".", nominal);
-            Object.Mouse_Support := true;
-            RETURN standard_mouse;
-         WHEN mouse_with_scroll'enum_rep    =>
-            Log("PS/2 port" & Port_No'img & " is a " &
-               mouse_with_scroll'img & ".", nominal);
-            Object.Mouse_Support := true;
-            RETURN mouse_with_scroll;
-         WHEN mouse_with_5_buttons'enum_rep =>
-            Log("PS/2 port" & Port_No'img & " is a " &
-               mouse_with_5_buttons'img & ".", nominal);
-            Object.Mouse_Support := true;
-            RETURN mouse_with_5_buttons;
-         WHEN OTHERS                        =>
-            Log("PS/2 port" & Port_No'img & " is "   &
-               unrecognised'img & " -" &
-               ID_Bytes(1)'img & ID_Bytes(2)'img & ".", warning);
-            RETURN unrecognised;
-      END CASE;
+      IF NOT Port_2 THEN
+         Object.Port_1_Device := Identified_Device;
+         IF Object.Port_1_Device = unrecognised THEN
+            Log("PS/2 port 1 unrecognised identity bytes:" & ID_Bytes(1)'img &
+               ID_Bytes(2)'img & ".");
+         END IF;
+      ELSE
+         Object.Port_2_Device := Identified_Device;
+         IF Object.Port_2_Device = unrecognised THEN
+            Log("PS/2 port 2 unrecognised identity bytes:" & ID_Bytes(1)'img &
+               ID_Bytes(2)'img & ".");
+         END IF;
+      END IF;
    END Identify_Device;
 
    FUNCTION Send_Configuration(
-      Object    : IN OUT controller)
+      Object    : IN controller)
    RETURN boolean IS
       Configuration_Settings : CONSTANT configuration :=
          Input_Controller.Current_Configuration;
@@ -286,7 +277,7 @@ IS
    END Send_Configuration;
 
    FUNCTION Send_Typematics(
-      Object             : IN OUT controller;
+      Object             : IN controller;
       Port_2             : IN boolean := false)
    RETURN boolean          IS
       Typematic_Settings : CONSTANT typematics :=
@@ -324,7 +315,7 @@ IS
    END Send_Typematics;
 
    FUNCTION Send_Scancode_Set(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Port_2    : IN boolean := false)
    RETURN boolean IS
    BEGIN
@@ -399,18 +390,63 @@ IS
       END IF;
 
       IF NOT Input_Controller.Send_Controller_Command(port_2_disable) THEN
-         Log("Failed to disable PS/2 port 2.", fatal);
-         RETURN;
+         Log("Failed to disable PS/2 port 2.", warning);
       END IF;
 
-      -- Flush anything in the output buffer.
+      -- Flush anything in the output buffer again to make sure.
       Input_Controller.Flush;
 
       -- Run the controller and port tests.
-      IF NOT Input_Controller.Test THEN
-         Log("PS/2 controller failed test(s).", fatal);
+      -- First, test the PS/2 controller itself.
+      Log("Testing PS/2 controller.", nominal);
+      IF
+         NOT Input_Controller.Send_Controller_Command(test_controller_begin) OR
+         ELSE Input_Controller.Receive(data) /= test_controller_pass
+      THEN
+         Input_Controller.Current_Condition := unreliable;
+         Log("PS/2 controller test failure.", fatal);
          RETURN;
       END IF;
+      Log("PS/2 controller test successful.", nominal);
+
+      -- Secondly, test the first PS/2 data port for a device.
+      Log("Testing PS/2 port 1.");
+      IF
+         NOT Input_Controller.Send_Controller_Command(test_port_1_begin) OR
+         ELSE Input_Controller.Receive(data) /= test_port_pass
+      THEN
+         Input_Controller.Current_Condition := unreliable;
+         Log("PS/2 port 1 test failure.", fatal);
+         RETURN;
+      END IF;
+      Log("PS/2 port 1 test successful.", nominal);
+
+      -- Now determine if we have a second port and check the port 2 clock if
+      -- it is enabled already by the system. See the configuration record.
+      IF
+         Input_Controller.Send_Controller_Command(configuration_read) AND
+         THEN BT(INB(data'enum_rep), 5) -- `Receive()` cannot handle this.
+      THEN
+         Log("Testing PS/2 port 2.");
+         IF
+            NOT Input_Controller.Send_Controller_Command(test_port_2_begin) OR
+            ELSE Input_Controller.Receive(data) /= test_port_pass
+         THEN
+            -- Since the previous port worked, we will ignore this extra port.
+            Log("PS/2 port 2 test failure.", warning);
+         ELSE
+            Log("PS/2 port 2 test successful.", nominal);
+            Input_Controller.Current_Configuration.Port_2_Enabled := true;
+            Input_Controller.Current_Configuration.Port_2_Clock   := true;
+            Input_Controller.Port_2_Support := true;
+         END IF;
+      ELSE
+         Log("PS/2 controller cannot support port 2.", warning);
+      END IF;
+
+      -- Flush any incoming bytes left over from the tests and leave.
+      -- Depends on the PS/2 controller's implementation.
+      Input_Controller.Flush;
 
       -- Disable any scanning or reporting by the devices. Note that the
       -- disabling commands are the same byte. The difference between the
@@ -428,8 +464,8 @@ IS
       END IF;
 
       -- See what devices are connected to the ports.
-      Input_Controller.Port_1_Device := Input_Controller.Identify_Device(1);
-      Input_Controller.Port_2_Device := Input_Controller.Identify_Device(2);
+      Input_Controller.Identify_Device(Port_2 => false);
+      Input_Controller.Identify_Device(Port_2 =>  true);
 
       -- Write my configuration.
       IF NOT Input_Controller.Send_Configuration THEN

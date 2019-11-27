@@ -3,6 +3,13 @@
 
 PACKAGE HAVK_Kernel.Interrupts.Exceptions
 IS
+   PRAGMA Warnings(GNATprove, off, "pragma ""Machine_Attribute"" ignored",
+      Reason => "The pragma must be used to create CPU exception ISRs.");
+
+   -- GCC wants the handlers to take in a pointer to the interrupt
+   -- stack frame as a parameter.
+   TYPE access_interrupt IS PRIVATE;
+
    -- Format: <exception name> - <mnemonic code> - <exception type>.
 
    -- Divide-by-zero error - DE - fault.
@@ -172,4 +179,11 @@ IS
    PROCEDURE ISR_31_Handler(
       Stack_Frame : IN access_interrupt);
    PRAGMA Machine_Attribute(ISR_31_Handler, "interrupt");
+PRIVATE
+   -- General access types are not allowed in SPARK, but we need one for
+   -- GCC to generate an ISR. Using an anonymous access (replacing "IN"
+   -- with "ACCESS" in the procedure) confuses GCC about the size of the
+   -- parameter.
+   PRAGMA SPARK_Mode(off);
+   TYPE access_interrupt IS NOT NULL ACCESS CONSTANT interrupt;
 END HAVK_Kernel.Interrupts.Exceptions;

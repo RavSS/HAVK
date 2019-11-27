@@ -14,7 +14,7 @@ IS
    Debugger : CONSTANT serial_connection :=
    (
       -- Use COM1 for debugging purposes.
-      Port                    => COM(1),
+      Port                    => COM1,
       -- Going with a very safe baud rate.
       Baud_Rate               => 9600,
       -- Assume Windows line enders (CRLF), which should stay compatible
@@ -39,7 +39,9 @@ IS
 
    -- Writes a string to the serial port used for debugging.
    PROCEDURE Message(
-      Info : IN string);
+      Information : IN string)
+   WITH
+      Pre => Information'length <= 500; -- Absolute maximum.
 
    -- This is for causing an emulator breakpoint, so I can inspect
    -- values with GDB etc. Not very sophisticated, but it gets the job done.

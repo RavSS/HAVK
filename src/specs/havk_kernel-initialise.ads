@@ -8,6 +8,8 @@ USE
    HAVK_Kernel.Graphics.Text;
 
 PACKAGE HAVK_Kernel.Initialise
+WITH
+   SPARK_Mode => off -- See paging package specification ("enum_rep" issue).
 IS
    -- Prepares the descriptor tables, which is necessary for interrupts.
    PROCEDURE Descriptor_Tables;
@@ -20,7 +22,7 @@ IS
 
    -- Draws a grid to the screen as an initial test.
    PROCEDURE Grid_Test(
-      Display    : IN OUT view;
+      Display    : IN view;
       Colour     : IN pixel);
 
    -- Prints the magic number to the textbox.
@@ -30,11 +32,6 @@ IS
    -- Prints the nearly all of the current font's characters.
    PROCEDURE Font_Test(
       Terminal   : IN OUT textbox);
-
-   -- Outputs the PS/2 scancodes to the textbox. Does not return as of now.
-   PROCEDURE PS2_Scancode_Test(
-      Terminal   : IN OUT textbox;
-      Display    : IN view);
 
    -- Outputs the character from the input handler to the textbox.
    PROCEDURE Input_Key_Test(
@@ -60,10 +57,20 @@ IS
    -- Initialises any debug utilities.
    PROCEDURE Debugger;
 
+   -- Returns the bootloader arguments structure/record. Only handles UEFI and
+   -- any changes must be reflected across HAVK's kernel and HAVK's bootloader.
+   FUNCTION Get_Arguments
+   RETURN UEFI.arguments;
+
+   -- Returns a UEFI-style memory map.
+   FUNCTION Get_Memory_Map
+   RETURN UEFI.memory_map;
+
    -- The default paging layout.
    Kernel_Paging_Layout : Paging.page_layout;
 PRIVATE
-   -- Bootloader magic number.
+   -- Bootloader magic number. This is here in-case any other procedures etc.
+   -- need to access it outside of `See_Magic()`.
    Magic : CONSTANT num
    WITH
       Import     => true,

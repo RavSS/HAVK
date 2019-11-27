@@ -2,10 +2,8 @@
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date at UTC +13:00 )
 
 -------------------------
-### Tasklist - 2019-11-22
+### Tasklist - 2019-11-27
 - Very specific resolutions like 1366x768 are bugged and unusable.
-- If there's a lot of keys pressed too fast, the keyboard shift state
-often becomes stuck in reverse.
 - Unoptimised `Object.Screen(Index, Pixel)` function as I cannot figure out
 how to add a non-local address aliased array into a tagged record, or
 any other optimal solution. Making it non-primitive doesn't help at
@@ -26,6 +24,9 @@ the "Final" build is compiled with the former, as debug functionality is
 irrelevant to that build's purpose.
 - After implementing more OS functionality, implement LAPIC and IOAPIC
 features by parsing some of the ACPI tables. Required for SMT support.
+- Create a script that compiles the latest version of `gnatprove` so
+the tool can process packages with "enum_rep" attribute usage, or remove
+usages of them and replace them with more sensible types.
 
 -------------------------
 ## UPCOMING - 20??-??-??
@@ -35,6 +36,9 @@ support for potential mouse input handling.
 - New global `Log()` procedure replaces old debug pragmas. Arbitrary 
 information can now be stored in the kernel space for checking the kernels 
 status or for seeing if there has been any errors raised.
+- Numerous changes that resolve SPARK analysis issues.
+- Solved PS/2 keyboard issue, with the shift state now properly setting
+and resetting.
 
 -------------------------
 ## 00-09-00 - 2019-11-15

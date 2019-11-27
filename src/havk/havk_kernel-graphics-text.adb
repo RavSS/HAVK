@@ -27,9 +27,12 @@ IS
          -- Reverse the loop due to how I've stored the font data.
          -- Check "HAVK_Kernel.Font" for bit order information.
          FOR X IN REVERSE num RANGE 0 .. Framefont_Width - 1 LOOP
-            -- Move to the next pixel by incrementing
-            -- the pixel location.
+            -- Move to the next pixel by incrementing the pixel location.
             Pixel_Location := Pixel_Location + Buffer.Pixel_Size;
+
+            -- Range check. Regardless of the screen's pixel capacity, I will
+            -- just draw as much of the character as I can to make it easier.
+            EXIT WHEN Pixel_Location >= Buffer.Framebuffer_Elements;
 
             IF BT(X_Line, X) THEN
                Buffer.Screen(Pixel_Location, Foreground_Colour);
@@ -45,12 +48,14 @@ IS
       Object : IN OUT textbox)
    IS
    BEGIN
-      -- Shift every line upwards.
-      FOR Y IN Object.Data'first(1) .. Object.Data'last(1) - 1 LOOP
-         FOR X IN Object.Data'range(2) LOOP
-            Object.Data(Y, X) := Object.Data(Y + 1, X);
+      -- Shift every line upwards if there are multiple lines.
+      IF Object.Data'first(1) < Object.Data'last(1) THEN
+         FOR Y IN Object.Data'first(1) .. Object.Data'last(1) - 1 LOOP
+            FOR X IN Object.Data'range(2) LOOP
+               Object.Data(Y, X) := Object.Data(Y + 1, X);
+            END LOOP;
          END LOOP;
-      END LOOP;
+      END IF;
 
       -- Now blank out the last line.
       FOR X IN Object.Data'range(2) LOOP
@@ -68,14 +73,12 @@ IS
       END IF;
 
       IF Object.Current_Y_Index  > Object.Data'last(1) THEN
-         Object.Scroll_Down;
+         Object.Scroll_Down; -- Call before index assignments (`gnatprove`).
+         Object.Current_X_Index := Object.Data'first(2);
          Object.Current_Y_Index := Object.Data'last(1);
       END IF;
    END Update_Cursor;
 
-   -- TODO: In the debug build, this procedure somehow ends up adding a
-   -- random character to the end of the data array inside the textbox.
-   -- The address of "Message" seems to be that very character. No clue.
    PROCEDURE Print(
       Object  : IN OUT textbox;
       Message : IN string;
@@ -83,8 +86,20 @@ IS
    IS
    BEGIN
       IF Centre AND THEN Message'length /= 0 THEN
-         Object.Current_X_Index := Object.Data'last(2) / 2 -
-            Message'length / 2;
+         DECLARE
+            Centre_Index         : CONSTANT num := Object.Data'last(2) / 2;
+            Centre_Message_Index : CONSTANT num := Message'length / 2;
+         BEGIN
+            IF
+               Centre_Index = 0 OR
+               ELSE Centre_Message_Index = 0 OR
+               ELSE Centre_Index <= Centre_Message_Index
+            THEN
+               Object.Current_X_Index := Object.Data'first(2);
+            ELSE
+               Object.Current_X_Index := Centre_Index - Centre_Message_Index;
+            END IF;
+         END;
       END IF;
 
       FOR I IN Message'range LOOP
@@ -110,15 +125,15 @@ IS
    END Newline;
 
    PROCEDURE Draw_On(
-      Object          : IN textbox;
-      Display         : IN view)
+      Object         : IN textbox;
+      Display        : IN view)
    IS
-      Current_Pixel   : num := Object.Position;
-      Row_Separation  : CONSTANT num := Object.Line_Separation +
+      Row_Separation : CONSTANT num := Object.Line_Separation +
          Framefont_Height;
-      Next_Row        : CONSTANT num := Display.Screen_Width *
-         Display.Pixel_Size * Row_Separation;
-      Next_Column     : CONSTANT num := Framefont_Width + Object.Kerning;
+      Next_Row       : CONSTANT num := (Display.Screen_Width *
+         Display.Pixel_Size) * Row_Separation;
+      Next_Column    : CONSTANT num := Framefont_Width + Object.Kerning;
+      Current_Pixel  :          num := Object.Start_Position;
    BEGIN
       FOR Y IN Object.Data'range(1) LOOP
          FOR X IN Object.Data'range(2) LOOP
@@ -127,11 +142,8 @@ IS
             -- ASCII characters start at 33, from the exclamation mark.
             -- This should grant a performance increase. Do still draw
             -- spaces (32) though, or else there would be a gap between
-            -- words if the user wanted to fill in the background too. Null
-            -- characters are also drawn for the purpose of an explicit blank.
-            IF character'pos(Object.Data(Y, X)) > 31 OR ELSE
-               character'pos(Object.Data(Y, X)) =  0
-            THEN
+            -- words if the user wanted to fill in the background too.
+            IF character'pos(Object.Data(Y, X)) > 31 THEN
                Draw_Character(
                   Display,
                   Current_Pixel,
@@ -143,24 +155,26 @@ IS
             Current_Pixel := Current_Pixel + Next_Column;
          END LOOP;
 
-         Current_Pixel := Object.Position + Y * Next_Row;
+         Current_Pixel := Object.Start_Position + Next_Row * (Y + 1);
       END LOOP;
    END Draw_On;
 
    PROCEDURE Clear_All(
-      Object : IN OUT textbox)
+      Object : IN OUT textbox;
+      ASCII  : IN character := character'val(0))
    IS
    BEGIN
       FOR Y IN Object.Data'range(1) LOOP
          FOR X IN Object.Data'range(2) LOOP
-            Object.Data(Y, X) := character'val(0);
+            Object.Data(Y, X) := ASCII;
          END LOOP;
       END LOOP;
    END Clear_All;
 
    PROCEDURE Clear_Column(
-      Object  : IN OUT textbox;
-      Column  : IN num)
+      Object : IN OUT textbox;
+      Column : IN num;
+      ASCII  : IN character := character'val(0))
    IS
    BEGIN
       IF Column NOT IN Object.Data'range(2) THEN
@@ -168,13 +182,14 @@ IS
       END IF;
 
       FOR Y IN Object.Data'range(1) LOOP
-         Object.Data(Y, Column) := character'val(0);
+         Object.Data(Y, Column) := ASCII;
       END LOOP;
    END Clear_Column;
 
    PROCEDURE Clear_Line(
-      Object  : IN OUT textbox;
-      Line    : IN num)
+      Object : IN OUT textbox;
+      Line   : IN num;
+      ASCII  : IN character := character'val(0))
    IS
    BEGIN
       IF Line NOT IN Object.Data'range(1) THEN
@@ -182,7 +197,7 @@ IS
       END IF;
 
       FOR X IN Object.Data'range(2) LOOP
-         Object.Data(Line, X) := character'val(0);
+         Object.Data(Line, X) := ASCII;
       END LOOP;
    END Clear_Line;
 END HAVK_Kernel.Graphics.Text;

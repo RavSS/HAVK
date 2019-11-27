@@ -24,10 +24,6 @@ IS
       Alignment =>  128, -- I believe the stack frame needs 16-byte alignment?
       Pack      => true;
 
-   -- GCC wants the handlers to take in a pointer
-   -- to the interrupt stack frame as a parameter.
-   TYPE access_interrupt        IS NOT NULL ACCESS CONSTANT interrupt;
-
    -- https://wiki.osdev.org/Global_Descriptor_Table
    TYPE GDT_access              IS RECORD
       -- Only touched by the CPU, never by me (except for setting up a TSS).
@@ -285,11 +281,21 @@ IS
 
    PROCEDURE Prepare_IDT;
 
+   -- TODO: Store IRQ 0 interrupts here temporarily in a counter.
+   -- No idea what the timer's frequency is, so I can't exactly
+   -- count seconds right now.
+   Ticker : num := 0;
+
    -- Declare the tables.
-   IDT         : IDT_gates; -- Fill this in later to avoid elaboration time.
-   TSS         : TSS_structure; -- Set the kernel stacks later.
+   IDT    : IDT_gates; -- Fill this in later to avoid elaboration time.
+   TSS    : TSS_structure; -- Set the kernel stacks later.
+PRIVATE
+   -- There are address attributes used in here outside of clauses. They're
+   -- needed to configure the GDT.
+   PRAGMA SPARK_Mode(off);
+
    TSS_address : CONSTANT num := Address_To_num(TSS'address);
-   GDT         : GDT_entries :=
+   GDT         : GDT_entries  :=
    (
       Descriptor_Null               => -- Never accessed by the CPU.
       (
@@ -456,9 +462,4 @@ IS
    )
    WITH
       Volatile => true; -- For the "accessed" bit, which the CPU can change.
-
-   -- TODO: Store IRQ 0 interrupts here temporarily in a counter.
-   -- No idea what the timer's frequency is, so I can't exactly
-   -- count seconds right now.
-   Ticker : num := 0;
 END HAVK_Kernel.Interrupts;

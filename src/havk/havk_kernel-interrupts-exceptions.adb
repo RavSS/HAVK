@@ -10,7 +10,7 @@ USE
 
 PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions
 WITH
-   SPARK_Mode => off -- Again, `gnatprove` crashes on this package.
+   SPARK_Mode => off -- General access types utilised.
 IS
    PRAGMA Warnings(off, "formal parameter ""Stack_Frame"" is not referenced");
    PRAGMA Warnings(off, "formal parameter ""Error_Code"" is not referenced");

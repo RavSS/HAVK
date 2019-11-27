@@ -11,12 +11,12 @@ IS
    TYPE pixel_formats IS(
       RGB,     -- PixelRedGreenBlueReserved8BitPerColor.
       BGR,     -- PixelBlueGreenRedReserved8BitPerColor.
-      Bitmask, -- PixelBitMask.
+      bitmask, -- PixelBitMask.
       BLT,     -- PixelBltOnly (no framebuffer access = failure).
-      Max)     -- PixelFormatMax (should never get this from boot).
+      max)     -- PixelFormatMax (should never get this from boot).
    WITH
       Size       => 32,
-      Convention => C;
+      Convention =>  C;
 
    TYPE pixel_bitmasks IS RECORD
       Red      : num RANGE 0 .. 16#FFFFFFFF#;
@@ -25,7 +25,7 @@ IS
       Reserved : num RANGE 0 .. 16#FFFFFFFF#;
    END RECORD
    WITH
-      Convention => C;
+      Convention => C_Pass_By_Copy;
    FOR  pixel_bitmasks USE RECORD
       Red      AT  0 RANGE 0 .. 31;
       Green    AT  4 RANGE 0 .. 31;
@@ -94,14 +94,14 @@ IS
       persistent_data)    -- Usable memory. Essentially conventional memory.
    WITH
       Size       => 32,
-      Convention => C;
+      Convention =>  C;
 
    -- These make up the memory map. Each one explains what a region of memory
    -- is, what its attributes are, and how big it is.
    TYPE memory_descriptor IS RECORD
       Memory_Region_Type            : memory_type;
       -- See the representation clause for information about this component.
-      Padding_1             : num RANGE 0 .. 16#FFFFFFFF#;
+      Padding_1                     : num RANGE 0 .. 16#FFFFFFFF#;
       -- The physical address of where the region starts.
       Start_Address_Physical        : num;
       -- The virtual address of where the region starts. This is essentially
@@ -118,7 +118,7 @@ IS
       Padding_2                     : num;
    END RECORD
    WITH
-      Convention => C;
+      Convention => C_Pass_By_Copy;
    FOR memory_descriptor USE RECORD
       Memory_Region_Type            AT  0 RANGE 0 .. 31;
       -- There's 32 bits of padding right here. This is foolishly unexplained
@@ -138,26 +138,26 @@ IS
       Padding_2                     AT 40 RANGE 0 .. 63;
    END RECORD;
 
-   TYPE arguments  IS RECORD
+   TYPE arguments IS RECORD
       -- Graphics related variables.
       Graphics_Mode_Current         : num RANGE 0 .. 16#FFFFFFFF#;
       Graphics_Mode_Max             : num RANGE 0 .. 16#FFFFFFFF#;
-      Framebuffer_Address           : System.Address;
-      Framebuffer_Size              : num;
-      Horizontal_Resolution         : num RANGE 0 .. 16#FFFFFFFF#;
-      Vertical_Resolution           : num RANGE 0 .. 16#FFFFFFFF#;
-      Pixels_Per_Scanline           : num RANGE 0 .. 16#FFFFFFFF#;
-      Pixel_Format                  : pixel_formats;
+      Framebuffer_Address           : num RANGE 1 .. num'last;
+      Framebuffer_Size              : num RANGE 4 .. num'last; -- 32-bit pixel.
+      Horizontal_Resolution         : num RANGE 1 .. 16#FFFFFFFF#;
+      Vertical_Resolution           : num RANGE 1 .. 16#FFFFFFFF#;
+      Pixels_Per_Scanline           : num RANGE 1 .. 16#FFFFFFFF#;
+      Pixel_Format                  : pixel_formats RANGE RGB .. bitmask;
       Pixel_Bitmask                 : pixel_bitmasks;
       -- Memory related variables.
-      Memory_Map_Address            : System.Address;
-      Memory_Map_Key                : num;
-      Memory_Map_Size               : num;
-      Memory_Map_Descriptor_Size    : num;
+      Memory_Map_Address            : num RANGE 1 .. num'last;
+      Memory_Map_Key                : num RANGE 1 .. num'last;
+      Memory_Map_Size               : num RANGE 1 .. num'last;
+      Memory_Map_Descriptor_Size    : num RANGE 1 .. num'last;
       Memory_Map_Descriptor_Version : num RANGE 0 .. 16#FFFFFFFF#;
    END RECORD
    WITH
-      Convention => C;
+      Convention => C_Pass_By_Copy;
    FOR arguments USE RECORD
       Graphics_Mode_Current         AT  0 RANGE 0 ..  31;
       Graphics_Mode_Max             AT  4 RANGE 0 ..  31;
@@ -175,11 +175,8 @@ IS
       Memory_Map_Descriptor_Version AT 88 RANGE 0 ..  31;
    END RECORD;
 
-   -- A pointer is passed by the UEFI bootloader.
-   TYPE access_arguments IS NOT NULL ACCESS CONSTANT arguments;
-
    -- An array of memory descriptors - a memory map.
-   TYPE memory_map       IS ARRAY(num RANGE <>) OF ALIASED memory_descriptor
+   TYPE memory_map IS ARRAY(num RANGE <>) OF ALIASED memory_descriptor
    WITH
       Convention     =>   C,
       Component_Size => 384;

@@ -1,7 +1,8 @@
 WITH
    HAVK_Kernel.Debug;
 
-PACKAGE BODY HAVK_Kernel IS
+PACKAGE BODY HAVK_Kernel
+IS
    PROCEDURE Log(
       Information : IN string;
       Priority    : IN urgency := trivial)
@@ -27,24 +28,29 @@ PACKAGE BODY HAVK_Kernel IS
    BEGIN
       PRAGMA Debug(Serial_Message); -- Always send it over COM* first.
 
-      IF Information'length <= Logs(Last_Log).Information'length THEN
+      IF -- Check if the log's information can actually be stored.
+         Information'first >= Logs(Last_Log).Information'first AND
+         THEN Information'last <= Logs(Last_Log).Information'last
+      THEN
          FOR I IN Information'range LOOP
             Logs(Last_Log).Information(I) := Information(I);
          END LOOP;
+
+         Logs(Last_Log).Priority := Priority;
       ELSE
          -- Don't use recursion in case this message also exceeds the length.
          PRAGMA Debug(Debug.Message("[WARNING] | Above log message " &
-            "exceeded storage length."));
-         RETURN;
+            "is outside storage length."));
+
+         -- Quickly describe why the log's information is missing if I can.
+         -- The if-statement check here is so the log information size is
+         -- easily configurable in the future. It will be optimised out.
+         IF Logs(Last_Log).Information'length >= 3 THEN
+            Logs(Last_Log).Information := ('C', 'U', 'T',
+               OTHERS => character'val(0));
+            Logs(Last_Log).Priority    := warning;
+         END IF;
       END IF;
-
-      -- Pad out the rest of the log's string with zeroes so the entry can
-      -- be reused later without garbage characters occuring at the end.
-      FOR I IN Information'last + 1 .. Logs(1).Information'last LOOP
-         Logs(Last_Log).Information(I) := character'val(0);
-      END LOOP;
-
-      Logs(Last_Log).Priority := Priority;
 
       IF Last_Log = log_entry_limit'last THEN
          FOR L IN log_entry_limit'first .. log_entry_limit'last - 1 LOOP

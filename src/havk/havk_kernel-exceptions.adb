@@ -3,7 +3,13 @@ WITH
 USE
    System.Machine_Code;
 
-PACKAGE BODY HAVK_Kernel.Exceptions IS
+PACKAGE BODY HAVK_Kernel.Exceptions
+WITH
+   -- If anything in this package is called, then it's already game over.
+   -- Utilising SPARK outside of here should mean nothing here matters, or in
+   -- the case of a kernel panic, a program failure is intended on purpose.
+   SPARK_Mode => off
+IS
    PROCEDURE Last_Chance_Handler(
       Source_Location : IN System.Address;
       Line            : IN integer)
@@ -41,7 +47,6 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
                "MOV RDX, %0;" &
                "MOV RSI, %1;" & -- Character array of source file's name.
                "MOV EDI, %2;" & -- Line destination in the source file.
-               "MOV RSP, %0;" &
                "MOV R8,  %0;" &
                "MOV R9,  %0;" &
                "MOV R10, %0;" &
@@ -54,7 +59,7 @@ PACKAGE BODY HAVK_Kernel.Exceptions IS
                Inputs   => (num'Asm_Input("g", Mnemonic),
                            System.Address'Asm_Input("g", Source_Location),
                            integer'Asm_Input("g", Line)),
-               Clobber  => "rax, rbx, rcx, rdx, rsi, edi, rsp," &
+               Clobber  => "rax, rbx, rcx, rdx, rsi, edi," &
                            "r8,  r9,  r10, r11, r12, r13, r14, r15",
                Volatile => true);
          END LOOP;

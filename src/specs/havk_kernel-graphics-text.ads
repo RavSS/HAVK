@@ -1,3 +1,5 @@
+-- This package handles graphical text. The main object is a textbox, which
+-- can be used for any case where textual information needs to be displayed.
 PACKAGE HAVK_Kernel.Graphics.Text
 IS
    -- Stores textbox data in two dimensions. First index is for the line,
@@ -7,40 +9,45 @@ IS
    -- This is the type used for showing textboxes and message boxes.
    -- For now, it is used for terminal/commandline console display logic.
    TYPE textbox(
-      Width             : num;
-      Height            : num)
+      Width             : num; -- Amount of columns (characters on a row).
+      Height            : num) -- Amount of rows (characters in a column).
    IS TAGGED RECORD
       -- Warnings raised by GNAT, but not anything to do with Ada standards.
       PRAGMA Warnings(off, "record layout may cause performance issues");
       PRAGMA Warnings(off, "*length depends on a discriminant");
       PRAGMA Warnings(off, "comes too early and was moved down");
-      -- Holds the data for the textbox. It may contain junk upon declaration.
-      Data              : textbox_data(1 .. Height, 1 .. Width);
-      -- The X index of the current cursor, which is the column.
-      Current_X_Index   : num := 1;
-      -- The Y index of the current cursor, which is the row.
-      Current_Y_Index   : num := 1;
+      -- Holds the data for the textbox. First dimension is the line/row (Y).
+      Data              : textbox_data(0 .. Height, 0 .. Width);
+      -- The X index of the text cursor, which is the column (textbox width).
+      Current_X_Index   : num   := 0;
+      -- The Y index of the text cursor, which is the row (textbox height).
+      Current_Y_Index   : num   := 0;
       -- Set to a black background by default.
       Background_Colour : pixel := 0;
       -- Set to white text by default.
       Foreground_Colour : pixel := 16#FFFFFF#;
       -- The distance between drawn characters is 2 pixels by default.
-      Kerning           : num := 2;
+      Kerning           : num   := 2;
       -- TODO: Font size is currently unused, but I think I can "upscale"
       -- the font if I want?
-      Font_Size         : num := 1;
+      Font_Size         : num   := 1;
       -- The line separation between rows is 3 pixels by default.
       -- This does not include the font height, that is handled automatically.
-      Line_Separation   : num := 3;
-      -- Where the textbox should be drawn on the framebuffer.
-      Position          : num := 1;
+      Line_Separation   : num   := 3;
+      -- Where the textbox should be drawn on a framebuffer.
+      Start_Position    : num   := 0;
    END RECORD;
 
    -- Adds a string into a textbox.
    PROCEDURE Print(
       Object  : IN OUT textbox;
       Message : IN string;
-      Centre  : IN boolean := false);
+      Centre  : IN boolean := false)
+   WITH
+      Pre'class => Message'length          /= 0 AND THEN
+                  (IF Centre                        THEN
+                   Object.Data'last(2) / 2 /= 0 AND THEN
+                   Message'length      / 2 /= 0);
 
    -- Moves the cursor down a row while handling correct positioning.
    PROCEDURE Newline(
@@ -56,21 +63,24 @@ IS
 
    -- Removes all characters from a textbox and replaces them with null.
    PROCEDURE Clear_All(
-      Object  : IN OUT textbox)
+      Object  : IN OUT textbox;
+      ASCII   : IN character := character'val(0))
    WITH
       Inline => true;
 
    -- Removes all characters from a textbox's column.
    PROCEDURE Clear_Column(
       Object  : IN OUT textbox;
-      Column  : IN num)
+      Column  : IN num;
+      ASCII   : IN character := character'val(0))
    WITH
       Inline => true;
 
    -- Removes all characters from a textbox's row.
    PROCEDURE Clear_Line(
       Object  : IN OUT textbox;
-      Line    : IN num)
+      Line    : IN num;
+      ASCII   : IN character := character'val(0))
    WITH
       Inline => true;
 PRIVATE
@@ -83,11 +93,11 @@ PRIVATE
    PROCEDURE Update_Cursor(
       Object  : IN OUT textbox)
    WITH
-      Post'class => Object.Current_Y_Index IN Object.Data'range(1) AND THEN
-                    Object.Current_X_Index IN Object.Data'range(2);
+      Post'class => Object.Current_Y_Index <= Object.Data'last(1) AND THEN
+                    Object.Current_X_Index <= Object.Data'last(2);
 
    -- This draws a character onto the framebuffer type which is defined
-   -- in this very procedure's package parent.
+   -- in this very procedure's parent package.
    PROCEDURE Draw_Character(
       Buffer            : IN view;
       Pixel_Start       : IN num;

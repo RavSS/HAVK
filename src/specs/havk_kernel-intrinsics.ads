@@ -8,7 +8,8 @@ IS
       Shifts : IN num)
    RETURN num
    WITH
-      Inline_Always => true;
+      Inline => true,
+      Pre    => Shifts <= 63;
 
    -- Shift a value to the right (>>). Alternate to `Shift_Right()`.
    FUNCTION SHR(
@@ -16,7 +17,8 @@ IS
       Shifts : IN num)
    RETURN num
    WITH
-      Inline_Always => true;
+      Inline => true,
+      Pre    => Shifts <= 63;
 
    -- Does a bit test on a specific value and returns true for a set bit etc.
    -- The second argument refers to the bits in the first argument from zero.
@@ -29,42 +31,46 @@ IS
       Bit    : IN num)
    RETURN boolean
    WITH
-      Inline_Always => true;
+      Inline => true,
+      Pre    => Bit <= 63;
 
    -- Outputs a byte to an IO port.
    PROCEDURE OUTB(
       Port   : IN num;
       Value  : IN num)
    WITH
-      Inline_Always => true;
+      Inline => true,
+      Pre    => Port <= 16#FFFF# AND THEN Value <= 16#FF#;
 
    -- Reads a byte from an IO port.
    FUNCTION INB(
       Port   : IN num)
    RETURN num
    WITH
-      Inline_Always => true;
+      Inline => true,
+      Pre    => Port       <= 16#FFFF#,
+      Post   => INB'result <=   16#FF#;
 
    -- Halts the CPU.
    PROCEDURE HLT
    WITH
-      Inline_Always => true;
+      Inline => true;
 
    -- Enables interrupts.
    PROCEDURE STI
    WITH
-      Inline_Always => true;
+      Inline => true;
 
    -- Disables interrupts.
    PROCEDURE CLI
    WITH
-      Inline_Always => true;
+      Inline => true;
 
    -- Spinlock hint. Uses GCC's internal intrinsic, as it additionally
    -- adds and provides a compiler memory barrier/fence.
    PROCEDURE PAUSE
    WITH
-      Inline_Always => true,
+      Inline        => true,
       Import        => true,
       Convention    => Intrinsic,
       External_Name => "__builtin_ia32_pause";

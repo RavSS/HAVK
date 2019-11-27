@@ -18,19 +18,20 @@ IS
    -- exceptions, but instead come directly after them.
    PROCEDURE Remap;
 
+   -- TODO: Very odd GCC glitch where if the optimisation is set to O2, then
+   -- inlining the below functions that contain an `OUTB` instructions cause
+   -- an error where the ISR is trying to call itself (or at least GCC says
+   -- that). It does not occur with the above procedure that only resets
+   -- the master PIC and only that... somehow. Also does not occur
+   -- on O3, O1, O0, etc.
+
    -- Resets the master PIC only.
    PROCEDURE Master_Reset
    WITH
-      Inline_Always => true;
+      Inline => false;
 
-   -- TODO: Very odd GCC glitch where if the optimisation is set to O2, then
-   -- inlining a function that has two `OUTB` instructions causes an error
-   -- where the ISR is trying to call itself (or at least GCC says that).
-   -- It does not occur with the above procedure that only resets the master
-   -- PIC and only that... somehow. Also does not occur on O3, O1, O0, etc.
-   ----------------------------------------------------------------------------
    -- Resets both the master PIC and the slave PIC.
    PROCEDURE Dual_Reset
    WITH
-      Inline        => false;
+      Inline => false;
 END HAVK_Kernel.Interrupts.PIC;

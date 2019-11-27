@@ -1,11 +1,7 @@
 OUTPUT_FORMAT(elf64-x86-64)
 ENTRY(entry)
 STARTUP(entry.o)
-
-/* Aside from changing output format, the script
-/  has not been changed much from the bare bones
-/  example. I have removed some segments, they
-/  did not seem like they were used. */
+_DEFAULT_STACK_SIZE = 65536; /* Match the size in "entry.asm". */
 
 SECTIONS
 {

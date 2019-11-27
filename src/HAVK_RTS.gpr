@@ -135,7 +135,7 @@ LIBRARY PROJECT HAVK_RTS IS
          "-mno-red-zone",
          -- Allows me to place the kernel anywhere. I can also specify
          -- "large" instead of "kernel". Not sure if there is a difference.
-         "-mcmodel=kernel",
+         "-mcmodel=kernel", "-fno-PIC",
          -- No MMX instructions.
          "-mno-mmx",
          -- No SSE instructions.

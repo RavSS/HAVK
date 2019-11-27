@@ -1,19 +1,36 @@
+WITH
+   HAVK_Kernel.User_Input;
+USE
+   HAVK_Kernel.User_Input;
+
 -- This package revolves around the PS/2 keyboard. Anything specific to it
 -- instead of generic PS/2 logic should be here.
 PACKAGE HAVK_Kernel.PS2.Keyboard
 IS
-   -- Handles raised IRQs. Should be inlined directly into the ISR handler.
+   -- Becomes true when either shift key is held down.
+   Shift_State     : boolean := false;
+
+   -- Becomes true when caps lock has been pressed. Inverts on repeat.
+   Caps_Lock_State : boolean := false;
+
+   -- Becomes true when any key is released, after which it becomes false.
+   Break_State     : boolean := false;
+
+   -- Handles the PS/2 keyboard logic for all scancode sets. This should be
+   -- called from the ISR handler so it occurs on an IRQ.
    PROCEDURE Interrupt_Manager
    WITH
-      Inline_Always => true;
+      Global => (In_Out => (Shift_State, Caps_Lock_State, Break_State,
+                            Last_Key_State));
 
+PRIVATE
    -- Jump table that sets the current input record accordingly.
-   PROCEDURE Scancode_Set_2(
-      Scancode     : IN num;
-      Shifted      : IN boolean;
-      Break        : IN boolean)
+   FUNCTION Scancode_Set_2(
+      Scancode : IN num)
+   RETURN key_state
    WITH
-      Inline_Always => true;
+      Global => (Input  => (Shift_State, Caps_Lock_State, Break_State)),
+      Inline => true,
+      Pre    => Scancode <= 16#FF#;
 
-   Current_Shift_State : boolean := false;
 END HAVK_Kernel.PS2.Keyboard;

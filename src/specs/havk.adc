@@ -3,6 +3,9 @@ PRAGMA License(GPL);
 PRAGMA SPARK_Mode(on);
 PRAGMA Normalize_Scalars;
 
+PRAGMA Warnings(GNATprove, off, "subprogram * has no effect",
+   Reason => "Most of these warnings don't know of hardware interactions.");
+
 -- TODO: This GNAT extension is somewhat buggy and can cause GNAT to crash.
 PRAGMA Allow_Integer_Address;
 

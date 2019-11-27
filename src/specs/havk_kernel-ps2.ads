@@ -218,7 +218,7 @@ IS
    -- This should not be called directly and instead the wrappers should be
    -- used. Does not handle all commands, but a majority of them.
    FUNCTION Send(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Port_Type : IN port;
       Byte      : IN num;
       Port_2    : IN boolean;
@@ -227,7 +227,7 @@ IS
 
    -- Issues a controller specific command to the PS/2 controller IO port.
    FUNCTION Send_Controller_Command(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Operation : IN controller_command)
    RETURN boolean;
 
@@ -238,7 +238,7 @@ IS
    -- Issues a keyboard specific command to the PS/2 controller's first data
    -- IO port by default, as the keyboard is often on the first port.
    FUNCTION Send_Keyboard_Command(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Operation : IN keyboard_command;
       Port_2    : IN boolean := false)
    RETURN boolean;
@@ -246,7 +246,7 @@ IS
    -- Issues a mouse specific command to the PS/2 controller's second data
    -- IO port by default, as the mouse is often on the second port.
    FUNCTION Send_Mouse_Command(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Operation : IN mouse_command;
       Port_2    : IN boolean := true)
    RETURN boolean;
@@ -257,7 +257,7 @@ IS
    -- instead returns an arbitrary byte describing the configuration, so that
    -- would cause an error with this function. Disable "Verify" to avoid it.
    FUNCTION Send_Data(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Byte_Data : IN num;
       Port_2    : IN boolean := false;
       Verify    : IN boolean := true)
@@ -265,43 +265,34 @@ IS
 
    -- Receives a response from either one of the two ports.
    FUNCTION Receive(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Port_Type : IN port)
    RETURN response;
 
    -- If the output buffer is full on the controller, then empty it properly.
    PROCEDURE Flush(
-      Object    : IN OUT controller);
-
-   -- Does the proper controller and port tests. Returns true on success.
-   -- Note that port 2 may fail a test and this will still report the overall
-   -- functionality of the PS/2 controller as functional, as port 2 is not
-   -- required outside of mouse input.
-   FUNCTION Test(
-      Object    : IN OUT controller)
-   RETURN boolean;
+      Object    : IN controller);
 
    -- Sets the port device fields in the class object. Returns false on
    -- any errors. Handles port 2 support.
-   FUNCTION Identify_Device(
+   PROCEDURE Identify_Device(
       Object    : IN OUT controller;
-      Port_No   : IN num)
-   RETURN device;
+      Port_2    : IN boolean);
 
    -- Sends the PS/2 configuration in the record to the controller.
    FUNCTION Send_Configuration(
-      Object    : IN OUT controller)
+      Object    : IN controller)
    RETURN boolean;
 
    -- Sends typematic settings to a PS/2 keyboard on either port.
    FUNCTION Send_Typematics(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Port_2    : IN boolean := false)
    RETURN boolean;
 
    -- Sends a preference for a scancode set to a PS/2 keyboard on either port.
    FUNCTION Send_Scancode_Set(
-      Object    : IN OUT controller;
+      Object    : IN controller;
       Port_2    : IN boolean := false)
    RETURN boolean;
 
@@ -349,10 +340,6 @@ PRIVATE
          Delay_Rate         =>      3, -- Largest delay between repeats.
          Zeroed             =>      0
       );
-      -- The last status field indicates the last received status of the
-      -- controller. It is not considered to be the latest and should
-      -- not be used for checking buffer capacity.
-      Last_Status           : status;
       -- Indicates whether or not the PS/2 controller is dual-channel capable.
       -- This does not mean there is a mouse available or if the second device
       -- is a mouse at all.
@@ -368,7 +355,7 @@ PRIVATE
    -- Checks the status register's output buffer indicator and returns true
    -- if it is full and receiving won't cause an error.
    FUNCTION Ready_To_Receive(
-      Object        : IN OUT controller'class)
+      Object        : IN controller'class)
    RETURN boolean
    WITH
       Inline => true;
@@ -376,7 +363,7 @@ PRIVATE
    -- Checks the status register's input buffer indicator and returns true
    -- if it is empty.
    FUNCTION Ready_To_Send(
-      Object        : IN OUT controller'class)
+      Object        : IN controller'class)
    RETURN boolean
    WITH
       Inline => true;

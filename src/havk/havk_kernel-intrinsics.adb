@@ -111,18 +111,18 @@ IS
    PROCEDURE HLT
    IS
    BEGIN
-      Asm("HLT;", Volatile => true);
+      Asm("HLT;", Clobber => "memory", Volatile => true);
    END HLT;
 
    PROCEDURE STI
    IS
    BEGIN
-      Asm("STI;", Volatile => true);
+      Asm("STI;", Clobber => "memory", Volatile => true);
    END STI;
 
    PROCEDURE CLI
    IS
    BEGIN
-      Asm("CLI;", Volatile => true);
+      Asm("CLI;", Clobber => "memory", Volatile => true);
    END CLI;
 END HAVK_Kernel.Intrinsics;

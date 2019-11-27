@@ -71,6 +71,9 @@ EFI_SRC_DIR=$(SRC_DIR)uefi/
 EFI_CRT0=$(EFI_SRC_DIR)crt0-efi-x86_64.o
 EFI_LINK=$(EFI_SRC_DIR)elf_x86_64_efi.lds
 
+# Note that I create two EFI files, but one still has the debug symbols kept
+# in it. For better analyzing, it's wise to use the same optimisation level
+# for both of the bootloader application's files.
 EFI_C_STD=-std=c11 # Intel ASM syntax does not work with GNU-EFI functionality.
 EFI_C_WARN=-Wall -Wextra
 EFI_C_OPT=-nostdlib -fpic -fno-stack-protector -fno-strict-aliasing \
@@ -80,15 +83,6 @@ EFI_C_LIB=-l efi -l gnuefi
 EFI_C_DEF=-D EFI_FUNCTION_WRAPPER -D HAVK_VERSION=L\"$(VERSION)\"
 EFI_C_FLAGS=$(EFI_C_STD) $(EFI_C_WARN) $(EFI_C_OPT) $(EFI_C_INC) \
 	$(EFI_C_LIB) $(EFI_C_DEF)
-
-# Note that I create two EFI files, but one still has the debug symbols kept
-# in it. For better analyzing, it's wise to use the same optimization level
-# for both of the bootloader application's files.
-ifeq ("$(BUILD)", "Debug")
-	EFI_C_OPT+= -Og -ggdb3
-else
-	EFI_C_OPT+= -O2 -g0
-endif
 
 # The offset values below are estimations.
 EFI_TEXT_SECTION_OFFSET=0x3000
@@ -110,7 +104,7 @@ EFI_LD_INC=-L $(LIB_DIR) -T $(EFI_LINK)
 EFI_LD_LIB=-l efi -l gnuefi
 EFI_LD_FLAGS=$(EFI_LD_OPT) $(EFI_LD_INC) $(EFI_CRT0)
 
-GDB_REMOTE_DEBUG_PORT=40404
+GDB_REMOTE_DEBUG_PORT?=40404
 QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) \
 	-d guest_errors -m 1024 -cpu qemu64,check -net none \
 	-no-reboot -no-shutdown
@@ -142,16 +136,22 @@ ESP_SECTOR_SIZE=9550
 # Also control the optimisation here so it's easier to tweak.
 ifeq ("$(BUILD)", "Debug")
 	O?=g
+	EFI_C_OPT+= -ggdb3 -O$(O)
 	GPR_RTS_FLAGS=-we -k -d -O$(O)
 	GPR_KERNEL_FLAGS=-we -k -d -O$(O)
 else
 	O?=2
+	EFI_C_OPT+= -g0 -O$(O)
 	GPR_RTS_FLAGS=-q -vP0 -O$(O)
 	GPR_KERNEL_FLAGS=-q -vP0 -O$(O)
 endif
 
+ifneq ("$(PROVE_FILES)", "")
+	override PROVE_FILES:=-u $(PROVE_FILES)
+endif
+
 define echo
-@echo -e "\033[4;96m          $1\033[0m"
+	@echo -e "\033[4;96m          $1\033[0m"
 endef
 
 .DEFAULT_GOAL: all
@@ -166,8 +166,8 @@ $(BUILD_DIR):
 # build is necessary. This can be resolved.
 $(HAVK_ADAINCLUDE_DIR): | $(BUILD_DIR)
 	@if [ -d "$@" ]; then rm -r $@; fi
-	@mkdir $(HAVK_ADAINCLUDE_DIR)
-	@cp $(HAVK_RUNTIME_DIR)* $(HAVK_ADAINCLUDE_DIR)
+	@mkdir $@
+	@cp $(HAVK_RUNTIME_DIR)* $@
 
 $(EFI_O_FILE): $(EFI_C_FILE) | $(BUILD_DIR)
 	$(call echo, "BUILDING BOOTLOADER TO $(HAVK_BOOTLOADER)")
@@ -241,7 +241,7 @@ qemu: $(HAVK_IMAGE)
 	-drive if=pflash,format=raw,unit=0,\
 	file=$(OVMF_DIR)OVMF_CODE-pure-efi.fd,readonly=on \
 	-drive if=pflash,format=raw,unit=1,\
-	file=$(OVMF_DIR)OVMF_VARS-pure-efi.fd,readonly=on \
+	file=$(OVMF_DIR)OVMF_VARS-pure-efi.fd,readonly=off \
 	-drive index=0,format=raw,media=disk,\
 	file=$<,readonly=off \
 	$(QEMU_FLAGS)
@@ -254,6 +254,8 @@ gdb:
 		-ex "set confirm off" \
 		-ex "set architecture i386:x86-64:intel" \
 		-ex "set max-value-size 10485760" \
+		-ex "set tcp auto-retry on" \
+		-ex "set tcp connect-timeout 300" \
 		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \
 		-ex "continue"
 
@@ -271,6 +273,8 @@ uefi-gdb:
 		-ex "set confirm off" \
 		-ex "set architecture i386:x86-64:intel" \
 		-ex "set max-value-size 10485760" \
+		-ex "set tcp auto-retry on" \
+		-ex "set tcp connect-timeout 300" \
 		-ex "add-symbol-file $(HAVK_BOOTLOADER).debug \
 			$(EFI_TEXT_SECTION) -s .data $(EFI_DATA_SECTION)" \
 		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \
@@ -279,28 +283,30 @@ uefi-gdb:
 
 .PHONY: proof
 proof: $(BUILD_DIR)
-	-@gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) -j 0 -k \
-		--assumptions --pedantic --level=4
+	$(call echo, "PROVING HAVK KERNEL\'S CORRECTNESS")
+
+	@gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) $(PROVE_FILES) -j0 -k \
+		--assumptions --pedantic --cwe --level=4 --mode=all
 
 .PHONY: stats
 stats:
 	$(call echo, "HAVK KERNEL STATISTICS")
 
-	@echo -n "Makefile kernel image size capacity: \
-	$(shell du -sh $(HAVK_KERNEL) \
-		| awk -F '\t' '{print $$1}')"
+	@echo -n "Makefile kernel image size capacity: $(shell du -sh \
+		$(HAVK_KERNEL) | awk -F '\t' '{print $$1}')"
 
 	@echo -e " / $(shell du -sh $(HAVK_PARTITION) \
 		| awk -F '\t' '{print $$1}')\n"
 
-	@cd $(SRC_DIR) && \
-		gnatmetric -P HAVK.gpr -XBuild=$(BUILD) -U --contract-all \
-		--syntax-all --lines-all --lines-spark --complexity-all
+	@cd $(SRC_DIR) && gnatmetric -P HAVK.gpr -XBuild=$(BUILD) -U -eL \
+		--contract-all --syntax-all --lines-all --lines-spark \
+		--complexity-all
 
 .PHONY: clean
-clean: $(BUILD_DIR)
+clean: $(BUILD_DIR) $(HAVK_ADAINCLUDE_DIR)
 	$(call echo, "CLEANING BUILD DIRECTORY $<")
 
-	gprclean -P $(HAVK_RUNTIME) -XBuild=$(BUILD)
-	gprclean -P $(HAVK_PROJECT) -XBuild=$(BUILD)
-	rm -vr $<
+	@gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) --clean
+	@gprclean -P $(HAVK_RUNTIME) -XBuild=$(BUILD) -q
+	@gprclean -P $(HAVK_PROJECT) -XBuild=$(BUILD) -q
+	@rm -vr $<
