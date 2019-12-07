@@ -41,8 +41,8 @@ IS
       Configuration : IN UEFI.arguments)
    RETURN view
    WITH
-      Pre'class => Configuration.Pixels_Per_Scanline >=
-                   Configuration.Horizontal_Resolution;
+      Pre'class  => Configuration.Pixels_Per_Scanline >=
+                    Configuration.Horizontal_Resolution;
 
    -- TODO: Accesses the framebuffer dynamically. This is where my current
    -- knowledge of Ada falters, I have no idea how to add an imported and
@@ -69,11 +69,9 @@ IS
    RETURN pixel
    WITH
       Inline    => true,
-      Pre'class => Red   <= 16#FF#          AND THEN
-                   Green <= 16#FF#          AND THEN
-                   Blue  <= 16#FF#          AND THEN
-                  (Object.Pixel_Format = RGB OR ELSE
-                   Object.Pixel_Format = BGR);
+      Pre'class => Red   <= 16#FF# AND THEN
+                   Green <= 16#FF# AND THEN
+                   Blue  <= 16#FF#;
 
    -- Turns a screen resolution position into a framebuffer position.
    FUNCTION Calculate_Pixel(

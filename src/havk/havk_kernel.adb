@@ -29,14 +29,15 @@ IS
       PRAGMA Debug(Serial_Message); -- Always send it over COM* first.
 
       IF -- Check if the log's information can actually be stored.
-         Information'first >= Logs(Last_Log).Information'first AND
-         THEN Information'last <= Logs(Last_Log).Information'last
+         Information'first >= Logs.Log_List(Logs.Last_Log).Information'first
+         AND THEN
+         Information'last <= Logs.Log_List(Logs.Last_Log).Information'last
       THEN
          FOR I IN Information'range LOOP
-            Logs(Last_Log).Information(I) := Information(I);
+            Logs.Log_List(Logs.Last_Log).Information(I) := Information(I);
          END LOOP;
 
-         Logs(Last_Log).Priority := Priority;
+         Logs.Log_List(Logs.Last_Log).Priority := Priority;
       ELSE
          -- Don't use recursion in case this message also exceeds the length.
          PRAGMA Debug(Debug.Message("[WARNING] | Above log message " &
@@ -45,21 +46,22 @@ IS
          -- Quickly describe why the log's information is missing if I can.
          -- The if-statement check here is so the log information size is
          -- easily configurable in the future. It will be optimised out.
-         IF Logs(Last_Log).Information'length >= 3 THEN
-            Logs(Last_Log).Information := ('C', 'U', 'T',
+         IF Logs.Log_List(Logs.Last_Log).Information'length >= 3 THEN
+            Logs.Log_List(Logs.Last_Log).Information := ('C', 'U', 'T',
                OTHERS => character'val(0));
-            Logs(Last_Log).Priority    := warning;
+            Logs.Log_List(Logs.Last_Log).Priority    := warning;
          END IF;
       END IF;
 
-      IF Last_Log = log_entry_limit'last THEN
+      IF Logs.Last_Log = log_entry_limit'last THEN
          FOR L IN log_entry_limit'first .. log_entry_limit'last - 1 LOOP
-            Logs(L) := Logs(L + 1);
+            Logs.Log_List(L) := Logs.Log_List(L + 1);
          END LOOP;
-         Logs(Last_Log) := ((OTHERS => character'val(0)), trivial); -- Emptied.
-         Last_Log := Last_Log - 1;
+         Logs.Log_List(Logs.Last_Log) := -- Empty the last log's information.
+            ((OTHERS => character'val(0)), trivial);
+         Logs.Last_Log := Logs.Last_Log - 1;
       ELSE
-         Last_Log := Last_Log + 1;
+         Logs.Last_Log := Logs.Last_Log + 1;
       END IF;
    END Log;
 END HAVK_Kernel;

@@ -7,10 +7,9 @@
 
 PACKAGE HAVK_Kernel.Serial
 IS
-   -- A type that contains a few of the COM ports that may be present.
+   -- An arrayu that contains a few of the COM ports that may be present.
    -- I believe only COM1 and COM2 are actually guaranteed on the hardware.
-   TYPE      COM       IS(   COM4,    COM2,    COM3,    COM1);
-   FOR       COM      USE(16#2E8#, 16#2F8#, 16#3E8#, 16#3F8#);
+   COM : CONSTANT nums(1 .. 4) := (16#3F8#, 16#2F8#, 16#3E8#, 16#2E8#);
 
    -- 2 bit values that control the length of the inputted words (data).
    -- Reminder that ASCII only needs 7 bits.
@@ -86,7 +85,7 @@ IS
    -- An serial port object that contains the port address and more.
    TYPE serial_connection IS TAGGED RECORD
       -- 16-bit IO address for the COM port.
-      Port               : COM;
+      Port               : num RANGE 16#2E8# .. 16#3F8#;
       -- The baud rate used by the connection upon initialisation.
       Baud_Rate          : num RANGE 50 .. 115200;
       -- For the convenience of the data receiver, especially when just

@@ -2,7 +2,7 @@
 #### ( [Version Major]-[Version Minor]-[Patch] - ISO 8601 Date at UTC +13:00 )
 
 -------------------------
-### Tasklist - 2019-11-27
+### Tasklist - 2019-12-07
 - Very specific resolutions like 1366x768 are bugged and unusable.
 - Unoptimised `Object.Screen(Index, Pixel)` function as I cannot figure out
 how to add a non-local address aliased array into a tagged record, or
@@ -10,8 +10,6 @@ any other optimal solution. Making it non-primitive doesn't help at
 removing the overhead.
 - Reorganise the bootloader arguments structure and provide
 a consistent format that does away with some of UEFI's oddities.
-- Make the codebase properly compliant with SPARK. If there's time, attempt
-to do the same for the runtime system.
 - Potentially stop using NASM and transition to GAS, as it is included
 with GNAT and is a GNU tool. Less dependencies are usually nicer to have.
 - Create a CPUID package so things like 1-GiB pages can be used without fear.
@@ -24,21 +22,23 @@ the "Final" build is compiled with the former, as debug functionality is
 irrelevant to that build's purpose.
 - After implementing more OS functionality, implement LAPIC and IOAPIC
 features by parsing some of the ACPI tables. Required for SMT support.
-- Create a script that compiles the latest version of `gnatprove` so
-the tool can process packages with "enum_rep" attribute usage, or remove
-usages of them and replace them with more sensible types.
+- Create a page-frame allocator and a kernel `malloc()` utility so I
+can begin to use heap/dynamic memory.
 
 -------------------------
 ## UPCOMING - 20??-??-??
 ### Overall Changes
 - Increased PS/2 controller error-checking capabilities while adding
 support for potential mouse input handling.
-- New global `Log()` procedure replaces old debug pragmas. Arbitrary 
-information can now be stored in the kernel space for checking the kernels 
+- New global `Log()` procedure replaces old debug pragmas. Arbitrary
+information can now be stored in the kernel space for checking the kernels
 status or for seeing if there has been any errors raised.
-- Numerous changes that resolve SPARK analysis issues.
+- Numerous changes that resolve SPARK flow analysis issues. SPARK mode has
+been disabled in areas where assembly is used or address manipulation occurs
+for low-level logic, but other than that, it is enabled everywhere and all
+checks are satisified to my knowledge.
 - Solved PS/2 keyboard issue, with the shift state now properly setting
-and resetting.
+and resetting, while the caps-lock works as intended.
 
 -------------------------
 ## 00-09-00 - 2019-11-15
@@ -83,18 +83,18 @@ default ZFP RTS's packages.
 be used. This opens the way for object oriented development.
 - Refactored the entire UEFI bootloader into separate functions.
 - When booting HAVK, the user no longer has to guess the SFS handle of their
-HAVK boot drive. The choice will be added back in to boot from a separate 
+HAVK boot drive. The choice will be added back in to boot from a separate
 drive that doesn't contain both the bootloader and the kernel file.
 - HAVK can now tell how it was booted, either via UEFI or BIOS.
 - The overflow mode has been changed from ELIMINATED to MINIMIZED to resolve
-an issue with the bignum package, so e.g. strings can now be returned from 
+an issue with the bignum package, so e.g. strings can now be returned from
 functions as the problem is no longer present.
 - Debug messages are now sent over serial (RS266). This creates
 the possibility for bare metal debugging. At the moment, it just sends
 progress messages.
 - ASCII numerical characters in strings can now be scanned and read
 into proper number types due to an expansion of the runtime system.
-- Trimmed down read-me and made it more to the point.
+- Trimmed down README.md and made it more to the point.
 
 -------------------------
 ## 00-07-00 - 2019-06-16
@@ -204,9 +204,9 @@ HAVK can now utilize keyboard input on all (real) systems, not just QEMU.
 - Another restructure of Makefile system, now with two more Makefiles that
 target the legacy version and the now current platform for HAVK.
 It is not very stable right now, so the Makefiles will have to be cleaned up.
-### Depreciation
+### Deprecated
 - The x86 version of HAVK that was made with C and utilized BIOS to boot
-has been depreciated. The last thing that was being worked on was a frame
+has been deprecated. The last thing that was being worked on was a frame
 allocator for the memory manager. A language translation from C to Ada
 is now the next goal for the kernel as it is now.
 

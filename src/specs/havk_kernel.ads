@@ -35,11 +35,6 @@ IS
       warning, -- Self-explanatory. All warnings should be issued with this.
       fatal);  -- The most serious level. Only use for actual errors.
 
-   -- Stores a log in the kernel. Default log priority is trivial.
-   PROCEDURE Log(
-      Information : IN string;
-      Priority    : IN urgency := trivial);
-PRIVATE
    -- This controls the maximum amount of log entries. Note that this is
    -- static, it does not use heap allocation. This reserves around 30 KiB as
    -- of now for logs.
@@ -49,10 +44,32 @@ PRIVATE
    TYPE log_information IS RECORD
       -- String description of the log's meaning. 150 characters max as of now.
       Information : string(1 .. 150) := (OTHERS => character'val(0));
-      -- A field hinting at the type and context of the log.
+      -- A field hinting at the context of the log.
       Priority    : urgency          := trivial;
    END RECORD;
 
-   Logs     : ARRAY(log_entry_limit) OF log_information;
-   Last_Log : log_entry_limit := log_entry_limit'first;
+   -- An array type that indicates how logs are indexed.
+   TYPE log_entries IS ARRAY(log_entry_limit) OF log_information;
+
+   -- The main log structure.
+   TYPE log_collection IS RECORD
+      -- A list of the log entries.
+      Log_List : log_entries;
+      -- A variable that indicates what the current log index is.
+      Last_Log : log_entry_limit := log_entry_limit'first;
+   END RECORD;
+
+   -- This is where the logs are stored. I've kept it to only one collection
+   -- as of now to avoid complicating things.
+   Logs : log_collection;
+
+   -- Stores a log in the main kernel log collection variable.
+   -- Default log priority is "trivial".
+   PROCEDURE Log(
+      Information : IN string;
+      Priority    : IN urgency := trivial)
+   WITH
+      Global => (In_Out => Logs),
+      Pre    => Information'last <= Logs.Log_List(1).Information'last;
+
 END HAVK_Kernel;

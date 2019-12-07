@@ -16,7 +16,7 @@ IS
       -- Green will always be in-between red and blue (for now).
       Mid_Byte : CONSTANT num RANGE 0 .. 16#FF00# := SHL(Green, 8) AND
          16#FF00#;
-      Value    : num := 0;
+      Value    : num := Mid_Byte; -- Green on error.
    BEGIN
       IF    Object.Pixel_Format = BGR THEN
          Value := SHL(Red,  16) OR Mid_Byte OR Blue;
@@ -168,6 +168,14 @@ IS
    FUNCTION Get_Display(
       Configuration : IN UEFI.arguments)
    RETURN view        IS
+      -- I'll assume a few things about what the UEFI GOP implementation
+      -- returned to HAVK. Most of them are fairly sensible, while others
+      -- are limitations.
+
+      -- TODO: For now, we only support these two pixel formats.
+      PRAGMA Assume(Configuration.Pixel_Format = RGB OR
+         ELSE Configuration.Pixel_Format = BGR);
+
       New_View      : CONSTANT view :=
       (
          Framebuffer_Address  => Configuration.Framebuffer_Address,

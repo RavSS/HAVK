@@ -2,7 +2,7 @@
 -- inline assembly instructions for whatever random purpose.
 PACKAGE HAVK_Kernel.Intrinsics
 IS
-   -- Shift a value to the left (<<). Alternate to `Shift_Left()`.
+   -- Shift a value to the left (<<). Alternative to `Shift_Left()`.
    FUNCTION SHL(
       Value  : IN num;
       Shifts : IN num)
@@ -11,7 +11,7 @@ IS
       Inline => true,
       Pre    => Shifts <= 63;
 
-   -- Shift a value to the right (>>). Alternate to `Shift_Right()`.
+   -- Shift a value to the right (>>). Alternative to `Shift_Right()`.
    FUNCTION SHR(
       Value  : IN num;
       Shifts : IN num)
@@ -34,7 +34,7 @@ IS
       Inline => true,
       Pre    => Bit <= 63;
 
-   -- Outputs a byte to an IO port.
+   -- Outputs/writes a byte to an IO port.
    PROCEDURE OUTB(
       Port   : IN num;
       Value  : IN num)
@@ -42,14 +42,15 @@ IS
       Inline => true,
       Pre    => Port <= 16#FFFF# AND THEN Value <= 16#FF#;
 
-   -- Reads a byte from an IO port.
+   -- Inputs/reads a byte from an IO port.
    FUNCTION INB(
       Port   : IN num)
    RETURN num
    WITH
-      Inline => true,
-      Pre    => Port       <= 16#FFFF#,
-      Post   => INB'result <=   16#FF#;
+      Volatile_Function => true,
+      Inline            => true,
+      Pre               => Port       <= 16#FFFF#,
+      Post              => INB'result <=   16#FF#;
 
    -- Halts the CPU.
    PROCEDURE HLT

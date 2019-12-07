@@ -18,10 +18,7 @@ IS
 
    -- Handles the PS/2 keyboard logic for all scancode sets. This should be
    -- called from the ISR handler so it occurs on an IRQ.
-   PROCEDURE Interrupt_Manager
-   WITH
-      Global => (In_Out => (Shift_State, Caps_Lock_State, Break_State,
-                            Last_Key_State));
+   PROCEDURE Interrupt_Manager;
 
 PRIVATE
    -- Jump table that sets the current input record accordingly.
@@ -29,7 +26,6 @@ PRIVATE
       Scancode : IN num)
    RETURN key_state
    WITH
-      Global => (Input  => (Shift_State, Caps_Lock_State, Break_State)),
       Inline => true,
       Pre    => Scancode <= 16#FF#;
 

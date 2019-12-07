@@ -67,7 +67,7 @@ entry:
 	XOR R13, R13
 	XOR R14, R14
 	XOR R15, R15
-	XORPS XMM0, XMM0 ; TODO: Does XMM0 hold useful information from UEFI?
+	XORPD XMM0, XMM0 ; TODO: Does XMM0 hold useful information from UEFI?
 
 	; Set the x87 FPU control word.
 	SUB RSP, 2 ; Make room for the FCW register (16-bits).
@@ -92,11 +92,12 @@ entry:
 	EXTERN havk
 	CALL havk
 
-	; HAVK should never exit like this, so this should never be reached.
-	; It should handle a shutdown properly.
-
-	.spin: ; Endless loop.
-		CLI
+	; HAVK should not exit like this in a version at or above V00-01-00.
+	; It should handle a shutdown properly instead.
+	MOV AL, 0xFE ; Command byte for the PS/2 controller to reset the CPU.
+	.shutdown_spin: ; Endless loop. Reset the CPU twice if required.
+		OUT 0x64, AL ; 8042 PS/2 controller's CPU reset line pulsed.
 		HLT
-		JMP .spin
+		CLI ; The next halt will be forever (unless an NMI is raised).
+		JMP .shutdown_spin
 	.end:

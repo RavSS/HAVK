@@ -3,10 +3,16 @@ PRAGMA License(GPL);
 PRAGMA SPARK_Mode(on);
 PRAGMA Normalize_Scalars;
 
+-- TODO: What's the proper way to tell `gnatprove` of hardware effects without
+-- setting variables as volatile with async_* or effective_* aspects?
 PRAGMA Warnings(GNATprove, off, "subprogram * has no effect",
    Reason => "Most of these warnings don't know of hardware interactions.");
 
--- TODO: This GNAT extension is somewhat buggy and can cause GNAT to crash.
+PRAGMA Warnings(GNATprove, off, "*implementation-defined*",
+   Reason => "We're only using GNAT on x86-64. This likely doesn't matter.");
+
+-- TODO: In the future, make the System.Address type public instead so
+-- this does not have to be used.
 PRAGMA Allow_Integer_Address;
 
 PRAGMA Assertion_Policy(CHECK);

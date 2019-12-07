@@ -28,7 +28,7 @@ IS
 
    -- Pads out the fixed string.
    FUNCTION Key_String_Format(
-      Unformatted       : IN string)
+      Unformatted   : IN string)
    RETURN key_string
    WITH
       Inline => true,
@@ -38,13 +38,19 @@ IS
    FUNCTION Get_Key
    RETURN character
    WITH
-      Inline => true;
+      Inline => true,
+      Post   => Get_Key'result = Last_Key_State.ASCII OR ELSE
+                Get_Key'result = Last_Key_State.ASCII_Shifted;
 
    -- Shortcut function to retrieve the name as a string of the key pressed.
    FUNCTION Get_Key_Name
    RETURN string
    WITH
-      Inline => true;
+      Inline => true,
+      Post   => Get_Key_Name'result'first = key_string'first AND THEN
+                Get_Key_Name'result'last  = key_string'last  AND THEN
+               (Get_Key_Name'result = Last_Key_State.Name     OR ELSE
+                Get_Key_Name'result = Last_Key_State.Name_Shifted);
 
    -- Returns true if the last key pressed is printable/visible.
    FUNCTION Key_Is_Visible

@@ -4,21 +4,18 @@ WITH
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 USE
+   HAVK_Kernel.UEFI,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 
 PACKAGE HAVK_Kernel.Initialise
-WITH
-   SPARK_Mode => off -- See paging package specification ("enum_rep" issue).
 IS
    -- Prepares the descriptor tables, which is necessary for interrupts.
    PROCEDURE Descriptor_Tables;
 
    -- Identity maps the kernel's address space. Takes in an argument
    -- for the bootloader arguments structure passed to the kernel.
-   PROCEDURE Default_Page_Layout(
-      Bootloader : IN UEFI.arguments;
-      Map        : IN UEFI.memory_map);
+   PROCEDURE Default_Page_Layout;
 
    -- Draws a grid to the screen as an initial test.
    PROCEDURE Grid_Test(
@@ -33,6 +30,15 @@ IS
    PROCEDURE Font_Test(
       Terminal   : IN OUT textbox);
 
+   -- Waits for a key to be inputted that is different from the old key
+   -- specified as an argument.
+   PROCEDURE Wait_For_New_Key(
+      Terminal : IN OUT textbox;
+      Display  : IN view;
+      Old_Key  : IN character;
+      New_Key  : IN character;
+      Message  : IN string);
+
    -- Outputs the character from the input handler to the textbox.
    PROCEDURE Input_Key_Test(
       Terminal   : IN OUT textbox;
@@ -41,10 +47,11 @@ IS
    -- Prints the amount of seconds passed (since call) to a textbox endlessly.
    PROCEDURE Seconds_Count(
       Terminal   : IN OUT textbox;
-      Display    : IN view)
-   WITH
-      No_Return     => true,
-      Inline_Always => true;
+      Display    : IN view);
+
+   -- Show arbitrary information about the memory map and its descriptors.
+   PROCEDURE Memory_Map_Info(
+      Terminal : IN OUT textbox);
 
    -- Initialises the PS/2 controller for keyboard input purposes (as of now).
    PROCEDURE PS2_Input;
@@ -52,7 +59,10 @@ IS
    -- Retrieves the date and time in ISO 8601 format of when the current
    -- running version of the kernel was compiled and built.
    FUNCTION HAVK_Build_Datetime
-   RETURN string;
+   RETURN string
+   WITH
+      Post => HAVK_Build_Datetime'result'first =  1 AND THEN
+              HAVK_Build_Datetime'result'last  = 19; -- "YYYY-MM-DDTHH:MM:SS"
 
    -- Initialises any debug utilities.
    PROCEDURE Debugger;
@@ -60,11 +70,16 @@ IS
    -- Returns the bootloader arguments structure/record. Only handles UEFI and
    -- any changes must be reflected across HAVK's kernel and HAVK's bootloader.
    FUNCTION Get_Arguments
-   RETURN UEFI.arguments;
+   RETURN arguments
+   WITH
+      Post => Get_Arguments'result.Pixels_Per_Scanline >=
+              Get_Arguments'result.Horizontal_Resolution;
 
    -- Returns a UEFI-style memory map.
    FUNCTION Get_Memory_Map
-   RETURN UEFI.memory_map;
+   RETURN memory_map
+   WITH
+      Post => Get_Memory_Map'result'length <= 10000; -- See the body for why.
 
    -- The default paging layout.
    Kernel_Paging_Layout : Paging.page_layout;

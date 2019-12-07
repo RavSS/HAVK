@@ -14,7 +14,7 @@ IS
    Debugger : CONSTANT serial_connection :=
    (
       -- Use COM1 for debugging purposes.
-      Port                    => COM1,
+      Port                    => COM(1),
       -- Going with a very safe baud rate.
       Baud_Rate               => 9600,
       -- Assume Windows line enders (CRLF), which should stay compatible

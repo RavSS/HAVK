@@ -17,7 +17,8 @@ IS
       PRAGMA Warnings(off, "*length depends on a discriminant");
       PRAGMA Warnings(off, "comes too early and was moved down");
       -- Holds the data for the textbox. First dimension is the line/row (Y).
-      Data              : textbox_data(0 .. Height, 0 .. Width);
+      Data              : textbox_data(0 .. Height, 0 .. Width) :=
+         (OTHERS => (OTHERS => character'val(0)));
       -- The X index of the text cursor, which is the column (textbox width).
       Current_X_Index   : num   := 0;
       -- The Y index of the text cursor, which is the row (textbox height).
@@ -42,12 +43,7 @@ IS
    PROCEDURE Print(
       Object  : IN OUT textbox;
       Message : IN string;
-      Centre  : IN boolean := false)
-   WITH
-      Pre'class => Message'length          /= 0 AND THEN
-                  (IF Centre                        THEN
-                   Object.Data'last(2) / 2 /= 0 AND THEN
-                   Message'length      / 2 /= 0);
+      Centre  : IN boolean := false);
 
    -- Moves the cursor down a row while handling correct positioning.
    PROCEDURE Newline(

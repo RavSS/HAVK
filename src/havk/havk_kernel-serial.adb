@@ -4,8 +4,6 @@ USE
    HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Serial
-WITH
-   SPARK_Mode => off -- "enum_rep" is utilised. Enable SPARK later.
 IS
    PROCEDURE Interface_Initialise(
       Object                  : IN serial_connection)
@@ -28,44 +26,41 @@ IS
       -- Only a baud rate between 50 to 115200 is supported.
       Divisor_Latch_Value     : CONSTANT num RANGE 1 .. 2304 :=
          115200 / Object.Baud_Rate;
-
-      -- Base port number. Offsets from it indicate different registers
-      Port_Base               : CONSTANT num := Object.Port'enum_rep;
    BEGIN
       -- Disable interrupt handling of the connection.
-      OUTB(Port_Base + 1, Interrupt_Settings_Byte);
+      OUTB(Object.Port + 1, Interrupt_Settings_Byte);
 
       -- Set the divisor latch access bit to true for the purposes of setting
       -- the baud rate. Offsets +0 and +1 are now used for setting the divisor.
-      OUTB(Port_Base + 3, 16#80#);
+      OUTB(Object.Port + 3, 16#80#);
 
       -- Send the low byte and then the high byte.
-      OUTB(Port_Base + 0,     Divisor_Latch_Value     AND 16#FF#);
-      OUTB(Port_Base + 1, SHR(Divisor_Latch_Value, 8) AND 16#FF#);
+      OUTB(Object.Port + 0,     Divisor_Latch_Value     AND 16#FF#);
+      OUTB(Object.Port + 1, SHR(Divisor_Latch_Value, 8) AND 16#FF#);
 
       -- Apply the line control settings.
-      OUTB(Port_Base + 3, Line_Settings_Byte);
+      OUTB(Object.Port + 3, Line_Settings_Byte);
 
       -- TODO: Make records for these.
-      OUTB(Port_Base + 2, 16#C7#); -- 11000111 -  FIFO control register.
-      OUTB(Port_Base + 4, 16#0B#); --     1011 - modem control register.
+      OUTB(Object.Port + 2, 16#C7#); -- 11000111 -  FIFO control register.
+      OUTB(Object.Port + 4, 16#0B#); --     1011 - modem control register.
    END Interface_Initialise;
 
    PROCEDURE Write(
-      Object      : IN serial_connection;
-      Data        : IN character)
+      Object     : IN serial_connection;
+      Data       : IN character)
    IS
    BEGIN
       WHILE NOT Object.Get_Status.Empty_Buffer LOOP
          PAUSE; -- Wait for the buffer to become empty.
       END LOOP;
       -- Send data.
-      OUTB(Object.Port'enum_rep, character'pos(Data));
+      OUTB(Object.Port, character'pos(Data));
    END Write;
 
    PROCEDURE Print(
-      Object      : IN serial_connection;
-      Data        : IN string)
+      Object     : IN serial_connection;
+      Data       : IN string)
    IS
    BEGIN
       FOR C IN Data'range LOOP
@@ -76,17 +71,27 @@ IS
    END Print;
 
    FUNCTION Get_Status(
-      Object      : IN serial_connection)
+      Object     : IN serial_connection)
    RETURN line_status_register IS
-      Status_Port : CONSTANT num := Object.Port'enum_rep + 5;
-      Status_Byte : CONSTANT num RANGE 0 .. 16#FF# := INB(Status_Port);
-      Status      : CONSTANT line_status_register
+      Error_Text : CONSTANT string := " {ERROR} ";
+      Status     : CONSTANT line_status_register
       WITH
          Import     => true,
          Convention => Ada,
          Size       => 8,
-         Address    => Status_Byte'address;
+         Address    => INB(Object.Port + 5)'address;
    BEGIN
+      IF -- Output the error text if something has gone wrong.
+              Status.Error_Detected OR
+         ELSE Status.Data_Error     OR
+         ELSE Status.Data_Lost      OR
+         ELSE Status.Incomplete
+      THEN
+         FOR I IN Error_Text'range LOOP
+            OUTB(Object.Port, character'pos(Error_Text(I)));
+         END LOOP;
+      END IF; -- Continue regardless.
+
       RETURN Status;
    END Get_Status;
 END HAVK_Kernel.Serial;

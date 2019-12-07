@@ -10,28 +10,47 @@ USE
    HAVK_Kernel.Exceptions;
 
 PACKAGE BODY HAVK_Kernel.Paging
-WITH
-   SPARK_Mode => off -- See the package specification for the "enum_rep" issue.
 IS
    FUNCTION Align(
       Address   : IN num;
-      Alignment : IN page_frame_variant :=  page;
+      Alignment : IN page_frame_variant :=  Page;
       Round_Up  : IN boolean            := false)
    RETURN num     IS
-      Remnant   : CONSTANT num := Address MOD Alignment'enum_rep;
-   BEGIN
-      IF Remnant /= 0 THEN
-         RETURN (IF Round_Up THEN Address + Remnant ELSE Address - Remnant);
+   (
+      IF NOT Round_Up THEN
+         Address - ((Alignment + (Address MOD Alignment)) MOD Alignment)
       ELSE
-         RETURN Address;
-      END IF;
-   END Align;
+         Address + ((Alignment - (Address MOD Alignment)) MOD Alignment)
+   );
+
+   FUNCTION Get_Level_Pointer(
+      Object    : IN page_layout;
+      Level     : IN num;
+      Offset_1  : IN page_mask;
+      Offset_2  : IN page_mask)
+   RETURN num IS
+   (  -- Bits 11 to 0 are zero for page structure level addresses regardless
+      -- of page size. The rest of the value should have its least
+      -- significant size zeroed according to a precondition contract.
+      IF    Level = 1 THEN
+         SHR(Object.L1(Offset_1, Offset_2)'address - Kernel_Virtual_Base, 12)
+            AND 16#FFFFFFFFFF#
+      ELSIF Level = 2 THEN
+         SHR(Object.L2(Offset_1, Offset_2)'address - Kernel_Virtual_Base, 12)
+            AND 16#FFFFFFFFFF#
+      ELSIF Level = 3 THEN
+         SHR(Object.L3(Offset_1, Offset_2)'address - Kernel_Virtual_Base, 12)
+            AND 16#FFFFFFFFFF#
+      ELSE 0 -- Pointer to null address on precondition failure.
+   )
+   WITH
+      SPARK_Mode => off; -- Address attributes used in pointer calculations.
 
    PROCEDURE Map_Address(
       Object           : IN OUT page_layout;
       Virtual_Address  : IN num;
       Physical_Address : IN num;
-      Page_Size        : IN page_frame_variant :=  page;
+      Page_Size        : IN page_frame_variant :=  Page;
       Present          : IN boolean            :=  true;
       Write_Access     : IN boolean            := false;
       User_Access      : IN boolean            := false;
@@ -43,46 +62,44 @@ IS
       -- Make sure to see "Figure 5-17. 4-Kbyte Page Translation-Long Mode"
       -- in the AMD64 system programming manual before you touch anything.
 
+      -- The aligned (virtual) address to be mapped.
+      Address          : CONSTANT num := Align(Virtual_Address, Page_Size);
+
       -- Bits 47 to 39. Directory map index.
-      L4_Offset        : CONSTANT page_mask := SHR(Virtual_Address, 39)
+      L4_Offset        : CONSTANT page_mask := SHR(Address, 39)
          AND page_mask'last;
 
       -- Bits 38 to 30. Directory pointer table index.
-      L3_Offset        : CONSTANT page_mask := SHR(Virtual_Address, 30)
+      L3_Offset        : CONSTANT page_mask := SHR(Address, 30)
          AND page_mask'last;
 
       -- Bits 29 to 21. Directory table index.
-      L2_Offset        : CONSTANT page_mask := SHR(Virtual_Address, 21)
+      L2_Offset        : CONSTANT page_mask := SHR(Address, 21)
          AND page_mask'last;
 
       -- Bits 20 to 12. Page table index.
-      L1_Offset        : CONSTANT page_mask := SHR(Virtual_Address, 12)
+      L1_Offset        : CONSTANT page_mask := SHR(Address, 12)
          AND page_mask'last;
 
-      -- Bits 11 to 0 are presumed zero for directory pointer table addresses.
+      -- Points to a page directory pointer table.
       L3_Pointer       : CONSTANT num RANGE 0 .. 16#FFFFFFFFFF# :=
-         SHR(num(Object.L3(L4_Offset, L3_Offset)'address) -
-            Kernel_Virtual_Base, 12)
-         AND 16#FFFFFFFFFF#;
+         Object.Get_Level_Pointer(3, L4_Offset, L3_Offset);
 
-      -- Bits 11 to 0 are presumed zero for directory table addresses.
+      -- Points to a page directory table.
       L2_Pointer       : CONSTANT num RANGE 0 .. 16#FFFFFFFFFF# :=
-         SHR(num(Object.L2(L3_Offset, L2_Offset)'address) -
-            Kernel_Virtual_Base, 12)
-         AND 16#FFFFFFFFFF#;
+         Object.Get_Level_Pointer(2, L3_Offset, L2_Offset);
 
-      -- Bits 11 to 0 are presumed zero for page table addresses.
+      -- Points to a page table.
       L1_Pointer       : CONSTANT num RANGE 0 .. 16#FFFFFFFFFF# :=
-         SHR(num(Object.L1(L2_Offset, L1_Offset)'address) -
-            Kernel_Virtual_Base, 12)
-         AND 16#FFFFFFFFFF#;
+         Object.Get_Level_Pointer(1, L2_Offset, L1_Offset);
 
-      -- Bits 11 to 0 are presumed zero for physical page frame addresses
-      -- when the page size is the standard 4 KiB.
+      -- Points to a physical frame, regardless of page frame size.
       L0_Frame         : CONSTANT num RANGE 0 .. 16#FFFFFFFFFF# :=
-         SHR(Physical_Address,   12)
-         AND 16#FFFFFFFFFF#;
+         SHR(Align(Physical_Address, Page_Size), 12) AND 16#FFFFFFFFFF#;
    BEGIN
+      -- TODO: Account for CPU vulnerabilities by removing the pointer or frame
+      -- address when a page structure is marked as not present. Set to null.
+
       Object.L4(L4_Offset).Pointer                 := L3_Pointer;
       Object.L4(L4_Offset).Present                 := Present;
       Object.L4(L4_Offset).Write_Access            := Write_Access;
@@ -94,11 +111,11 @@ IS
       Object.L3(L4_Offset, L3_Offset).User_Access  := User_Access;
       Object.L3(L4_Offset, L3_Offset).NX           := NX;
 
-      IF Page_Size /= giant_page THEN
+      IF Page_Size /= Giant_Page THEN
          Object.L3(L4_Offset, L3_Offset).Pointer   := L2_Pointer;
       ELSE
-         -- Bits 20 to 0 are presumed zero for physical page frame addresses
-         -- when the page size is 2 MiB.
+         -- Bits 20 to 0 are zero for physical page frame addresses when the
+         -- page size is 2 MiB.
          Object.L3(L4_Offset, L3_Offset).Pointer   := L0_Frame;
          -- Just pretend that this record field is named "Giant" instead.
          Object.L3(L4_Offset, L3_Offset).Huge      := true;
@@ -110,11 +127,11 @@ IS
       Object.L2(L3_Offset, L2_Offset).User_Access  := User_Access;
       Object.L2(L3_Offset, L2_Offset).NX           := NX;
 
-      IF Page_Size /= huge_page THEN
+      IF Page_Size /= Huge_Page THEN
          Object.L2(L3_Offset, L2_Offset).Pointer   := L1_Pointer;
       ELSE
-         -- Bits 29 to 0 are presumed zero for physical page frame addresses
-         -- when the page size is 1 GiB.
+         -- Bits 29 to 0 are zero for physical page frame addresses when the
+         -- page size is 1 GiB.
          Object.L2(L3_Offset, L2_Offset).Pointer   := L0_Frame;
          Object.L2(L3_Offset, L2_Offset).Huge      := true;
          RETURN;
@@ -132,7 +149,7 @@ IS
       Virtual_Address  : IN num;
       Physical_Address : IN num;
       Size             : IN num;
-      Page_Size        : IN page_frame_variant :=  page;
+      Page_Size        : IN page_frame_variant :=  Page;
       Present          : IN boolean            :=  true;
       Write_Access     : IN boolean            := false;
       User_Access      : IN boolean            := false;
@@ -143,8 +160,8 @@ IS
    BEGIN
       FOR P IN 0 .. Pages LOOP
          Object.Map_Address(
-            Virtual_Address  + Page_Size'enum_rep * P,
-            Physical_Address + Page_Size'enum_rep * P,
+            Virtual_Address  + Page_Size * P,
+            Physical_Address + Page_Size * P,
             Page_Size    =>    Page_Size,
             Present      =>      Present,
             Write_Access => Write_Access,
@@ -156,17 +173,18 @@ IS
    -- Took this function's equation from the UEFI macro `EFI_SIZE_TO_PAGES()`.
    -- Not sure if I have adapted it properly for the larger page sizes.
    FUNCTION Size_To_Pages(
-      Size          : IN num;
-      Alignment     : IN page_frame_variant := page)
-   RETURN num         IS
-      Extra_Page    : CONSTANT num := Size AND Alignment'enum_rep;
-      Pages         : num;
+      Size             : IN num;
+      Alignment        : IN page_frame_variant := Page)
+   RETURN num            IS
+      Extra_Page       : CONSTANT num := Size AND Alignment;
+      Pages            : num;
    BEGIN
       -- Read the manuals to see which lower bits need to be zeroed.
       CASE Alignment IS
-         WHEN       page => Pages := SHR(Size, 12);
-         WHEN  huge_page => Pages := SHR(Size, 21);
-         WHEN giant_page => Pages := SHR(Size, 30);
+         WHEN       Page => Pages := SHR(Size, 12);
+         WHEN  Huge_Page => Pages := SHR(Size, 21);
+         WHEN Giant_Page => Pages := SHR(Size, 30);
+         WHEN     OTHERS => Pages := SHR(Size, 12); -- Precondition failure.
       END CASE;
 
       IF Extra_Page /= 0 THEN
@@ -180,9 +198,11 @@ IS
    -- Avoid inlining this, or else it makes it harder to pick up on weird
    -- stack smash failure calls.
    PROCEDURE Load(
-      Object        : IN page_layout)
+      Object           : IN page_layout)
+   WITH
+      SPARK_Mode => off -- Assembly is used to load the page structure.
    IS
-      Structure     : CONSTANT System.Address := Object.L4'address -
+      Structure        : CONSTANT System.Address := Object.L4'address -
          System'To_Address(Kernel_Virtual_Base);
    BEGIN
       Asm(
@@ -193,14 +213,16 @@ IS
    END Load;
 
    PROCEDURE Page_Fault_Handler(
-      Error_Code    : IN num)
+      Error_Code       : IN num)
+   WITH
+      SPARK_Mode => off -- Assembly is used to get the page fault address.
    IS
       Fault_Address : System.Address;
 
       -- The below conditionals describe why the page fault was raised.
       -- READ: https://wiki.osdev.org/Exceptions#Page_Fault
 
-      Present_Field : CONSTANT string :=
+      Present_Field    : CONSTANT string :=
       (
          IF BT(Error_Code, 0) THEN
             "Page-protection violation, "
@@ -208,7 +230,7 @@ IS
             "Page not present, "
       );
 
-      Write_Field   : CONSTANT string :=
+      Write_Field      : CONSTANT string :=
       (
          IF BT(Error_Code, 1) THEN
             "occurred during write."

@@ -7,13 +7,6 @@
 -- page map covers 256 TiB (48 bits).
 
 PACKAGE HAVK_Kernel.Paging
-WITH
-   -- The version of `gnatprove` supplied with GNAT GPL/CE 2019 had its last
-   -- update at 2019-05-17, but support for "enum_rep" only made it in a commit
-   -- which came just a few days later. Unfortunately, this means "enum_rep" is
-   -- a violation of SPARK for the current version. I don't think there's any
-   -- way to ignore legality rule errors.
-   SPARK_Mode => off
 IS
    -- READ: https://wiki.osdev.org/Page_Tables#48-bit_virtual_address_space
    -- See "Figure 5-1. Virtual to Physical Address Translation-Long Mode"
@@ -25,14 +18,10 @@ IS
    -- 4 kibibytes. Huge pages are 2 mebibytes and "giant" (as I call them)
    -- pages are 1 gibibyte, where only the latter may not be supported by the
    -- processor. It can be checked in CPUID's output (bit 26 of EAX).
-   TYPE page_frame_variant IS(
-      page,        -- 4 KiB.
-      huge_page,   -- 2 MiB.
-      giant_page); -- 1 GiB. Requires explicit CPU support.
-   FOR page_frame_variant USE(
-      page       =>     16#1000#,
-      huge_page  =>   16#200000#,
-      giant_page => 16#40000000#);
+   SUBTYPE page_frame_variant IS num RANGE 16#1000# .. 16#40000000#;
+   Page       : CONSTANT num := 16#1000#;     -- 4 KiB.
+   Huge_Page  : CONSTANT num := 16#200000#;   -- 2 MiB.
+   Giant_Page : CONSTANT num := 16#40000000#; -- 1 GiB. Requires CPU support.
 
    -- This record contains the structure for a map entry.
    TYPE map_entry IS RECORD
@@ -64,7 +53,7 @@ IS
       -- right shift of 12.
       Pointer      : num RANGE 0 .. 16#FFFFFFFFFF# := 0;
       -- Bits that are available for anything.
-      Available_2  : num RANGE 0 .. 1023;
+      Available_2  : num RANGE 0 .. 1023 := 0;
       -- The NX (non-executable) bit. Self-explanatory.
       NX           : boolean := false;
    END RECORD;
@@ -122,7 +111,7 @@ IS
       -- right shift of 12.
       Pointer      : num RANGE 0 .. 16#FFFFFFFFFF# := 0;
       -- Bits that are available for anything.
-      Available_2  : num RANGE 0 .. 1023;
+      Available_2  : num RANGE 0 .. 1023 := 0;
       -- The NX (non-executable) bit. Self-explanatory.
       NX           : boolean := false;
    END RECORD;
@@ -179,12 +168,12 @@ IS
       -- lowest paging level, otherwise it's ignored and should be false.
       Global       : boolean := false;
       -- Bits that are available for anything.
-      Available_1  : num RANGE 0 .. 7;
+      Available_1  : num RANGE 0 .. 7 := 0;
       -- Points to the physical frame that is 4-KiB aligned. Must be shifted
       -- to the right by 12, much like the page structure pointers.
       Frame        : num RANGE 0 .. 16#FFFFFFFFFF# := 0;
       -- Bits that are available for anything.
-      Available_2  : num RANGE 0 .. 1023;
+      Available_2  : num RANGE 0 .. 1023 := 0;
       -- The NX (non-executable) bit. Self-explanatory.
       NX           : boolean := false;
    END RECORD;
@@ -212,28 +201,28 @@ IS
    -- The page structures below are of limited sizes. They cannot represent
    -- every possible virtual address, so use them sparingly.
 
-   -- Level 4 structure. 1 page map table.
+   -- Level 4 structure. 1 page map table with 512 entries.
    TYPE map_table
       IS ARRAY(page_mask)            OF map_entry
    WITH
       Component_Size => 64,
-      Alignment      => 16#1000#;
+      Alignment      => Page;
 
-   -- Level 3 structure. 512 page directory pointer tables.
+   -- Level 3 structure. 512 page directory pointer tables with 512 entries.
    TYPE pointer_tables
       IS ARRAY(page_mask, page_mask) OF directory_pointer_entry
    WITH
       Component_Size => 64,
       Alignment      => 16#1000#;
 
-   -- Level 2 structure. 512 page directory tables.
+   -- Level 2 structure. 512 page directory tables with 512 entries.
    TYPE directory_tables
       IS ARRAY(page_mask, page_mask) OF directory_entry
    WITH
       Component_Size => 64,
       Alignment      => 16#1000#;
 
-   -- Level 1 structure. 512 page tables.
+   -- Level 1 structure. 512 page tables with 512 entries.
    TYPE page_tables
       IS ARRAY(page_mask, page_mask) OF page_entry
    WITH
@@ -254,12 +243,15 @@ IS
    -- Note that it rounds down, not up, if no second argument is provided.
    FUNCTION Align(
       Address   : IN num;
-      Alignment : IN page_frame_variant :=  page;
+      Alignment : IN page_frame_variant :=  Page;
       Round_Up  : IN boolean            := false)
    RETURN num
    WITH
       Inline => true,
-      Post   => Align'result MOD Alignment'enum_rep = 0;
+      Pre    => Alignment =       Page OR ELSE
+                Alignment =  Huge_Page OR ELSE
+                Alignment = Giant_Page,
+      Post   => Align'result MOD Alignment = 0;
 
    -- Moves the base 4-KiB aligned address of the directory map table
    -- to the CR3 register to switch virtual address mappings.
@@ -270,56 +262,68 @@ IS
    -- Purposefully does not take in zero bytes or else a condition fails.
    FUNCTION Size_To_Pages(
       Size      : IN num;
-      Alignment : IN page_frame_variant := page)
+      Alignment : IN page_frame_variant := Page)
    RETURN num
    WITH
       Inline => true,
-      Pre    => Size > 0,
-      -- Always return at least one page for obvious reasons.
-      Post   => Size_To_Pages'result > 0;
+      Pre    => Alignment =       Page OR ELSE
+                Alignment =  Huge_Page OR ELSE
+                Alignment = Giant_Page;
 
-   -- Maps a virtual address to a physical address, huge entry.
-   -- Requires all addresses passed to it as 2-MiB aligned.
-   -- Note that it supports a very limited amount of pages to reduce ELF size.
+   FUNCTION Get_Level_Pointer(
+      Object    : IN page_layout;
+      Level     : IN num;
+      Offset_1  : IN page_mask;
+      Offset_2  : IN page_mask)
+   RETURN num
+   WITH
+      Pre'class  => Level >= 1 AND THEN Level <= 3,
+      Post'class => Get_Level_Pointer'result  <= 16#FFFFFFFFFF#;
+
+   -- Maps a virtual address to a physical address. Handles all page sizes.
+   -- Requires all addresses passed to it as page aligned.
+   -- Note that it supports a very limited amount of pages to reduce load size.
    -- Try using the larger page sizes to avoid oddities.
    PROCEDURE Map_Address(
       Object           : IN OUT page_layout;
       Virtual_Address  : IN num;
       Physical_Address : IN num;
-      Page_Size        : IN page_frame_variant :=  page;
+      Page_Size        : IN page_frame_variant :=  Page;
       Present          : IN boolean            :=  true;
       Write_Access     : IN boolean            := false;
       User_Access      : IN boolean            := false;
       NX               : IN boolean            :=  true)
    WITH
-      Pre'class => Virtual_Address = Align(Virtual_Address, Page_Size) AND THEN
-                   Physical_Address = Align(Physical_Address, Page_Size);
+      Pre'class => (Page_Size =       Page OR ELSE
+                    Page_Size =  Huge_Page OR ELSE
+                    Page_Size = Giant_Page);
 
-   -- Shortcut procedure for identity mapping a virtual address range to a
-   -- physical address range. The range is determined by the size, which
-   -- is then converted into 2-MiB physical pages. Requires all addresses
-   -- passed to it as 2-MiB aligned. The range is linear. See the
-   -- `Map_Address` procedure for more details.
+   -- Shortcut procedure for mapping a virtual address range to a physical
+   -- address range. The range is determined by the size, which is then
+   -- converted into physical pages. Requires all addresses passed to it to
+   -- be aligned. The range is linear. See the `Map_Address` procedure
+   -- for more details.
    PROCEDURE Map_Address_Range(
       Object           : IN OUT page_layout;
       Virtual_Address  : IN num;
       Physical_Address : IN num;
       Size             : IN num;
-      Page_Size        : IN page_frame_variant :=  page;
+      Page_Size        : IN page_frame_variant :=  Page;
       Present          : IN boolean            :=  true;
       Write_Access     : IN boolean            := false;
       User_Access      : IN boolean            := false;
       NX               : IN boolean            :=  true)
    WITH
-      Pre'class => Virtual_Address = Align(Virtual_Address, Page_Size) AND THEN
-                   Physical_Address = Align(Physical_Address, Page_Size),
-      Inline    => true;
+      Inline    => true,
+      Pre'class => (Page_Size =       Page OR ELSE
+                    Page_Size =  Huge_Page OR ELSE
+                    Page_Size = Giant_Page);
 
    PROCEDURE Page_Fault_Handler(
       Error_Code       : IN num)
    WITH
-      Pre    => Error_Code <= 16#FFFF_FFFF#, -- Error codes are 32-bits.
-      Inline => true;
+      Inline        => true,
+      Pre           => Error_Code <= 16#FFFF_FFFF#; -- Error codes are 32-bits.
 
    Kernel_Base          : CONSTANT num
    WITH

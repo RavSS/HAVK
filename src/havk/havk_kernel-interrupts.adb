@@ -11,7 +11,7 @@ USE
 
 PACKAGE BODY HAVK_Kernel.Interrupts
 WITH
-   SPARK_Mode => off -- `gnatprove` crashes on this package. Why? Who knows.
+   SPARK_Mode => off -- Address attributes are used outside of address clauses.
 IS
    PROCEDURE Prepare_GDT
    IS
@@ -26,7 +26,7 @@ IS
          GDTR_Address : IN System.Address)
       WITH -- See the explanation later on.
          Import        =>  true,
-         Convention    =>  C,
+         Convention    =>  NASM,
          External_Name => "lgdt";
    BEGIN
       -- Now to reload the segment registers. Sadly, Ada's Machine Code

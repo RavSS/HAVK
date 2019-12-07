@@ -86,7 +86,7 @@ IS
    IS
    BEGIN
       IF Centre AND THEN Message'length /= 0 THEN
-         DECLARE
+         DECLARE -- Index range checks for SPARK.
             Centre_Index         : CONSTANT num := Object.Data'last(2) / 2;
             Centre_Message_Index : CONSTANT num := Message'length / 2;
          BEGIN

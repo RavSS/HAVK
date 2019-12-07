@@ -14,14 +14,10 @@ IS
       functional);
 
    -- Holds all possible scancode sets for PS/2 keyboards.
-   TYPE scancode_set         IS(
-      set_1,  -- IBM PC XT.
-      set_2,  -- IBM PC AT.
-      set_3); -- IBM PC 3270.
-   FOR  scancode_set        USE(
-      set_1                 => 16#01#,
-      set_2                 => 16#02#,
-      set_3                 => 16#03#);
+   SUBTYPE scancode_set IS num RANGE 1 .. 3;
+
+   -- Specifies the IO address of the two PS/2 IO ports (not the device ports).
+   SUBTYPE port IS num RANGE 16#60# .. 16#64#;
 
    -- There's five common types of devices with these specific IDs.
    -- There are various keyboards with negligible differences not worth it.
@@ -29,125 +25,70 @@ IS
    -- to the keyboard enumeration, then you can safely ignore the second one,
    -- as it often describes a multifunctional (MF2) keyboard variant with or
    -- without set 1 translation, which also means it is bound to port 1.
-   TYPE device               IS(
-      standard_mouse,
-      mouse_with_scroll,
-      mouse_with_5_buttons,
-      standard_keyboard,
-      unrecognised); -- Dummy value for kernel purposes.
-   FOR device               USE(
-      standard_mouse        => 16#00#,
-      mouse_with_scroll     => 16#03#,
-      mouse_with_5_buttons  => 16#04#,
-      standard_keyboard     => 16#AB#,
-      unrecognised          => 16#FC#);
-
-   -- Specifies the IO address of the two PS/2 IO ports (not the device ports).
-   TYPE port                 IS(
-      data,
-      command);
-   FOR  port                USE(
-      data                  => 16#60#,
-      command               => 16#64#);
+   SUBTYPE device IS num RANGE 16#00# .. 16#FF#;
 
    -- Constant values for abstracting PS/2 controller operations.
-   TYPE controller_command   IS(
-      configuration_read,
-      configuration_write,
-      port_2_disable,
-      port_2_enable,
-      test_port_2_begin,
-      test_controller_begin,
-      test_port_1_begin,
-      port_1_disable,
-      port_1_enable,
-      port_2_data);
-   FOR  controller_command  USE(
-      configuration_read    => 16#20#,
-      configuration_write   => 16#60#,
-      port_2_disable        => 16#A7#,
-      port_2_enable         => 16#A8#,
-      test_port_2_begin     => 16#A9#,
-      test_controller_begin => 16#AA#,
-      test_port_1_begin     => 16#AB#,
-      port_1_disable        => 16#AD#,
-      port_1_enable         => 16#AE#,
-      port_2_data           => 16#D4#);
+   SUBTYPE controller_command IS num RANGE 16#20# .. 16#D4#;
 
    -- Constant values for standard PS/2 keyboard commands that must be sent
    -- to the keyboard's PS/2 data IO port. There are a few keyboard commands
    -- missing as they are specific to scancode set 3 and are not really useful.
-   TYPE keyboard_command     IS(
-      set_lights,
-      echo_keyboard,
-      scancode_set_options,
-      keyboard_identity,
-      typematics_write,
-      scanning_enable,
-      scanning_disable,
-      keyboard_defaults,
-      keyboard_byte_resend,
-      test_keyboard);
-   FOR  keyboard_command    USE(
-      set_lights            => 16#ED#,
-      echo_keyboard         => 16#EE#,
-      scancode_set_options  => 16#F0#,
-      keyboard_identity     => 16#F2#,
-      typematics_write      => 16#F3#,
-      scanning_enable       => 16#F4#,
-      scanning_disable      => 16#F5#,
-      keyboard_defaults     => 16#F6#,
-      keyboard_byte_resend  => 16#FE#,
-      test_keyboard         => 16#FF#);
+   SUBTYPE keyboard_command IS num RANGE 16#ED# .. 16#FF#;
 
-   -- Contains all of the commands for PS/2 mice.
-   TYPE mouse_command        IS(
-      set_scaling,
-      set_resolution,
-      mouse_status,
-      stream_mode,
-      read_data,
-      wrap_mode_reset,
-      wrap_mode_set,
-      remote_mode,
-      mouse_identity,
-      set_sample_rate,
-      reporting_enable,
-      reporting_disable,
-      mouse_defaults,
-      mouse_byte_resend,
-      mouse_reset);
-   FOR  mouse_command       USE(
-      set_scaling           => 16#E6#,
-      set_resolution        => 16#E8#,
-      mouse_status          => 16#E9#,
-      stream_mode           => 16#EA#,
-      read_data             => 16#EB#,
-      wrap_mode_reset       => 16#EC#,
-      wrap_mode_set         => 16#EE#,
-      remote_mode           => 16#F0#,
-      mouse_identity        => 16#F2#,
-      set_sample_rate       => 16#F3#,
-      reporting_enable      => 16#F4#,
-      reporting_disable     => 16#F5#,
-      mouse_defaults        => 16#F6#,
-      mouse_byte_resend     => 16#FE#,
-      mouse_reset           => 16#FF#);
+   -- Like with the keyboard command type, but for PS/2 mice commands.
+   SUBTYPE mouse_command IS num RANGE 16#E6# .. 16#FF#;
 
    -- Describes the most common answers of `INB()` on the PS/2
-   -- controller and device ports.
-   TYPE response             IS(
-      test_port_pass,
-      test_controller_pass,
-      data_acknowledged,
-      failure, -- Poses as "test_fail". Can be used for internal kernel errors.
-      data_resend);
-   FOR  response            USE(
-      test_port_pass        => 16#00#,
-      test_controller_pass  => 16#55#,
-      data_acknowledged     => 16#FA#,
-      failure               => 16#FC#,
-      data_resend           => 16#FE#);
+   -- controller and device ports. The ones below do not cover them all.
+   SUBTYPE response IS num RANGE 16#00# .. 16#FF#;
+
+   Data                  : CONSTANT               port := 16#60#;
+   Command               : CONSTANT               port := 16#64#;
+   Standard_Mouse        : CONSTANT             device := 16#00#;
+   Mouse_With_Scroll     : CONSTANT             device := 16#03#;
+   Mouse_With_5_Buttons  : CONSTANT             device := 16#04#;
+   Standard_Keyboard     : CONSTANT             device := 16#AB#;
+   Unrecognised          : CONSTANT             device := 16#FC#;
+   Test_Port_Pass        : CONSTANT           response := 16#00#;
+   Test_Controller_Pass  : CONSTANT           response := 16#55#;
+   Data_Acknowledged     : CONSTANT           response := 16#FA#;
+   Failure               : CONSTANT           response := 16#FC#;
+   Data_Resend           : CONSTANT           response := 16#FE#;
+   Set_Scaling           : CONSTANT      mouse_command := 16#E6#;
+   Set_Resolution        : CONSTANT      mouse_command := 16#E8#;
+   Mouse_Status          : CONSTANT      mouse_command := 16#E9#;
+   Stream_Mode           : CONSTANT      mouse_command := 16#EA#;
+   Read_Data             : CONSTANT      mouse_command := 16#EB#;
+   Wrap_Mode_Reset       : CONSTANT      mouse_command := 16#EC#;
+   Wrap_Mode_Set         : CONSTANT      mouse_command := 16#EE#;
+   Remote_Mode           : CONSTANT      mouse_command := 16#F0#;
+   Mouse_Identity        : CONSTANT      mouse_command := 16#F2#;
+   Set_Sample_Rate       : CONSTANT      mouse_command := 16#F3#;
+   Reporting_Enable      : CONSTANT      mouse_command := 16#F4#;
+   Reporting_Disable     : CONSTANT      mouse_command := 16#F5#;
+   Mouse_Defaults        : CONSTANT      mouse_command := 16#F6#;
+   Mouse_Byte_Resend     : CONSTANT      mouse_command := 16#FE#;
+   Mouse_Reset           : CONSTANT      mouse_command := 16#FF#;
+   Set_Lights            : CONSTANT   keyboard_command := 16#ED#;
+   Echo_Keyboard         : CONSTANT   keyboard_command := 16#EE#;
+   Scancode_Set_Options  : CONSTANT   keyboard_command := 16#F0#;
+   Keyboard_Identity     : CONSTANT   keyboard_command := 16#F2#;
+   Typematics_Write      : CONSTANT   keyboard_command := 16#F3#;
+   Scanning_Enable       : CONSTANT   keyboard_command := 16#F4#;
+   Scanning_Disable      : CONSTANT   keyboard_command := 16#F5#;
+   Keyboard_Defaults     : CONSTANT   keyboard_command := 16#F6#;
+   Keyboard_Byte_Resend  : CONSTANT   keyboard_command := 16#FE#;
+   Test_Keyboard         : CONSTANT   keyboard_command := 16#FF#;
+   Configuration_Read    : CONSTANT controller_command := 16#20#;
+   Configuration_Write   : CONSTANT controller_command := 16#60#;
+   Port_2_Disable        : CONSTANT controller_command := 16#A7#;
+   Port_2_Enable         : CONSTANT controller_command := 16#A8#;
+   Test_Port_2_Begin     : CONSTANT controller_command := 16#A9#;
+   Test_Controller_Begin : CONSTANT controller_command := 16#AA#;
+   Test_Port_1_Begin     : CONSTANT controller_command := 16#AB#;
+   Port_1_Disable        : CONSTANT controller_command := 16#AD#;
+   Port_1_Enable         : CONSTANT controller_command := 16#AE#;
+   Port_2_Data           : CONSTANT controller_command := 16#D4#;
 
    -- Outlines the configuration byte for the PS/2 controller itself.
    TYPE configuration      IS RECORD
@@ -210,114 +151,13 @@ IS
       Zeroed              AT 0 RANGE 7 .. 7;
    END RECORD;
 
-   -- Represents the 8042 PS/2 controller as a private object instead of a
-   -- package wide state for less globals.
-   TYPE controller IS TAGGED PRIVATE;
-
-   -- The main function for interacting with the controller and its devices.
-   -- This should not be called directly and instead the wrappers should be
-   -- used. Does not handle all commands, but a majority of them.
-   FUNCTION Send(
-      Object    : IN controller;
-      Port_Type : IN port;
-      Byte      : IN num;
-      Port_2    : IN boolean;
-      Verify    : IN boolean)
-   RETURN boolean;
-
-   -- Issues a controller specific command to the PS/2 controller IO port.
-   FUNCTION Send_Controller_Command(
-      Object    : IN controller;
-      Operation : IN controller_command)
-   RETURN boolean;
-
-   -- TODO: This does not handle "scancode_set_options" if the scancode set is
-   -- set to zero, which actually returns the current scancode set on the PS/2
-   -- controller itself. Otherwise, data acknowledgements and resends are
-   -- respected and handled properly.
-   -- Issues a keyboard specific command to the PS/2 controller's first data
-   -- IO port by default, as the keyboard is often on the first port.
-   FUNCTION Send_Keyboard_Command(
-      Object    : IN controller;
-      Operation : IN keyboard_command;
-      Port_2    : IN boolean := false)
-   RETURN boolean;
-
-   -- Issues a mouse specific command to the PS/2 controller's second data
-   -- IO port by default, as the mouse is often on the second port.
-   FUNCTION Send_Mouse_Command(
-      Object    : IN controller;
-      Operation : IN mouse_command;
-      Port_2    : IN boolean := true)
-   RETURN boolean;
-
-   -- Sends a byte to the data IO port. By default, this attempts to verify or
-   -- error check the response, but not all previously sent commands return
-   -- actual responses. An example of that is "configuration_read", which
-   -- instead returns an arbitrary byte describing the configuration, so that
-   -- would cause an error with this function. Disable "Verify" to avoid it.
-   FUNCTION Send_Data(
-      Object    : IN controller;
-      Byte_Data : IN num;
-      Port_2    : IN boolean := false;
-      Verify    : IN boolean := true)
-   RETURN boolean;
-
-   -- Receives a response from either one of the two ports.
-   FUNCTION Receive(
-      Object    : IN controller;
-      Port_Type : IN port)
-   RETURN response;
-
-   -- If the output buffer is full on the controller, then empty it properly.
-   PROCEDURE Flush(
-      Object    : IN controller);
-
-   -- Sets the port device fields in the class object. Returns false on
-   -- any errors. Handles port 2 support.
-   PROCEDURE Identify_Device(
-      Object    : IN OUT controller;
-      Port_2    : IN boolean);
-
-   -- Sends the PS/2 configuration in the record to the controller.
-   FUNCTION Send_Configuration(
-      Object    : IN controller)
-   RETURN boolean;
-
-   -- Sends typematic settings to a PS/2 keyboard on either port.
-   FUNCTION Send_Typematics(
-      Object    : IN controller;
-      Port_2    : IN boolean := false)
-   RETURN boolean;
-
-   -- Sends a preference for a scancode set to a PS/2 keyboard on either port.
-   FUNCTION Send_Scancode_Set(
-      Object    : IN controller;
-      Port_2    : IN boolean := false)
-   RETURN boolean;
-
-   -- Returns the controller's current condition.
-   FUNCTION Check_Condition
-   RETURN controller_condition
-   WITH
-      Inline => true;
-
-   -- Returns true if a mouse is enabled.
-   FUNCTION Mouse_Exists
-   RETURN boolean
-   WITH
-      Inline => true;
-
-   -- Does an initial PS/2 controller setup that uses values from the
-   -- tagged record itself to configure the controller.
-   PROCEDURE Setup;
-PRIVATE
+   -- Represents the 8042 PS/2 controller as a single object.
    TYPE controller  IS TAGGED RECORD
       -- Max `INB()` and `OUTB()` attempts. Honestly doesn't matter.
       Retry_Rate            : num RANGE 10 .. 1000 := 100;
       -- The default set is set 2, as it is the only one implemented as of now
       -- and it is the most common scancode set.
-      Current_Scancode_Set  : scancode_set         := set_2;
+      Current_Scancode_Set  : scancode_set         := 2;
       -- The current condition of the controller is unknown at the start.
       Current_Condition     : controller_condition := unknown;
       -- The default configuration is safe and does not assume there
@@ -348,14 +188,117 @@ PRIVATE
       -- that is completely usable.
       Mouse_Support         : boolean := false;
       -- A keyboard is presumed to be at port 1. Port 2 takes no guesses.
-      Port_1_Device         : device  := standard_keyboard;
-      Port_2_Device         : device  := unrecognised;
+      Port_1_Device         : device  := Standard_Keyboard;
+      Port_2_Device         : device  := Unrecognised;
    END RECORD;
+
+   -- The main 8042 PS/2 controller. The IBM PC system by design only has one.
+   -- Declaring new controllers can be used for switching PS/2 controller
+   -- configurations, but that is not tested as of now.
+   Input_Controller : controller;
+
+   -- Receives a response from either one of the two ports.
+   FUNCTION Receive(
+      Object    : IN controller'class;
+      Port_Type : IN port)
+   RETURN response;
+
+   -- If the output buffer is full on the controller, then empty it properly.
+   PROCEDURE Flush(
+      Object    : IN controller'class);
+
+   -- Returns the controller's current condition.
+   FUNCTION Check_Condition
+   RETURN controller_condition
+   WITH
+      Inline => true;
+
+   -- Returns true if a mouse is enabled.
+   FUNCTION Mouse_Exists
+   RETURN boolean
+   WITH
+      Inline => true;
+
+   -- Does an initial PS/2 controller setup that uses values from the
+   -- tagged record itself to configure the controller.
+   PROCEDURE Setup;
+
+PRIVATE
+   -- The main function for interacting with the controller and its devices.
+   -- Don't call this directly. Call the wrappers instead.
+   FUNCTION Send(
+      Object    : IN controller'class;
+      Port_Type : IN port;
+      Byte      : IN num;
+      Port_2    : IN boolean;
+      Verify    : IN boolean)
+   RETURN boolean
+   WITH
+      Pre => Byte <= 16#FF#;
+
+   -- Issues a controller specific command to the PS/2 controller IO port.
+   FUNCTION Send_Controller_Command(
+      Object    : IN controller'class;
+      Operation : IN controller_command)
+   RETURN boolean;
+
+   -- Issues a keyboard specific command to the PS/2 controller's first data
+   -- IO port by default, as the keyboard is often on the first port.
+   FUNCTION Send_Keyboard_Command(
+      Object    : IN controller'class;
+      Operation : IN keyboard_command;
+      Port_2    : IN boolean := false)
+   RETURN boolean;
+
+   -- Issues a mouse specific command to the PS/2 controller's second data
+   -- IO port by default, as the mouse is often on the second port.
+   FUNCTION Send_Mouse_Command(
+      Object    : IN controller'class;
+      Operation : IN mouse_command;
+      Port_2    : IN boolean := true)
+   RETURN boolean;
+
+   -- Sends a byte to the data IO port. By default, this attempts to verify or
+   -- error check the response, but not all previously sent commands return
+   -- actual responses. An example of that is "configuration_read", which
+   -- instead returns an arbitrary byte describing the configuration, so that
+   -- would cause an error with this function. Disable "Verify" to avoid it.
+   FUNCTION Send_Data(
+      Object    : IN controller'class;
+      Byte_Data : IN num;
+      Port_2    : IN boolean := false;
+      Verify    : IN boolean := true)
+   RETURN boolean
+   WITH
+      Pre => Byte_Data <= 16#FF#;
+
+   -- Sets the port device fields in the class object. Returns false on
+   -- any errors. Handles port 2 support.
+   PROCEDURE Identify_Device(
+      Object    : IN OUT controller'class;
+      Port_2    : IN boolean);
+
+   -- Sends the PS/2 configuration in the record to the controller.
+   FUNCTION Send_Configuration(
+      Object    : IN controller'class)
+   RETURN boolean;
+
+   -- Sends typematic settings to a PS/2 keyboard on either port.
+   FUNCTION Send_Typematics(
+      Object    : IN controller'class;
+      Port_2    : IN boolean := false)
+   RETURN boolean;
+
+   -- Sends a preference for a scancode set to a PS/2 keyboard on either port.
+   FUNCTION Send_Scancode_Set(
+      Object    : IN controller'class;
+      Port_2    : IN boolean := false)
+   RETURN boolean;
 
    -- Checks the status register's output buffer indicator and returns true
    -- if it is full and receiving won't cause an error.
    FUNCTION Ready_To_Receive(
-      Object        : IN controller'class)
+      Object    : IN controller'class)
    RETURN boolean
    WITH
       Inline => true;
@@ -363,14 +306,9 @@ PRIVATE
    -- Checks the status register's input buffer indicator and returns true
    -- if it is empty.
    FUNCTION Ready_To_Send(
-      Object        : IN controller'class)
+      Object    : IN controller'class)
    RETURN boolean
    WITH
       Inline => true;
 
-   -- The main 8042 PS/2 controller. The IBM PC system by design only has one.
-   -- This variable will represent it by being the lone private global variable
-   -- in this package. Declaring new controllers can be used for switching
-   -- PS/2 controller configurations, but that is not tested as of now.
-   Input_Controller : controller;
 END HAVK_Kernel.PS2;

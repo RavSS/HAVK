@@ -24,6 +24,12 @@ IS
       Alignment =>  128, -- I believe the stack frame needs 16-byte alignment?
       Pack      => true;
 
+   -- The processor passes a pointer to the interrupt stack frame and GCC
+   -- demands that we account for it regardless of interaction. GCC also does
+   -- not allow for this to be replaced with an anonymous access parameter.
+   -- Not completely sure why `gnatprove` doesn't let this be a constant.
+   TYPE access_interrupt IS NOT NULL ACCESS interrupt;
+
    -- https://wiki.osdev.org/Global_Descriptor_Table
    TYPE GDT_access              IS RECORD
       -- Only touched by the CPU, never by me (except for setting up a TSS).
@@ -135,17 +141,17 @@ IS
 
    TYPE IDT_attributes     IS RECORD
       -- Specifies the type of gate for the interrupt.
-      Gate               : IDT_gate_type;
+      Gate               : IDT_gate_type      := interrupt_64_bit;
       -- If not a storage segment and an interrupt or trap gate, then
       -- this must be set to zero. I am going to set it to that by default.
-      Storage_Segment    : boolean;
+      Storage_Segment    : boolean            := false;
       -- Minimum privilege level for the descriptor that is trying to
       -- call the interrupt. Useful so userspace doesn't mess with
       -- kernel space interrupts for hardware etc.
-      DPL                : num  RANGE  0 .. 3;
+      DPL                : num  RANGE 0 .. 3  := 0;
       -- Whether the interrupt is currently active. Set to zero by default,
       -- so all the blank interrupts are not set to present.
-      Present            : boolean;
+      Present            : boolean            := false;
    END RECORD;
    FOR IDT_attributes      USE RECORD
       Gate                 AT 0 RANGE 0 .. 3;
@@ -158,23 +164,23 @@ IS
    TYPE IDT_gate           IS RECORD
       -- The lower 16 bits of the 64-bit address belonging to the location
       -- of the ISR handler which handles this interrupt.
-      ISR_Address_Low    : num  RANGE 0 ..     16#FFFF#;
+      ISR_Address_Low    : num  RANGE 0 ..     16#FFFF# := 0;
       -- Points to the code segment in our GDT. Not sure which DPL CS, though.
-      CS_Selector        : num  RANGE 0 ..     16#FFFF#;
+      CS_Selector        : num  RANGE 0 ..     16#FFFF# := 0;
       -- Only the first 3 bits do something, and they point to the
       -- the interrupt stack table offset (IST). The remaining 6 bits must
       -- be blank/zeroed. Disabled by default.
-      IST_Offset         : num  RANGE 0 ..       16#FF#;
+      IST_Offset         : num  RANGE 0 ..       16#FF# := 0;
       -- Details the properties and attributes of the IDT gate.
       -- See the "IDT_attributes" record for more information.
       Type_Attributes    : IDT_attributes;
       -- The 16 bits that reach the center of the 64-bit address for the
       -- ISR handler.
-      ISR_Address_Middle : num  RANGE 0 ..     16#FFFF#;
+      ISR_Address_Middle : num  RANGE 0 ..     16#FFFF# := 0;
       -- The final 32 bits that complete the 64-bit address.
-      ISR_Address_High   : num  RANGE 0 .. 16#FFFFFFFF#;
+      ISR_Address_High   : num  RANGE 0 .. 16#FFFFFFFF# := 0;
       -- 32 bits of zeroes only and nothing else.
-      Zeroed             : num  RANGE 0 .. 16#FFFFFFFF#;
+      Zeroed             : num  RANGE 0 .. 16#FFFFFFFF# := 0;
    END RECORD;
    FOR IDT_gate           USE RECORD
       ISR_Address_Low     AT  0 RANGE 0 .. 15;
@@ -248,11 +254,11 @@ IS
       Descriptor_TSS64          : GDT_entry_TSS64; -- 0x28 = 101000.
    END RECORD;
    FOR GDT_entries                USE RECORD
-      Descriptor_Null             AT  0 RANGE 0 .. 63;
-      Descriptor_Kernel_CS        AT  8 RANGE 0 .. 63;
-      Descriptor_Kernel_DS        AT 16 RANGE 0 .. 63;
-      Descriptor_User_CS          AT 24 RANGE 0 .. 63;
-      Descriptor_User_DS          AT 32 RANGE 0 .. 63;
+      Descriptor_Null             AT  0 RANGE 0 ..  63;
+      Descriptor_Kernel_CS        AT  8 RANGE 0 ..  63;
+      Descriptor_Kernel_DS        AT 16 RANGE 0 ..  63;
+      Descriptor_User_CS          AT 24 RANGE 0 ..  63;
+      Descriptor_User_DS          AT 32 RANGE 0 ..  63;
       Descriptor_TSS64            AT 40 RANGE 0 .. 127;
    END RECORD;
 
@@ -287,7 +293,7 @@ IS
    Ticker : num := 0;
 
    -- Declare the tables.
-   IDT    : IDT_gates; -- Fill this in later to avoid elaboration time.
+   IDT    : IDT_gates;
    TSS    : TSS_structure; -- Set the kernel stacks later.
 PRIVATE
    -- There are address attributes used in here outside of clauses. They're

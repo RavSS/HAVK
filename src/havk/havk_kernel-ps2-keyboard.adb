@@ -6,28 +6,26 @@ USE
 PACKAGE BODY HAVK_Kernel.PS2.Keyboard
 IS
    PROCEDURE Interrupt_Manager
-   WITH
-      SPARK_Mode => off -- Check the parent package's body for its reason.
    IS
       -- Remember that this procedure handles a single byte. A raised IRQ
       -- does not indicate that HAVK must read a sequence of bytes, but instead
       -- only a single byte. For example, multiple IRQs will be raised to
       -- handle key breaks, but only a single one will be raised for a press.
-      Scancode : CONSTANT num RANGE 0 .. 16#FF# := INB(data'enum_rep);
+      Scancode : CONSTANT num RANGE 0 .. 16#FF# := INB(Data);
    BEGIN
       IF -- TODO: This only supports a PS/2 keyboard on port 1.
-         PS2.Input_Controller.Port_1_Device /= standard_keyboard OR
+         PS2.Input_Controller.Port_1_Device /= Standard_Keyboard OR
          ELSE Scancode = 16#FA# -- Data is not for the keyboard.
       THEN
          RETURN;
       END IF;
 
       CASE PS2.Input_Controller.Current_Scancode_Set IS
-         WHEN set_1 => -- TODO: Set 1 is unimplemented.
+         WHEN 1 => -- TODO: Set 1 is unimplemented.
             Log("PS/2 keyboard scancode set 1 is selected, but the table " &
                 "is not implemented.", warning);
 
-         WHEN set_2 => -- TODO: Set 2 is mostly implemented.
+         WHEN 2 => -- TODO: Set 2 is mostly implemented.
             IF Scancode = 16#F0# THEN
                -- Break logic.
                Break_State := true;
@@ -48,7 +46,7 @@ IS
                Break_State    := false; -- Don't waste time evaluating it.
             END IF;
 
-         WHEN set_3 => -- TODO: Set 3 is unimplemented.
+         WHEN 3 => -- TODO: Set 3 is unimplemented.
             Log("PS/2 keyboard scancode set 3 is selected, but the table " &
                 "is not implemented.", warning);
       END CASE;

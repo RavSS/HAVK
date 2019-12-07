@@ -109,7 +109,7 @@ QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) \
 	-d guest_errors -m 1024 -cpu qemu64,check -net none \
 	-no-reboot -no-shutdown
 
-ifeq ("$(INT)", "1")
+ifeq ("$(QEMU_INT)", "1")
 	QEMU_FLAGS+= -d int,cpu_reset
 endif
 
@@ -286,7 +286,8 @@ proof: $(BUILD_DIR)
 	$(call echo, "PROVING HAVK KERNEL\'S CORRECTNESS")
 
 	@gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) $(PROVE_FILES) -j0 -k \
-		--assumptions --pedantic --cwe --level=4 --mode=all
+		--assumptions --pedantic --cwe --level=4 --mode=all \
+		--proof-warnings
 
 .PHONY: stats
 stats:
