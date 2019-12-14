@@ -27,28 +27,46 @@ SECTIONS
 
 	.text ALIGN(4K) : AT(ADDR(.text) - kernel_virtual_base)
 	{
-		section_text = .;
+		kernel_text_base = .;
+		
 		*(.text)
+		
+		. = ALIGN(4K);
+		kernel_text_end = .;
 	}
 
 	.rodata ALIGN(4K) : AT(ADDR(.rodata) - kernel_virtual_base)
 	{
-		section_rodata = .;
+		kernel_rodata_base = .;
+		
+		*(.rodata*)
 		*(.rodata)
+		
+		. = ALIGN(4K);
+		kernel_rodata_end = .;
 	}
 
 	.data ALIGN(4K) : AT(ADDR(.data) - kernel_virtual_base)
 	{
-		section_data = .;
+		kernel_data_base = .;
+		
 		*(.data)
+		
+		. = ALIGN(4K);
+		kernel_data_end = .;
 	}
 
 	.bss ALIGN(4K) : AT(ADDR(.bss) - kernel_virtual_base)
 	{
-		section_bss = .;
+		kernel_bss_base = .;
+		
 		*(COMMON)
 		*(.bss)
+		
+		. = ALIGN(4K);
+		kernel_bss_end = .;
 	}
 
+	. = ALIGN(4K); /* Align the end too for easier paging. */
 	kernel_end = .;
 }

@@ -3,7 +3,9 @@ WITH
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Exceptions,
+   HAVK_Kernel.Memory,
    HAVK_Kernel.Debug,
+   HAVK_Kernel.UEFI,
    HAVK_Kernel.PS2;
 USE
    HAVK_Kernel.User_Input,
@@ -24,57 +26,98 @@ IS
    PROCEDURE Default_Page_Layout
    IS
       USE
-         HAVK_Kernel.Paging;
+         HAVK_Kernel.UEFI,
+         HAVK_Kernel.Paging,
+         HAVK_Kernel.Memory;
 
-      Bootloader : CONSTANT UEFI.arguments  := Get_Arguments;
-      Map        : CONSTANT UEFI.memory_map := Get_Memory_Map;
+      Bootloader : CONSTANT arguments  := Get_Arguments;
+      Map        : CONSTANT memory_map := Get_Memory_Map;
    BEGIN
       -- Map the virtual null address to the physical null address.
-      Kernel_Paging_Layout.Map_Address(
-         Align(0, Page), -- Help `gnatprove` out.
-         Align(0, Page),
-         Page_Size    => Page,
-         Write_Access =>      true,
-         NX           =>    false);
+      Kernel_Paging_Layout.Map_Address(0, 0, No_Execution => false);
 
-      -- Map the higher-half virtual address to the physical one.
+      -- This mapping is just so the higher level page structures have a set
+      -- permission to them, the later section specific mappings will not
+      -- cascade their privilege settings down all the page levels below L3.
       Kernel_Paging_Layout.Map_Address_Range(
          Align(Kernel_Base,          Huge_Page),
          Align(Kernel_Physical_Base, Huge_Page),
          Kernel_Size,
-         Page_Size    => Huge_Page,
-         Write_Access =>      true,
-         NX           =>    false);
+         Page_Size          => Huge_Page,
+         Cascade_Privileges =>      true,
+         Cascade_Presence   =>     false,
+         Write_Access       =>      true,
+         No_Execution       =>     false);
+
+      -- Mark the text section as read-only, but executable.
+      Kernel_Paging_Layout.Map_Address_Range(
+         Kernel_Text_Base,
+         Kernel_Text_Base - Kernel_Virtual_Base,
+         Kernel_Text_Size,
+         Page_Size    =>  Page,
+         Write_Access => false,
+         No_Execution => false);
+
+      -- Mark the read-only data section as read-only... obviously.
+      Kernel_Paging_Layout.Map_Address_Range(
+         Kernel_RO_Data_Base,
+         Kernel_RO_Data_Base - Kernel_Virtual_Base,
+         Kernel_RO_Data_Size,
+         Page_Size    =>  Page,
+         Write_Access => false,
+         No_Execution =>  true);
+
+      -- Mark the data section as modifiable, but also not executable.
+      Kernel_Paging_Layout.Map_Address_Range(
+         Kernel_Data_Base,
+         Kernel_Data_Base - Kernel_Virtual_Base,
+         Kernel_Data_Size,
+         Page_Size    => Page,
+         Write_Access => true,
+         No_Execution => true);
+
+      -- Mark the BSS section as modifiable, but also not executable.
+      Kernel_Paging_Layout.Map_Address_Range(
+         Kernel_BSS_Base,
+         Kernel_BSS_Base - Kernel_Virtual_Base,
+         Kernel_BSS_Size,
+         Page_Size    => Page,
+         Write_Access => true,
+         No_Execution => true);
 
       -- Identity-map the framebuffer address space.
       Kernel_Paging_Layout.Map_Address_Range(
          Align(Bootloader.Framebuffer_Address, Huge_Page),
          Align(Bootloader.Framebuffer_Address, Huge_Page),
          Bootloader.Framebuffer_Size,
-         Page_Size    => Huge_Page,
-         Write_Access =>      true,
-         NX           =>    false);
+         Page_Size          => Huge_Page,
+         Cascade_Privileges =>      true,
+         Write_Access       =>      true,
+         No_Execution       =>      true);
 
       -- Identity-map the loader and MMIO regions sent to us by the UEFI
       -- bootloader. One of the MMIO regions is basically guaranteed to be
       -- just below 4 GiB, as it is the APIC. I will be accessing it through
       -- the modern x2APIC way (MSR and not MMIO), so I will not map it here.
-      -- TODO: It may be easier to copy the map's data onto our local stack...
       FOR I IN Map'range LOOP
          IF Map(I).Memory_Region_Type = loader_data THEN
             Kernel_Paging_Layout.Map_Address_Range(
                Align(Map(I).Start_Address_Physical, Huge_Page),
-               Align(Map(I).Start_Address_Physical, Huge_Page),
+               Align(Map(I).Start_Address_Physical, Huge_Page,
+                  Round_Up => false),
                Map(I).Number_Of_Pages * Page,
-               Page_Size    => Huge_Page,
-               Write_Access =>      true,
-               NX           =>    false);
+               Page_Size          => Huge_Page,
+               Cascade_Privileges =>      true,
+               Write_Access       =>     false,
+               No_Execution       =>      true);
          END IF;
       END LOOP;
 
       -- Finally, load the CR3 register with the highest level directory.
       Kernel_Paging_Layout.Load;
       Log("Self-described page directories loaded.", nominal);
+
+      -- LOOP NULL; END LOOP;
    END Default_Page_Layout;
 
    PROCEDURE Grid_Test(
@@ -292,12 +335,20 @@ IS
    PROCEDURE Memory_Map_Info(
       Terminal : IN OUT textbox)
    IS
-      Map : CONSTANT UEFI.memory_map := Get_Memory_Map;
+      USE
+         HAVK_Kernel.Memory;
+
+      Map : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map;
    BEGIN
       -- TODO: Needs work.
       Terminal.Print("MEMORY MAP ENUMERATION:");
       Terminal.Newline;
+
       Terminal.Print("   MEMORY DESCRIPTORS:" & num'image(Map'length));
+      Terminal.Newline;
+
+      Terminal.Print("   TOTAL USABLE MEMORY:" &
+         num'image(System_Memory_Limit / MiB) & " MEBIBYTES");
       Terminal.Newline;
    END Memory_Map_Info;
 
@@ -307,42 +358,4 @@ IS
       PRAGMA Debug(Debug.Initialise);
    END Debugger;
 
-   FUNCTION Get_Arguments
-   RETURN arguments          IS
-      -- The bootloader will never pass a null pointer, so this type is just
-      -- here to inform `gnatprove` of it without an explicit pragma.
-      TYPE access_arguments  IS NOT NULL ACCESS arguments;
-      Bootloader_Arguments : CONSTANT access_arguments
-      WITH
-         Import     => true,
-         Convention => NASM,
-         Link_Name  => "bootloader.arguments";
-   BEGIN
-      -- It's not physically possible for a scanline to have less pixels than
-      -- the scanline's width, so the UEFI GOP implementation will never return
-      -- anything to the contrary.
-      PRAGMA Assume(Bootloader_Arguments.Pixels_Per_Scanline >=
-         Bootloader_Arguments.Horizontal_Resolution);
-
-      RETURN Bootloader_Arguments.ALL;
-   END Get_Arguments;
-
-   FUNCTION Get_Memory_Map
-   RETURN memory_map    IS
-      Bootloader      : CONSTANT arguments := Get_Arguments;
-      Map             : CONSTANT memory_map(0 .. Bootloader.Memory_Map_Size /
-         Bootloader.Memory_Map_Descriptor_Size)
-      WITH
-         Import     => true,
-         Convention => C,
-         Address    => Bootloader.Memory_Map_Address;
-   BEGIN
-      -- I doubt UEFI will give back a memory map with more than a few hundred
-      -- memory map descriptors. To make it easier on `gnatprove`, I've assumed
-      -- the memory map to just be 10000 descriptors long. There does not seem
-      -- to be an actual limit on it in the UEFI specification as of 2.8.
-      PRAGMA Assume(Map'first = 0 AND THEN Map'last < 10000);
-
-      RETURN Map;
-   END Get_Memory_Map;
 END HAVK_Kernel.Initialise;

@@ -20,7 +20,6 @@ PRAGMA Convention_Identifier(NASM, Assembler);
 PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);
 
 PRAGMA Restrictions(No_Access_Parameter_Allocators);
-PRAGMA Restrictions(No_Allocators);
 PRAGMA Restrictions(No_Anonymous_Allocators);
 PRAGMA Restrictions(No_Calendar);
 PRAGMA Restrictions(No_Delay);
@@ -36,7 +35,6 @@ PRAGMA Restrictions(No_Implicit_Dynamic_Code); -- Impacts `-mindirect-branch`?
 PRAGMA Restrictions(No_Implicit_Heap_Allocations);
 PRAGMA Restrictions(No_Implicit_Task_Allocations);
 PRAGMA Restrictions(No_IO);
-PRAGMA Restrictions(No_Local_Allocators);
 PRAGMA Restrictions(No_Nested_Finalization);
 PRAGMA Restrictions(No_Obsolescent_Features);
 PRAGMA Restrictions(No_Protected_Types);

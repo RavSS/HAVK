@@ -25,22 +25,8 @@ bootloader: ; Space for bootloader information.
 SECTION .text
 ALIGN 4 ; 4-byte alignment from here on out.
 GLOBAL entry:function (entry.end - entry)
-; Passed : (RDI => arguments, RSI => BOOTLOADER_MAGIC, RDX => page_structure)
+; Passed : (RDI => arguments, RSI => BOOTLOADER_MAGIC)
 entry:
-	; My UEFI bootloader passes a page structure, but does not enable it.
-	MOV CR3, RDX ; Enable the temporary paging structure without changes.
-
-	; Now we're no longer position-independent and are referencing -2 GiB.
-
-	; Don't forget this step to set the RIP or very illusive bugs start
-	; occuring. Need to jump to the virtual address of the `entry` function
-	; without recursively doing it and getting stuck in a loop.
-	MOV RAX, .set_rip ; Store the local label's higher-half address in RAX.
-	JMP RAX ; Now we leave the actual physical address for the virtual one.
-	.set_rip: ; Use a label instead of counting the JMP instruction's size.
-
-	; The instruction pointer is now at the memory space's higher-half.
-
 	; To avoid any clobbering, I'm saving the UEFI application's passed
 	; arguments/parameters pointer to a specific location in memory.
 	; The pointer was passed in the way of the x86-64 System V ABI.

@@ -142,7 +142,7 @@ struct uefi_page_structure
 	UINT64 map[512] ALIGN(EFI_PAGE_SIZE);
 	UINT64 pointers[512][512] ALIGN(EFI_PAGE_SIZE);
 	UINT64 table[512][512] ALIGN(EFI_PAGE_SIZE);
-} __attribute__((packed)); // Just to save any space at all.
+};
 
 // Global variables.
 #define BUFFER_SIZE (sizeof(CHAR16) * 16) // Temporary input buffer size.
@@ -469,6 +469,9 @@ VOID load_havk(struct elf64_file_header *havk_file_header,
 		havk_memory_size += havk_program_headers[i].memory_size;
 	}
 
+	Print(L"HAVK VIRTUAL END ADDRESS: 0x%llX\r\n", havk_virtual_entry
+		+ havk_memory_size);
+
 	// Free the program headers' memory. Since I allocated it without
 	// the shortcut function and with my `UEFI()` wrapper, I'll free it
 	// with the wrapper.
@@ -776,7 +779,7 @@ VOID map_address_range(struct uefi_page_structure *structure,
 	physical = HUGE_PAGE_ALIGN(physical);
 	size = size ? SIZE_TO_HUGE_PAGES(size) : SIZE_TO_HUGE_PAGES(1);
 
-	for (UINT64 i = 0; i < size; ++i)
+	for (UINT64 i = 0; i <= size; ++i) // Map one extra huge page.
 	{
 		#define increment(x) ((x) + HUGE_PAGE_SIZE * i)
 
@@ -879,6 +882,9 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	get_memory_map(arguments, image_handle);
 	// UEFI boot services have ended. Can't e.g. `Print()` anymore.
 
+	// Load the temporary page structure. Intel syntax breaks compilation.
+	__asm__ volatile ("MOVQ %0, %%CR3" :: "r" (page_structure) : "memory");
+
 	// TODO: Set this up for the runtime services inside the OS if they
 	// are desired. You can only do it once, apparently.
 	/* UEFI(RT->SetVirtualAddressMap, 4,
@@ -893,15 +899,13 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	// I want to pass the memory map etc. to HAVK, so instead of using
 	// inline assembly, I can just tell GCC to use the System V ABI way
 	// of passing arguments to our assembly entry function which is
-	// using the ELF format and adheres to the System V ABI. It is the
-	// kernel's responsibility to switch the paging structure.
+	// using the ELF format and adheres to the System V ABI.
 	__attribute__((sysv_abi))
-	VOID (*enter_havk) (struct uefi_arguments *arguments,
-		UINT64 magic, struct uefi_page_structure *page_structure)
-		= (VOID *)havk_physical_entry;
+	VOID (*enter_havk) (struct uefi_arguments *arguments, UINT64 magic)
+		= (VOID *)havk_virtual_entry;
 
 	// Now we leave at last.
-	enter_havk(arguments, BOOTLOADER_MAGIC, page_structure);
+	enter_havk(arguments, BOOTLOADER_MAGIC);
 
 	return EFI_SUCCESS;
 }

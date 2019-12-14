@@ -1,6 +1,7 @@
 WITH
    HAVK_Kernel,
    HAVK_Kernel.UEFI,
+   HAVK_Kernel.Memory,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text,
    HAVK_Kernel.Initialise;
@@ -12,10 +13,8 @@ USE
 -- This is the main procedure, it is where HAVK starts itself after entry.
 PROCEDURE HAVK
 IS
-   -- Retrieve the arguments passed by HAVK's UEFI bootloader.
-   Bootloader     : CONSTANT UEFI.arguments := Initialise.Get_Arguments;
    -- Get an object which describes the system display.
-   Display        : CONSTANT view           := Get_Display(Bootloader);
+   Display        : CONSTANT view := Get_Display(UEFI.Get_Arguments);
 
    -- The main terminal or virtual console used to display text to the user.
    Terminal       : textbox( -- Both the font's width and height are 8 pixels.
@@ -39,6 +38,9 @@ BEGIN
    Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
    Initialise.Descriptor_Tables;
    Initialise.Default_Page_Layout;
+
+   -- Heap allocation is possible after this returns.
+   Memory.Prepare_Heap(Initialise.Kernel_Paging_Layout);
 
    -- Set up the terminal.
    Terminal.Start_Position    := Terminal_Start;
@@ -74,7 +76,7 @@ BEGIN
    Initialise.Seconds_Count(Terminal,  Display);
 
    -- Don't call the last chance handler on return, instead stop the processor.
-   Log("End of HAVK procedure reached.", warning);
+   Log("End of HAVK procedure reached. CPU reset imminent.", warning);
    Terminal.Newline(2);
    Terminal.Print("HAVK IS A WORK-IN-PROGRESS FROM HERE, EXITING...");
    Terminal.Newline(2);

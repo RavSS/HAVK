@@ -287,7 +287,7 @@ proof: $(BUILD_DIR)
 
 	@gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) $(PROVE_FILES) -j0 -k \
 		--assumptions --pedantic --cwe --level=4 --mode=all \
-		--proof-warnings
+		--proof-warnings --checks-as-errors --warnings=error
 
 .PHONY: stats
 stats:

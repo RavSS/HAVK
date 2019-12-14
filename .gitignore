@@ -12,7 +12,6 @@ src/gnatdoc
 !ext
 ext/*
 !ext/*.sh
-!ext/ovmf-x64
 ext/ovmf-x64/*
 !ext/fonts
 !ext/fonts/*

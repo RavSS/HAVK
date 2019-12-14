@@ -1,10 +1,8 @@
 WITH
-   HAVK_Kernel.UEFI,
    HAVK_Kernel.Paging,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 USE
-   HAVK_Kernel.UEFI,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 
@@ -66,20 +64,6 @@ IS
 
    -- Initialises any debug utilities.
    PROCEDURE Debugger;
-
-   -- Returns the bootloader arguments structure/record. Only handles UEFI and
-   -- any changes must be reflected across HAVK's kernel and HAVK's bootloader.
-   FUNCTION Get_Arguments
-   RETURN arguments
-   WITH
-      Post => Get_Arguments'result.Pixels_Per_Scanline >=
-              Get_Arguments'result.Horizontal_Resolution;
-
-   -- Returns a UEFI-style memory map.
-   FUNCTION Get_Memory_Map
-   RETURN memory_map
-   WITH
-      Post => Get_Memory_Map'result'length <= 10000; -- See the body for why.
 
    -- The default paging layout.
    Kernel_Paging_Layout : Paging.page_layout;

@@ -35,6 +35,18 @@ IS
       warning, -- Self-explanatory. All warnings should be issued with this.
       fatal);  -- The most serious level. Only use for actual errors.
 
+   -- Helper variables for memory units (non-SI).
+   KiB : CONSTANT num := 1_024;
+   MiB : CONSTANT num := 1_048_576;
+   GiB : CONSTANT num := 1_073_741_824;
+
+   -- Stores a log in the main kernel log collection variable.
+   -- Default log priority is "trivial".
+   PROCEDURE Log(
+      Information : IN string;
+      Priority    : IN urgency := trivial);
+
+PRIVATE
    -- This controls the maximum amount of log entries. Note that this is
    -- static, it does not use heap allocation. This reserves around 30 KiB as
    -- of now for logs.
@@ -62,14 +74,4 @@ IS
    -- This is where the logs are stored. I've kept it to only one collection
    -- as of now to avoid complicating things.
    Logs : log_collection;
-
-   -- Stores a log in the main kernel log collection variable.
-   -- Default log priority is "trivial".
-   PROCEDURE Log(
-      Information : IN string;
-      Priority    : IN urgency := trivial)
-   WITH
-      Global => (In_Out => Logs),
-      Pre    => Information'last <= Logs.Log_List(1).Information'last;
-
 END HAVK_Kernel;

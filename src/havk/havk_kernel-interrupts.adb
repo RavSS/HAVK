@@ -2,8 +2,7 @@ WITH
    System.Machine_Code,
    HAVK_Kernel.Interrupts.Exceptions,
    HAVK_Kernel.Interrupts.IRQs,
-   HAVK_Kernel.Interrupts.PIC,
-   HAVK_Kernel.Paging;
+   HAVK_Kernel.Interrupts.PIC;
 USE
    System.Machine_Code,
    HAVK_Kernel.Interrupts.Exceptions,
@@ -43,8 +42,7 @@ IS
       Exception_Type : IN IDT_gate_type;
       Ring           : IN num)
    IS
-      ISR_Address    : CONSTANT num := Address_To_num(ISR) -
-         Paging.Kernel_Virtual_Base;
+      ISR_Address    : CONSTANT num := Address_To_num(ISR);
    BEGIN
       IDT(Index)     :=
       (
@@ -58,7 +56,7 @@ IS
             DPL                        => Ring,
             Present                    => true
          ),
-         ISR_Address_Middle            => SHR(ISR_Address, 16),
+         ISR_Address_Middle            => SHR(ISR_Address, 16) AND 16#FFFF#,
          ISR_Address_High              => SHR(ISR_Address, 32),
          Zeroed                        => 0
       );
@@ -110,24 +108,22 @@ IS
       Setup_Interrupt(31, ISR_31_Handler'address, interrupt_64_bit, 0);
 
       -- Now the IRQs.
-      -- TODO: I don't think all of these should be callable
-      -- by anything in Ring 3, but it'll do for now.
-      Setup_Interrupt(32, ISR_32_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(33, ISR_33_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(34, ISR_34_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(35, ISR_35_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(36, ISR_36_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(37, ISR_37_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(38, ISR_38_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(39, ISR_39_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(40, ISR_40_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(41, ISR_41_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(42, ISR_42_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(43, ISR_43_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(44, ISR_44_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(45, ISR_45_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(46, ISR_46_Handler'address, interrupt_64_bit, 3);
-      Setup_Interrupt(47, ISR_47_Handler'address, interrupt_64_bit, 3);
+      Setup_Interrupt(32, ISR_32_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(33, ISR_33_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(34, ISR_34_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(35, ISR_35_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(36, ISR_36_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(37, ISR_37_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(38, ISR_38_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(39, ISR_39_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(40, ISR_40_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(41, ISR_41_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(42, ISR_42_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(43, ISR_43_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(44, ISR_44_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(45, ISR_45_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(46, ISR_46_Handler'address, interrupt_64_bit, 0);
+      Setup_Interrupt(47, ISR_47_Handler'address, interrupt_64_bit, 0);
 
       Asm(
          -- Must disable interrupts before we can setup and use interrupts.

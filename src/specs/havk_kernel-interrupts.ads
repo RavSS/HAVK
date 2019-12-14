@@ -31,7 +31,7 @@ IS
    TYPE access_interrupt IS NOT NULL ACCESS interrupt;
 
    -- https://wiki.osdev.org/Global_Descriptor_Table
-   TYPE GDT_access              IS RECORD
+   TYPE GDT_access IS RECORD
       -- Only touched by the CPU, never by me (except for setting up a TSS).
       Accessed                : boolean;
       -- Bit depends on the entry's segment. If code, then this indicates
@@ -58,7 +58,7 @@ IS
       -- the IDT gates, where I fill the entire range in).
       Present                 : boolean;
    END RECORD;
-   FOR GDT_access               USE RECORD
+   FOR GDT_access USE RECORD
       Accessed                  AT 0 RANGE 0 .. 0;
       Readable_Or_Writable      AT 0 RANGE 1 .. 1;
       Direction_Or_Conforming   AT 0 RANGE 2 .. 2;
@@ -68,7 +68,7 @@ IS
       Present                   AT 0 RANGE 7 .. 7;
    END RECORD;
 
-   TYPE GDT_flags               IS RECORD
+   TYPE GDT_flags IS RECORD
       -- This is actually an "Available" field, but we shall ignore it.
       Zeroed                  : num  RANGE 0 .. 0;
       -- Clearly must be set to one as this is for x86-64.
@@ -80,14 +80,14 @@ IS
       -- This applies to the end address value only, I think...
       Granularity             : boolean;
    END RECORD;
-   FOR GDT_flags                USE RECORD
+   FOR GDT_flags USE RECORD
       Zeroed                    AT 0 RANGE 0 .. 0;
       Long_Descriptor_Size      AT 0 RANGE 1 .. 1;
       Legacy_Descriptor_Size    AT 0 RANGE 2 .. 2;
       Granularity               AT 0 RANGE 3 .. 3;
    END RECORD;
 
-   TYPE GDT_entry               IS RECORD
+   TYPE GDT_entry IS RECORD
       -- The lower 16 bits of the segment's maximum address range.
       End_Address_Low         : num  RANGE 0 .. 16#FFFF#;
       -- The lower 16 bits of where the segment's address begins.
@@ -103,7 +103,7 @@ IS
       -- End 8 bits of the 32-bit starting address for the segment.
       Start_Address_High      : num  RANGE 0 ..   16#FF#;
    END RECORD;
-   FOR GDT_entry                USE RECORD
+   FOR GDT_entry USE RECORD
       End_Address_Low           AT 0 RANGE 0 .. 15;
       Start_Address_Low         AT 2 RANGE 0 .. 15;
       Start_Address_Middle      AT 4 RANGE 0 .. 7;
@@ -139,21 +139,21 @@ IS
       trap_64_bit         => 15);  -- 0b1111, 0xF, 15, Redefined in Long Mode.
    FOR IDT_gate_type'size USE 4;   --             4 bits define the gate type.
 
-   TYPE IDT_attributes     IS RECORD
+   TYPE IDT_attributes IS RECORD
       -- Specifies the type of gate for the interrupt.
-      Gate               : IDT_gate_type      := interrupt_64_bit;
+      Gate               : IDT_gate_type     := interrupt_64_bit;
       -- If not a storage segment and an interrupt or trap gate, then
       -- this must be set to zero. I am going to set it to that by default.
-      Storage_Segment    : boolean            := false;
+      Storage_Segment    : boolean           := false;
       -- Minimum privilege level for the descriptor that is trying to
       -- call the interrupt. Useful so userspace doesn't mess with
       -- kernel space interrupts for hardware etc.
-      DPL                : num  RANGE 0 .. 3  := 0;
+      DPL                : num  RANGE 0 .. 3 := 0;
       -- Whether the interrupt is currently active. Set to zero by default,
       -- so all the blank interrupts are not set to present.
-      Present            : boolean            := false;
+      Present            : boolean           := false;
    END RECORD;
-   FOR IDT_attributes      USE RECORD
+   FOR IDT_attributes USE RECORD
       Gate                 AT 0 RANGE 0 .. 3;
       Storage_Segment      AT 0 RANGE 4 .. 4;
       DPL                  AT 0 RANGE 5 .. 6;
@@ -161,7 +161,7 @@ IS
    END RECORD;
 
    -- Every field has been defaulted so it's easier to initialize an IDT array.
-   TYPE IDT_gate           IS RECORD
+   TYPE IDT_gate IS RECORD
       -- The lower 16 bits of the 64-bit address belonging to the location
       -- of the ISR handler which handles this interrupt.
       ISR_Address_Low    : num  RANGE 0 ..     16#FFFF# := 0;
@@ -182,7 +182,7 @@ IS
       -- 32 bits of zeroes only and nothing else.
       Zeroed             : num  RANGE 0 .. 16#FFFFFFFF# := 0;
    END RECORD;
-   FOR IDT_gate           USE RECORD
+   FOR IDT_gate USE RECORD
       ISR_Address_Low     AT  0 RANGE 0 .. 15;
       CS_Selector         AT  2 RANGE 0 .. 15;
       IST_Offset          AT  4 RANGE 0 ..  7;
@@ -192,7 +192,7 @@ IS
       Zeroed              AT 12 RANGE 0 .. 31;
    END RECORD;
 
-   TYPE TSS_structure    IS RECORD
+   TYPE TSS_structure IS RECORD
       Reserved_1  : num  RANGE 0 .. 16#FFFFFFFF# :=   0;
       RSP_Ring_0  : num  RANGE 0 ..     num'last :=   0; -- Ring 0 stack.
       RSP_Ring_1  : num  RANGE 0 ..     num'last :=   0; -- Ring 1 stack.
@@ -210,7 +210,7 @@ IS
       -- IOPB disabled by default (byte size of TSS).
       IOPB        : num  RANGE 0 ..     16#FFFF# := 104;
    END RECORD;
-   FOR TSS_structure           USE RECORD
+   FOR TSS_structure USE RECORD
       Reserved_1 AT   0  RANGE 0 .. 31;
       RSP_Ring_0 AT   4  RANGE 0 .. 63;
       RSP_Ring_1 AT  12  RANGE 0 .. 63;
@@ -228,47 +228,47 @@ IS
       IOPB       AT 102  RANGE 0 .. 15;
    END RECORD;
 
-   TYPE GDT_entry_TSS64           IS RECORD
-      Descriptor_TSS            : GDT_entry;
-      Start_Address_Extended    : num RANGE 0 .. 16#FFFFFFFF#;
-      Reserved_1                : num RANGE 0 ..       16#FF#;
-      Zeroed                    : num RANGE 0 ..        16#F#;
-      Reserved_2                : num RANGE 0 ..    16#FFFFF#;
+   TYPE GDT_entry_TSS64 IS RECORD
+      Descriptor_TSS         : GDT_entry;
+      Start_Address_Extended : num RANGE 0 .. 16#FFFFFFFF#;
+      Reserved_1             : num RANGE 0 ..       16#FF#;
+      Zeroed                 : num RANGE 0 ..        16#F#;
+      Reserved_2             : num RANGE 0 ..    16#FFFFF#;
    END RECORD;
-   FOR GDT_entry_TSS64            USE RECORD
-      Descriptor_TSS              AT 0 RANGE   0 ..  63; -- 64 bits.
-      Start_Address_Extended      AT 0 RANGE  64 ..  95; -- 32 bits.
-      Reserved_1                  AT 0 RANGE  96 .. 103; --  8 bits.
-      Zeroed                      AT 0 RANGE 104 .. 107; --  4 bits.
-      Reserved_2                  AT 0 RANGE 108 .. 127; -- 20 bits.
+   FOR GDT_entry_TSS64 USE RECORD
+      Descriptor_TSS          AT 0 RANGE   0 ..  63;
+      Start_Address_Extended  AT 0 RANGE  64 ..  95;
+      Reserved_1              AT 0 RANGE  96 .. 103;
+      Zeroed                  AT 0 RANGE 104 .. 107;
+      Reserved_2              AT 0 RANGE 108 .. 127;
    END RECORD;
 
    -- Increase the amount of GDT entries if need be.
    -- Tip: Bits 3 through 15 indicate the segment selector/descriptor index.
-   TYPE GDT_entries               IS RECORD
-      Descriptor_Null           : GDT_entry;       --  0x4 =    100.
-      Descriptor_Kernel_CS      : GDT_entry;       --  0x8 =   1000.
-      Descriptor_Kernel_DS      : GDT_entry;       -- 0x10 =  10000.
-      Descriptor_User_CS        : GDT_entry;       -- 0x20 = 100000.
-      Descriptor_User_DS        : GDT_entry;       -- 0x24 = 100100.
-      Descriptor_TSS64          : GDT_entry_TSS64; -- 0x28 = 101000.
+   TYPE GDT_entries IS RECORD
+      Descriptor_Null        : GDT_entry;       --  0x4 =    100.
+      Descriptor_Kernel_CS   : GDT_entry;       --  0x8 =   1000.
+      Descriptor_Kernel_DS   : GDT_entry;       -- 0x10 =  10000.
+      Descriptor_User_CS     : GDT_entry;       -- 0x20 = 100000.
+      Descriptor_User_DS     : GDT_entry;       -- 0x24 = 100100.
+      Descriptor_TSS64       : GDT_entry_TSS64; -- 0x28 = 101000.
    END RECORD;
-   FOR GDT_entries                USE RECORD
-      Descriptor_Null             AT  0 RANGE 0 ..  63;
-      Descriptor_Kernel_CS        AT  8 RANGE 0 ..  63;
-      Descriptor_Kernel_DS        AT 16 RANGE 0 ..  63;
-      Descriptor_User_CS          AT 24 RANGE 0 ..  63;
-      Descriptor_User_DS          AT 32 RANGE 0 ..  63;
-      Descriptor_TSS64            AT 40 RANGE 0 .. 127;
+   FOR GDT_entries USE RECORD
+      Descriptor_Null        AT  0 RANGE 0 ..  63;
+      Descriptor_Kernel_CS   AT  8 RANGE 0 ..  63;
+      Descriptor_Kernel_DS   AT 16 RANGE 0 ..  63;
+      Descriptor_User_CS     AT 24 RANGE 0 ..  63;
+      Descriptor_User_DS     AT 32 RANGE 0 ..  63;
+      Descriptor_TSS64       AT 40 RANGE 0 .. 127;
    END RECORD;
 
-   TYPE descriptor_table          IS RECORD
-      Table_Size                : num RANGE 0 .. 16#FFFF#;
-      Start_Address             : System.Address;
+   TYPE descriptor_table IS RECORD
+      Table_Size             : num RANGE 0 .. 16#FFFF#;
+      Start_Address          : System.Address;
    END RECORD;
-   FOR descriptor_table           USE RECORD
-      Table_Size                  AT 0 RANGE 0 .. 15;
-      Start_Address               AT 2 RANGE 0 .. 63;
+   FOR descriptor_table USE RECORD
+      Table_Size              AT 0 RANGE 0 .. 15;
+      Start_Address           AT 2 RANGE 0 .. 63;
    END RECORD;
 
    -- Increase this later on if need be.
@@ -294,10 +294,11 @@ IS
 
    -- Declare the tables.
    IDT    : IDT_gates;
-   TSS    : TSS_structure; -- Set the kernel stacks later.
+   TSS    : TSS_structure; -- TODO: Set the kernel stacks later.
 PRIVATE
    -- There are address attributes used in here outside of clauses. They're
    -- needed to configure the GDT.
+   -- TODO: Move them (only) to `Prepare_GDT` and make them null here.
    PRAGMA SPARK_Mode(off);
 
    TSS_address : CONSTANT num := Address_To_num(TSS'address);

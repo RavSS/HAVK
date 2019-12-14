@@ -2,8 +2,6 @@
 -- the arguments passed to the kernel by HAVK's bootloader. Make sure that
 -- this package specification accurately reflects the structures passed by
 -- the bootloader itself.
--- TODO: The UEFI specification (2.8) has oddities in it surrounding the memory
--- map, where it doesn't match up with the firmware or it contradicts itself.
 PACKAGE HAVK_Kernel.UEFI
 IS
    -- See the UEFI specifications for more about the types of pixel
@@ -25,7 +23,7 @@ IS
       Reserved : num RANGE 0 .. 16#FFFFFFFF#;
    END RECORD
    WITH
-      Convention => C_Pass_By_Copy;
+      Convention => C;
    FOR  pixel_bitmasks USE RECORD
       Red      AT  0 RANGE 0 .. 31;
       Green    AT  4 RANGE 0 .. 31;
@@ -33,43 +31,25 @@ IS
       Reserved AT 12 RANGE 0 .. 31;
    END RECORD;
 
-   -- TODO: Maybe make this into a record, what is the "best Ada way" here?
-   -- READ: UEFI Specification, Version 2.8 - Page 166.
+   -- This record contains all the set attributes of a memory region.
    -- Multiple attributes are allowed, they can be OR'd together.
-   TYPE memory_attributes IS(
-      uncacheable,              -- Memory region is not cacheable.
-      write_combining,          -- Write combining capable.
-      write_through,            -- Cache hits go through to the memory.
-      write_back,               -- Cache hits go back before going to memory.
-      uncacheable_inexportable, -- Memory region supports fetch-and-add.
-      write_protected,          -- Writing memory is not allowed.
-      read_protected,           -- Reading memory is not allowed.
-      execution_protected,      -- Executing memory is not allowed.
-      persistent,               -- Special NVRAM region for UEFI firmware etc.
-      high_reliability,         -- Memory region is more reliable than others.
-      read_only,                -- Memory region can only be read.
-      specific_purpose,         -- Memory region is for a specific purpose.
-      crypto_protected);        -- Protected via CPU's cryptographic features.
-   FOR memory_attributes USE(
-      uncacheable              =>     16#1#,
-      write_combining          =>     16#2#,
-      write_through            =>     16#4#,
-      write_back               =>     16#8#,
-      uncacheable_inexportable =>    16#10#,
-      write_protected          =>  16#1000#,
-      read_protected           =>  16#2000#,
-      execution_protected      =>  16#4000#,
-      persistent               =>  16#8000#,
-      high_reliability         => 16#10000#,
-      read_only                => 16#20000#,
-      specific_purpose         => 16#40000#,
-      crypto_protected         => 16#80000#);
-
-   -- TODO: Is there any way to jam this up into the type above?
-   -- UEFI runtime services memory region. This is here because it's too large
-   -- to fit inside the enumeration type, as apparently it goes over the range
-   -- of the "System.Max_Binary_Modulus" type. Lovely.
-   memory_attribute_runtime : CONSTANT num := 16#8000000000000000#;
+   -- READ: UEFI Specification, Version 2.8 - Page 166.
+   TYPE memory_attributes IS RECORD
+      Uncacheable      : boolean; -- Memory region is not cacheable.
+      Write_Combining  : boolean; -- Write combining capable.
+      Write_Through    : boolean; -- Cache hits go through to the memory.
+      Write_Back       : boolean; -- Cache hits go back before going to memory.
+      Inexportable     : boolean; -- Memory region supports fetch-and-add.
+      Write_Protected  : boolean; -- Writing memory is not allowed.
+      Read_Protected   : boolean; -- Reading memory is not allowed.
+      Not_Executable   : boolean; -- Executing memory is not allowed.
+      Persistent       : boolean; -- Special NVRAM region for any firmware etc.
+      High_Reliability : boolean; -- Memory is more reliable than normal.
+      Read_Only        : boolean; -- Memory region can only be read.
+      Specific_Purpose : boolean; -- Memory region is for a specific purpose.
+      Crypto_Protected : boolean; -- Protected via CPU cryptographic features.
+      Runtime_Service  : boolean; -- UEFI runtime services memory region.
+   END RECORD;
 
    -- Describes what type of memory a region/descriptor is. The current UEFI
    -- specification says to "never" use an enumerated type in a structure,
@@ -112,13 +92,13 @@ IS
       -- of 0xFFFFFFFFFFFFF000. If this is zero, then there's a massive error.
       Number_Of_Pages               : num RANGE 1 .. num'last;
       -- Attributes of the memory region that are OR'd together to
-      -- create a bitmask.
+      -- create a bitmask. See the "memory_attributes" record for more.
       Memory_Attribute_Bitmask      : num;
       -- See the representation clause for information about this component.
       Padding_2                     : num;
    END RECORD
    WITH
-      Convention => C_Pass_By_Copy;
+      Convention => C;
    FOR memory_descriptor USE RECORD
       Memory_Region_Type            AT  0 RANGE 0 .. 31;
       -- There's 32 bits of padding right here. This is foolishly unexplained
@@ -157,7 +137,7 @@ IS
       Memory_Map_Descriptor_Version : num RANGE 0 .. 16#FFFFFFFF#;
    END RECORD
    WITH
-      Convention => C_Pass_By_Copy;
+      Convention => C;
    FOR arguments USE RECORD
       Graphics_Mode_Current         AT  0 RANGE 0 ..  31;
       Graphics_Mode_Max             AT  4 RANGE 0 ..  31;
@@ -180,4 +160,25 @@ IS
    WITH
       Convention     =>   C,
       Component_Size => 384;
+
+   -- Returns the bootloader arguments structure/record. Only handles UEFI and
+   -- any changes must be reflected across HAVK's kernel and HAVK's bootloader.
+   FUNCTION Get_Arguments
+   RETURN arguments
+   WITH
+      Post => Get_Arguments'result.Pixels_Per_Scanline >=
+              Get_Arguments'result.Horizontal_Resolution;
+
+   -- Returns a UEFI-style memory map.
+   FUNCTION Get_Memory_Map
+   RETURN memory_map
+   WITH
+      Post => Get_Memory_Map'result'length <= 100000; -- See the body for why.
+
+   -- Takes in a memory descriptor and then returns a record of booleans
+   -- indicating the status of all possible UEFI memory attributes.
+   FUNCTION Get_Memory_Attributes(
+      Region : IN memory_descriptor)
+   RETURN memory_attributes;
+
 END HAVK_Kernel.UEFI;
