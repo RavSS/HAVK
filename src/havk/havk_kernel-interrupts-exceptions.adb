@@ -1,3 +1,10 @@
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-interrupts-exceptions.adb                  --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
+
 WITH
    System.Address_Image,
    HAVK_Kernel.Paging,

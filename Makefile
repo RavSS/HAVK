@@ -1,6 +1,10 @@
 ###############################################################################
-##################### HAVK - An Operating System & Kernel. ####################
+## Program         -- The HAVK Operating System                              ##
+## Filename        -- Makefile                                               ##
+## License         -- GNU General Public License Version 3.0                 ##
+## Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    ##
 ###############################################################################
+
 NAME:=HAVK
 
 # Currently, there are two build levels: "Final" and "Debug". Case sensitive.

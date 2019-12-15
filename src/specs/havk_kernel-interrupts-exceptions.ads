@@ -1,6 +1,12 @@
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-interrupts-exceptions.ads                  --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
+
 -- A package that is home to CPU exception handlers.
 -- READ: https://wiki.osdev.org/Exceptions
-
 PACKAGE HAVK_Kernel.Interrupts.Exceptions
 IS
    PRAGMA Warnings(GNATprove, off, "pragma ""Machine_Attribute"" ignored",

@@ -1,3 +1,10 @@
+/*****************************************************************************/
+/* Program         -- The HAVK Operating System                              */
+/* Filename        -- linker.ld                                              */
+/* License         -- GNU General Public License Version 3.0                 */
+/* Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    */
+/*****************************************************************************/
+
 OUTPUT_FORMAT(elf64-x86-64)
 ENTRY(entry)
 STARTUP(entry.o)

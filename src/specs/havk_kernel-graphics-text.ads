@@ -1,3 +1,10 @@
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-graphics-text.ads                          --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
+
 -- This package handles graphical text. The main object is a textbox, which
 -- can be used for any case where textual information needs to be displayed.
 PACKAGE HAVK_Kernel.Graphics.Text

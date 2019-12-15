@@ -1,7 +1,16 @@
-PRAGMA License(GPL);
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk.adc                                               --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
 
+PRAGMA License(GPL);
 PRAGMA SPARK_Mode(on);
 PRAGMA Normalize_Scalars;
+PRAGMA Assertion_Policy(CHECK);
+PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);
+PRAGMA Convention_Identifier(NASM, Assembler);
 
 -- TODO: What's the proper way to tell `gnatprove` of hardware effects without
 -- setting variables as volatile with async_* or effective_* aspects?
@@ -14,10 +23,6 @@ PRAGMA Warnings(GNATprove, off, "*implementation-defined*",
 -- TODO: In the future, make the System.Address type public instead so
 -- this does not have to be used.
 PRAGMA Allow_Integer_Address;
-
-PRAGMA Assertion_Policy(CHECK);
-PRAGMA Convention_Identifier(NASM, Assembler);
-PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);
 
 PRAGMA Restrictions(No_Access_Parameter_Allocators);
 PRAGMA Restrictions(No_Anonymous_Allocators);

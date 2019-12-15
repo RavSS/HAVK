@@ -1,3 +1,10 @@
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-paging.ads                                 --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
+
 -- This package has the purpose of managing page translation.
 -- TODO: Please check the record/structure of "page_layout". I am unsure of
 -- how many tables I need for each level. All I truly know is that there's only

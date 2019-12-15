@@ -1,3 +1,10 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Program         -- The HAVK Operating System                              ;;
+;; Filename        -- entry.asm                                              ;;
+;; License         -- GNU General Public License Version 3.0                 ;;
+;; Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ; This file contains the entry function that HAVK's UEFI bootloader
 ; needs to launch itself into the Ada program.
 BITS 64 ; Already in long mode thanks to UEFI.

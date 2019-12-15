@@ -1,3 +1,10 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Program         -- The HAVK Operating System                              ;;
+;; Filename        -- strings.asm                                            ;;
+;; License         -- GNU General Public License Version 3.0                 ;;
+;; Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 SECTION .text
 
 ; A simple C-style null terminated string length finder.

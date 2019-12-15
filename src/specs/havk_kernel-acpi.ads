@@ -1,3 +1,10 @@
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-acpi.ads                                   --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
+
 -- This package contains ACPI-related records for ACPI 2.0 tables.
 -- As of now, I've decided against integrating ACPICA, as it's not written
 -- by me, it's all in C, and that's no fun. I don't think I will need any

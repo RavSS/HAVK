@@ -1,8 +1,11 @@
-WITH
-   HAVK_Kernel;
-USE
-   HAVK_Kernel;
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-font.ads                                   --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
 
+-- Contains a 8x8 bitmap font used for drawing text onto a framebuffer.
 PACKAGE HAVK_Kernel.Font
 IS
    -- Fonts encompass both ASCII and EASCII.

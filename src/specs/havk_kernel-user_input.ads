@@ -1,3 +1,10 @@
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-user_input.ads                             --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
+
 -- This package controls the state of input, regardless of origin.
 -- TODO: Make input buffered by using a stack. Unbuffered input is not as good.
 PACKAGE HAVK_Kernel.User_Input

@@ -1,5 +1,13 @@
--- READ: https://en.wikipedia.org/wiki/Interrupt_request_(PC_architecture)
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-interrupts-irqs.ads                        --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
 
+-- This package handles the system IRQs. It presumes that the PIC interrupt
+-- vector has been remapped to the appropriate values.
+-- READ: https://en.wikipedia.org/wiki/Interrupt_request_(PC_architecture)
 PACKAGE HAVK_Kernel.Interrupts.IRQs
 IS
    PRAGMA Warnings(GNATprove, off, "pragma ""Machine_Attribute"" ignored",

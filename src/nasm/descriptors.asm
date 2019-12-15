@@ -1,3 +1,10 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Program         -- The HAVK Operating System                              ;;
+;; Filename        -- descriptors.asm                                        ;;
+;; License         -- GNU General Public License Version 3.0                 ;;
+;; Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 SECTION .text
 
 ; Loads the GDTR with my GDT.

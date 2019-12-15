@@ -1,3 +1,10 @@
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-interrupts-pic.ads                         --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
+
 -- This package controls the 8259 compatible PIC. I hope to replace it
 -- with the newer APIC, but that requires ACPI tables to be parsed, which
 -- is a big task. While primitive, this will do for now, assuming that

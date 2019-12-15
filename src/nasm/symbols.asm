@@ -1,3 +1,10 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Program         -- The HAVK Operating System                              ;;
+;; Filename        -- symbols.asm                                            ;;
+;; License         -- GNU General Public License Version 3.0                 ;;
+;; Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ; This file provides a cheap workaround for getting the symbol address instead
 ; of what is at the symbol. Simply use "External_Name" on a label (with
 ; "_address" at the end) below in Ada to get it.

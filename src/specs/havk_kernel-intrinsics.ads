@@ -1,3 +1,10 @@
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-intrinsics.ads                             --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
+
 -- This package contains x86(-64) procedures and functions utilizing
 -- inline assembly instructions for whatever random purpose.
 PACKAGE HAVK_Kernel.Intrinsics

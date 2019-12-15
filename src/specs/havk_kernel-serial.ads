@@ -1,10 +1,16 @@
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_kernel-serial.ads                                 --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-------------------------------------------------------------------------------
+
 -- The purpose of this package is really just to send debugging information
 -- to the serial ports, not so much actual communication. I do however intend
 -- on adding most of the functionality required, maybe in the future I could
 -- do GDB stub debugging via a serial port on an actual real machine. For now,
 -- there will be a lot of unused records and whatnot.
 -- READ: https://en.wikibooks.org/wiki/Serial_Programming/8250_UART_Programming
-
 PACKAGE HAVK_Kernel.Serial
 IS
    -- An arrayu that contains a few of the COM ports that may be present.

@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+// Program         -- The HAVK Operating System                              //
+// Filename        -- boot.c                                                 //
+// License         -- GNU General Public License Version 3.0                 //
+// Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    //
+///////////////////////////////////////////////////////////////////////////////
+
 // Read the UEFI specifications first: https://uefi.org/specifications
 // The purpose of this file is to boot HAVK. It utilizes GNU EFI.
 // If you're reading this to figure out how to create a UEFI application
