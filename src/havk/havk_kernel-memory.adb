@@ -1,5 +1,4 @@
 WITH
-   System.Address_Image,
    HAVK_Kernel.UEFI;
 
 PACKAGE BODY HAVK_Kernel.Memory
@@ -27,10 +26,6 @@ IS
       Map            : CONSTANT memory_map := Get_Memory_Map;
       Attributes     : memory_attributes;
    BEGIN
-      Log("Kernel heap range: 0x" &
-         System.Address_Image(kernel_heap_virtual'first) & " - 0x" &
-         System.Address_Image(kernel_heap_virtual'last)  & '.');
-
       FOR I IN Map'range LOOP
          Attributes := Get_Memory_Attributes(Map(I));
 
@@ -63,10 +58,10 @@ IS
          END IF;
       END LOOP;
 
-      Log("Kernel heap size is" &
-         num'image(Kernel_Heap_Left    / MiB) & " MiB.", nominal);
       Log("Usable system memory size is" &
          num'image(System_Memory_Limit / MiB) & " MiB.", nominal);
+      Log("Kernel heap size is" &
+         num'image(Kernel_Heap_Left    / MiB) & " MiB.", nominal);
    END Prepare_Heap;
 
    FUNCTION Allocate(

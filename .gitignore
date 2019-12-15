@@ -19,6 +19,6 @@ ext/ovmf-x64/*
 
 !Makefile
 !README.md
-!CHANGELOG.md
+!TASKLIST.md
 !LICENSE.md
 

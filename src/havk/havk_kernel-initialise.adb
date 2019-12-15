@@ -95,12 +95,16 @@ IS
          Write_Access       =>      true,
          No_Execution       =>      true);
 
-      -- Identity-map the loader and MMIO regions sent to us by the UEFI
+      -- Identity-map the loader and ACPI regions sent to us by the UEFI
       -- bootloader. One of the MMIO regions is basically guaranteed to be
       -- just below 4 GiB, as it is the APIC. I will be accessing it through
       -- the modern x2APIC way (MSR and not MMIO), so I will not map it here.
       FOR I IN Map'range LOOP
-         IF Map(I).Memory_Region_Type = loader_data THEN
+         IF
+            Map(I).Memory_Region_Type = loader_data OR
+            ELSE Map(I).Memory_Region_Type = ACPI_table_data OR
+            ELSE Map(I).Memory_Region_Type = ACPI_firmware_data
+         THEN
             Kernel_Paging_Layout.Map_Address_Range(
                Align(Map(I).Start_Address_Physical, Huge_Page),
                Align(Map(I).Start_Address_Physical, Huge_Page,

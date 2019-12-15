@@ -1,3 +1,6 @@
+WITH
+   HAVK_Kernel.ACPI;
+
 -- This package contains information about UEFI, which is used to interpret
 -- the arguments passed to the kernel by HAVK's bootloader. Make sure that
 -- this package specification accurately reflects the structures passed by
@@ -119,7 +122,7 @@ IS
    END RECORD;
 
    TYPE arguments IS RECORD
-      -- Graphics related variables.
+      -- Graphics-related variables.
       Graphics_Mode_Current         : num RANGE 0 .. 16#FFFFFFFF#;
       Graphics_Mode_Max             : num RANGE 0 .. 16#FFFFFFFF#;
       Framebuffer_Address           : num RANGE 1 .. num'last;
@@ -129,12 +132,14 @@ IS
       Pixels_Per_Scanline           : num RANGE 1 .. 16#FFFFFFFF#;
       Pixel_Format                  : pixel_formats RANGE RGB .. bitmask;
       Pixel_Bitmask                 : pixel_bitmasks;
-      -- Memory related variables.
+      -- Memory-related variables.
       Memory_Map_Address            : num RANGE 1 .. num'last;
       Memory_Map_Key                : num RANGE 1 .. num'last;
       Memory_Map_Size               : num RANGE 1 .. num'last;
       Memory_Map_Descriptor_Size    : num RANGE 1 .. num'last;
       Memory_Map_Descriptor_Version : num RANGE 0 .. 16#FFFFFFFF#;
+      -- ACPI-related variables.
+      RSDP : NOT NULL ACCESS ACPI.root_system_description_pointer;
    END RECORD
    WITH
       Convention => C;
@@ -153,6 +158,7 @@ IS
       Memory_Map_Size               AT 72 RANGE 0 ..  63;
       Memory_Map_Descriptor_Size    AT 80 RANGE 0 ..  63;
       Memory_Map_Descriptor_Version AT 88 RANGE 0 ..  31;
+      RSDP                          AT 92 RANGE 0 ..  63;
    END RECORD;
 
    -- An array of memory descriptors - a memory map.

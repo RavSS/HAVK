@@ -21,6 +21,8 @@
 	#define HAVK_LOCATION L"\\HAVK\\HAVK.elf"
 #endif
 
+// TODO: Replace these below macros with functions for safety and versatility.
+
 #define CRITICAL_FAILURE() do\
 {\
 	Print(L"FAILED TO BOOT HAVK\r\n");\
@@ -105,22 +107,24 @@ struct elf64_section_header
 
 // This gets passed to HAVK's entry function later on. I've just made it
 // into a structure for the sake of less parameters needing to be passed.
+// All "UINTN" types should be changed to "UINT64" to avoid ambiguity.
 struct uefi_arguments
 {
 	UINT32 graphics_mode_current;
 	UINT32 graphics_mode_max;
 	EFI_PHYSICAL_ADDRESS framebuffer_address;
-	UINTN framebuffer_size;
+	UINT64 framebuffer_size;
 	UINT32 horizontal_resolution;
 	UINT32 vertical_resolution;
 	UINT32 pixels_per_scanline;
 	EFI_GRAPHICS_PIXEL_FORMAT pixel_format;
 	EFI_PIXEL_BITMASK pixel_bitmask;
 	EFI_MEMORY_DESCRIPTOR *memory_map;
-	UINTN memory_map_key;
-	UINTN memory_map_size;
-	UINTN memory_map_descriptor_size;
+	UINT64 memory_map_key;
+	UINT64 memory_map_size;
+	UINT64 memory_map_descriptor_size;
 	UINT32 memory_map_descriptor_version;
+	EFI_PHYSICAL_ADDRESS root_system_description_pointer;
 } __attribute__((packed));
 
 // Can't modify the default page structure, so I need to make my own.
@@ -158,6 +162,7 @@ UINT64 havk_memory_size = 0; // Used for mapping the entire kernel.
 EFI_GUID simple_file_system_guid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
 EFI_GUID file_info_guid = EFI_FILE_INFO_ID;
 EFI_GUID graphics_output_protocol_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
+EFI_GUID acpi_guid = ACPI_20_TABLE_GUID; // ACPI 2.0 only.
 
 // EFI protocol variables.
 EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *simple_file_system;
@@ -205,7 +210,7 @@ EFI_GRAPHICS_OUTPUT_PROTOCOL *graphics_output_protocol;
 #endif
 
 EFIAPI
-VOID welcome(EFI_HANDLE image_handle)
+VOID welcome(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
 	// Set the colours for the text.
 	UEFI(ST->ConOut->SetAttribute, 2,
@@ -237,6 +242,8 @@ VOID welcome(EFI_HANDLE image_handle)
 	// Print the version notification in the centre of the screen.
 	PrintAt(40 - 8, 1, L"NOW BOOTING HAVK\r\n");
 	PrintAt(40 - 8, 2, L"VERSION %s\r\n\r\n", HAVK_VERSION);
+	Print(L"UEFI VENDOR: %s (V%lu)\r\n",
+		system_table->FirmwareVendor, system_table->FirmwareRevision);
 
 	#ifdef HAVK_GDB_DEBUG
 		Print(L"! COMPILED WITH GDB SPECIFIC DEBUGGING FUNCTIONS\r\n");
@@ -689,10 +696,35 @@ VOID get_graphics_information(struct uefi_arguments *arguments)
 		arguments->horizontal_resolution,
 		arguments->vertical_resolution);
 
-	Print(L"VIDEO FRAMEBUFFER RANGE: 0x%X to 0x%X\r\n",
+	Print(L"VIDEO FRAMEBUFFER RANGE: 0x%llX to 0x%llX\r\n",
 		arguments->framebuffer_address,
-		arguments->framebuffer_address
-		+ arguments->framebuffer_size);
+		arguments->framebuffer_address + arguments->framebuffer_size);
+}
+
+// Retrieves the RSDP for ACPI 2.0. ACPI 1.0 is not supported, as it is
+// too old and it does not even support x86-64 due to it lacking the XSDT.
+EFIAPI
+VOID get_acpi_rsdp(struct uefi_arguments *arguments,
+	EFI_SYSTEM_TABLE *system_table)
+{
+	for (UINTN i = 0; i < system_table->NumberOfTableEntries; i++)
+	{
+		const EFI_GUID table_guid
+			= system_table->ConfigurationTable[i].VendorGuid;
+		const EFI_PHYSICAL_ADDRESS table
+			= (EFI_PHYSICAL_ADDRESS)
+			system_table->ConfigurationTable[i].VendorTable;
+
+		if (!CompareMem(&table_guid, &acpi_guid, sizeof(EFI_GUID)))
+		{
+			arguments->root_system_description_pointer = table;
+			Print(L"ACPI RSDP ADDRESS: 0x%llX\r\n", table);
+			return;
+		}
+	}
+
+	Print(L"ACPI 2.0 IS NOT SUPPORTED ON YOUR SYSTEM\r\n");
+	CRITICAL_FAILURE();
 }
 
 // This also exits boot services, or else the memory map would quickly become
@@ -840,7 +872,7 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	// wrapper or the shortcut functions found in "efilib.h".
 	// See all references to "AllocatePool" for the general idea.
 	InitializeLib(image_handle, system_table);
-	welcome(image_handle);
+	welcome(image_handle, system_table);
 
 	#if HAVK_GDB_DEBUG
 		setup_debug_session();
@@ -871,14 +903,16 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	arguments = AllocatePool(sizeof(struct uefi_arguments));
 	get_graphics_information(arguments);
 
+	// Get the RSDP, as HAVK will need ACPI info for PCIe enumeration etc.
+	get_acpi_rsdp(arguments, system_table);
+
 	// Now prepare the temporary page mappings so we can have
-	// a higher-half kernel.
+	// a higher-half kernel, but don't switch it yet.
 	page_structure = page_malloc(sizeof(struct uefi_page_structure));
 	default_mappings(page_structure);
 
 	Print(L"PREPARING TO ENTER HAVK\r\n");
 
-	// TODO: Get ACPI tables etc. before the memory map.
 	get_memory_map(arguments, image_handle);
 	// UEFI boot services have ended. Can't e.g. `Print()` anymore.
 
