@@ -8,8 +8,7 @@
 WITH
    System.Machine_Code,
    HAVK_Kernel.Interrupts.Exceptions,
-   HAVK_Kernel.Interrupts.IRQs,
-   HAVK_Kernel.Interrupts.PIC;
+   HAVK_Kernel.Interrupts.IRQs;
 USE
    System.Machine_Code,
    HAVK_Kernel.Interrupts.Exceptions,
@@ -77,9 +76,6 @@ IS
          Start_Address =>  IDT'address
       );
    BEGIN
-      -- Remap the interrupt vector so no interrupts overlap etc.
-      PIC.Remap;
-
       -- First setup the CPU exceptions.
       Setup_Interrupt( 0,  ISR_0_Handler'address, interrupt_64_bit, 0);
       Setup_Interrupt( 1,  ISR_1_Handler'address, interrupt_64_bit, 0);
@@ -133,10 +129,7 @@ IS
       Setup_Interrupt(47, ISR_47_Handler'address, interrupt_64_bit, 0);
 
       Asm(
-         -- Must disable interrupts before we can setup and use interrupts.
-         "CLI;" &
-         -- Load my own IDT into the IDTR.
-         "LIDT [%0];",
+         "LIDT [%0];", -- Load my own IDT into the IDTR.
          Inputs   => System.Address'asm_input("r", IDTR'address),
          Volatile => true);
    END Prepare_IDT;

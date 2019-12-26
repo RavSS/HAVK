@@ -42,8 +42,19 @@ BEGIN
 
    Log("Entered main kernel procedure.");
 
+   -- Show a basic graphical shape on screen.
    Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
+
+   -- Parse information from the ACPI tables for multiple reasons.
+   Initialise.Parse_ACPI_Tables;
+
+   -- Remap the PICs and see the APICs.
+   Initialise.Interrupt_Controllers;
+
+   -- Create new descriptor tables and make interrupts possible.
    Initialise.Descriptor_Tables;
+
+   -- Use a new page structure and map the kernel, UEFI/ACPI data, etc.
    Initialise.Default_Page_Layout;
 
    -- Heap allocation is possible after this returns.

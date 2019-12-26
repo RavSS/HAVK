@@ -1,5 +1,5 @@
 # Tasklist for the HAVK operating system
-### 2019-12-15
+### 2019-12-25
 - Very specific resolutions like 1366x768 are bugged and unusable.
 - Unoptimised `Object.Screen(Index, Pixel)` function as I cannot figure out
 how to add a non-local address aliased array into a tagged record, or
@@ -19,3 +19,5 @@ the "Final" build is compiled with the former, as debug functionality is
 irrelevant to that build's purpose.
 - After implementing more OS functionality, implement LAPIC and IOAPIC
 features by parsing some of the ACPI tables. Required for SMT support.
+- Switch from a statically allocated page structure to a dynamic one,
+as it's unfortunately too limiting and we have plenty of heap space.

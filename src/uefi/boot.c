@@ -248,8 +248,8 @@ VOID welcome(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 
 	// Print the version notification in the centre of the screen.
 	PrintAt(40 - 8, 1, L"NOW BOOTING HAVK\r\n");
-	PrintAt(40 - 8, 2, L"VERSION %s\r\n\r\n", HAVK_VERSION);
-	Print(L"UEFI VENDOR: %s (V%lu)\r\n",
+	PrintAt(40 - 8, 2, L"VERSION %s\r\n\n", HAVK_VERSION);
+	Print(L"UEFI FIRMWARE VENDOR: %s (VERSION %lu)\r\n",
 		system_table->FirmwareVendor, system_table->FirmwareRevision);
 
 	#ifdef HAVK_GDB_DEBUG
@@ -438,7 +438,7 @@ VOID load_havk(struct elf64_file_header *havk_file_header,
 		// Need custom error handling, so my wrapper is not used here.
 		ret = uefi_call_wrapper(BS->AllocatePages, 4,
 			AllocateAddress,
-			EfiLoaderData, // TODO: Correct memory type, I think?
+			EfiLoaderData,
 			EFI_SIZE_TO_PAGES(havk_program_headers[i].memory_size),
 			&segment_physical_address);
 
@@ -716,9 +716,9 @@ VOID get_acpi_rsdp(struct uefi_arguments *arguments,
 {
 	for (UINTN i = 0; i < system_table->NumberOfTableEntries; i++)
 	{
-		const EFI_GUID table_guid
+		CONST EFI_GUID table_guid
 			= system_table->ConfigurationTable[i].VendorGuid;
-		const EFI_PHYSICAL_ADDRESS table
+		CONST EFI_PHYSICAL_ADDRESS table
 			= (EFI_PHYSICAL_ADDRESS)
 			system_table->ConfigurationTable[i].VendorTable;
 
@@ -871,6 +871,29 @@ VOID default_mappings(struct uefi_page_structure *structure)
 	Print(L"TEMPORARY PAGE STRUCTURE ADDRESS: 0x%llX\r\n", structure);
 }
 
+// This function allocates at the lowest possible address and it works up
+// from there.
+EFIAPI
+VOID *low_malloc(UINT64 size)
+{
+	static EFI_PHYSICAL_ADDRESS lowest_address;
+	EFI_STATUS allocation;
+
+	do
+	{
+		allocation = uefi_call_wrapper(BS->AllocatePages, 4,
+			AllocateAddress,
+			EfiLoaderData,
+			EFI_SIZE_TO_PAGES(size),
+			&lowest_address);
+		lowest_address += size;
+
+	}
+	while (allocation != EFI_SUCCESS);
+
+	return (VOID *)lowest_address;
+}
+
 EFIAPI
 EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
@@ -905,9 +928,11 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 
 	set_screen_resolution(read_screen_resolutions(get_gop_handle()));
 
-	// Allocate pools only after HAVK has been loaded, or else I find that
-	// a pool gets allocated to where HAVK would be copied into later on.
-	arguments = AllocatePool(sizeof(struct uefi_arguments));
+	// Allocate the arguments structure only after HAVK is loaded, so it
+	// won't take up its address space. Allocate it at the lowest possible
+	// address.
+	arguments = low_malloc(sizeof(struct uefi_arguments));
+
 	get_graphics_information(arguments);
 
 	// Get the RSDP, as HAVK will need ACPI info for PCIe enumeration etc.

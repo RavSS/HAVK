@@ -4,21 +4,26 @@
 !.gitignore
 
 !src
-src/*/*.tmp
-src/gnatprove
-src/gnatinspect.db
-src/gnatdoc
+src/*
+!src/havk
+!src/havk/*.adb
+!src/specs
+!src/specs/*.ads
+!src/runtime
+!src/runtime/*.ad?
+!src/uefi
+!src/uefi/*
+!src/nasm
+!src/nasm/*
+!src/*.gpr
+!src/*.ld
 
 !ext
 ext/*
 !ext/*.sh
-ext/ovmf-x64/*
 !ext/fonts
 !ext/fonts/*
 !ext/bochsrc.txt
 
 !Makefile
-!README.md
-!TASKLIST.md
-!LICENSE.md
-
+!*.md

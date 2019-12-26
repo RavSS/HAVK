@@ -8,11 +8,14 @@
 WITH
    HAVK_Kernel.User_Input,
    HAVK_Kernel.Interrupts,
+   HAVK_Kernel.Interrupts.PIC,
+   HAVK_Kernel.Interrupts.APIC,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Exceptions,
    HAVK_Kernel.Memory,
    HAVK_Kernel.Debug,
    HAVK_Kernel.UEFI,
+   HAVK_Kernel.ACPI,
    HAVK_Kernel.PS2;
 USE
    HAVK_Kernel.User_Input,
@@ -23,12 +26,27 @@ IS
    PROCEDURE Descriptor_Tables
    IS
    BEGIN
+      CLI;
       Interrupts.Prepare_GDT;
       Interrupts.Prepare_IDT;
       Log("Descriptor tables prepared.", nominal);
       STI;
       Log("Interrupts enabled.");
    END Descriptor_Tables;
+
+   PROCEDURE Interrupt_Controllers
+   IS
+   BEGIN
+      -- Remap the PIC's interrupt vector so no interrupts overlap.
+      Interrupts.PIC.Remap;
+
+      -- See what's in the ACPI MADT's APIC structure area.
+      Interrupts.APIC.Enumerate_MADT;
+
+      Log("Interrupt controllers have been set up.", nominal);
+
+      Log("Detected" & Interrupts.APIC.CPU_Cores'img & " CPU cores.", nominal);
+   END Interrupt_Controllers;
 
    PROCEDURE Default_Page_Layout
    IS
@@ -41,7 +59,7 @@ IS
       Map        : CONSTANT memory_map := Get_Memory_Map;
    BEGIN
       -- Map the virtual null address to the physical null address.
-      Kernel_Paging_Layout.Map_Address(0, 0, No_Execution => false);
+      Kernel_Paging_Layout.Map_Address(0, 0);
 
       -- This mapping is just so the higher level page structures have a set
       -- permission to them, the later section specific mappings will not
@@ -107,28 +125,24 @@ IS
       -- just below 4 GiB, as it is the APIC. I will be accessing it through
       -- the modern x2APIC way (MSR and not MMIO), so I will not map it here.
       FOR I IN Map'range LOOP
-         IF
-            Map(I).Memory_Region_Type = loader_data OR
-            ELSE Map(I).Memory_Region_Type = ACPI_table_data OR
-            ELSE Map(I).Memory_Region_Type = ACPI_firmware_data
+         IF -- TODO: Not sure if the ACPI firmware is vital to map.
+                 Map(I).Memory_Region_Type = loader_data OR
+            ELSE Map(I).Memory_Region_Type = ACPI_table_data
          THEN
+            -- I'm starting to run out of 4-KiB pages, so 2-MiB will do.
+            -- Otherwise, previous page entries in L1 start getting
+            -- overwritten, and that is fatal.
             Kernel_Paging_Layout.Map_Address_Range(
                Align(Map(I).Start_Address_Physical, Huge_Page),
-               Align(Map(I).Start_Address_Physical, Huge_Page,
-                  Round_Up => false),
+               Align(Map(I).Start_Address_Physical, Huge_Page),
                Map(I).Number_Of_Pages * Page,
-               Page_Size          => Huge_Page,
-               Cascade_Privileges =>      true,
-               Write_Access       =>     false,
-               No_Execution       =>      true);
+               Page_Size => Huge_Page);
          END IF;
       END LOOP;
 
       -- Finally, load the CR3 register with the highest level directory.
       Kernel_Paging_Layout.Load;
       Log("Self-described page directories loaded.", nominal);
-
-      -- LOOP NULL; END LOOP;
    END Default_Page_Layout;
 
    PROCEDURE Grid_Test(
@@ -362,6 +376,16 @@ IS
          num'image(System_Memory_Limit / MiB) & " MEBIBYTES");
       Terminal.Newline;
    END Memory_Map_Info;
+
+   PROCEDURE Parse_ACPI_Tables
+   IS
+   BEGIN
+      IF ACPI.Valid_Implementation THEN
+         Log("ACPI tables RSDP and XSDT are valid.");
+      ELSE
+         Log("Skipping ACPI tables due to corruption.", warning);
+      END IF;
+   END Parse_ACPI_Tables;
 
    PROCEDURE Debugger
    IS

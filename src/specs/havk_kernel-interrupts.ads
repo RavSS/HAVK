@@ -34,7 +34,6 @@ IS
    -- The processor passes a pointer to the interrupt stack frame and GCC
    -- demands that we account for it regardless of interaction. GCC also does
    -- not allow for this to be replaced with an anonymous access parameter.
-   -- Not completely sure why `gnatprove` doesn't let this be a constant.
    TYPE access_interrupt IS NOT NULL ACCESS interrupt;
 
    -- https://wiki.osdev.org/Global_Descriptor_Table
@@ -284,14 +283,17 @@ IS
       Component_Size => 128,
       Pack           => true;
 
+   -- Sets up the global descriptor table.
    PROCEDURE Prepare_GDT;
 
+   -- Fills in an IDT entry with specific settings.
    PROCEDURE Setup_Interrupt(
       Index          : IN num;
       ISR            : IN System.Address;
       Exception_Type : IN IDT_gate_type;
       Ring           : IN num);
 
+   -- Sets up the interrupt descriptor table.
    PROCEDURE Prepare_IDT;
 
    -- TODO: Store IRQ 0 interrupts here temporarily in a counter.

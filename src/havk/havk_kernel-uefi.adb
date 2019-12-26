@@ -63,7 +63,7 @@ IS
       Bootloader_Arguments : CONSTANT access_arguments
       WITH
          Import     => true,
-         Convention => NASM,
+         Convention => C,
          Link_Name  => "bootloader.arguments";
    BEGIN
       -- It's not physically possible for a scanline to have less pixels than

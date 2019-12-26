@@ -15,6 +15,10 @@ USE
 -- and does things in a last-in-never-out fashion like a corrupted stack.
 -- NOTE: If really needed, replace this with K&R `malloc()` repurposed for the
 -- kernel level and a real page frame allocator.
+-- TODO: I went back to the original ZFP RTS and found out that there's a near
+-- identical implementation of the allocation function which imports symbols
+-- for where the heap begins and ends, meaning that this package could be moved
+-- to the runtime directory and replaced with the "s-memory.ad{b,s}" file.
 PACKAGE HAVK_Kernel.Memory
 IS
    -- This maps the heap in the respective page structure layout.
@@ -78,7 +82,7 @@ PRIVATE
    -- should be utilised. This is normally in the "s-memory.ad{b,s}" RTS file,
    -- but I cannot (and would rather not) fit it there, as it requires
    -- freestanding knowledge of how the system's memory is laid out during
-   -- runtime, not prior to it.
+   -- runtime, not prior to it. TODO: See this package's description for more.
    FUNCTION Allocate(
       Size : IN num)
    RETURN pointer

@@ -31,7 +31,6 @@ PRAGMA Restrictions(No_Delay);
 PRAGMA Restrictions(No_Direct_Boolean_Operators);
 PRAGMA Restrictions(No_Dispatching_Calls);
 PRAGMA Restrictions(No_Dynamic_Attachment);
-PRAGMA Restrictions(No_Enumeration_Maps);
 PRAGMA Restrictions(No_Exception_Handlers);
 PRAGMA Restrictions(No_Exception_Propagation);
 PRAGMA Restrictions(No_Exception_Registration);

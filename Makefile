@@ -110,8 +110,8 @@ EFI_LD_FLAGS=$(EFI_LD_OPT) $(EFI_LD_INC) $(EFI_CRT0)
 
 GDB_REMOTE_DEBUG_PORT?=40404
 QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) \
-	-d guest_errors -m 1024 -cpu qemu64,check -net none \
-	-no-reboot -no-shutdown
+	-d guest_errors -m 1024 -cpu host,+x2apic,enforce -net none \
+	-no-reboot -no-shutdown -nic user,model=e1000e -enable-kvm -smp 2
 
 ifeq ("$(QEMU_INT)", "1")
 	QEMU_FLAGS+= -d int,cpu_reset
@@ -199,14 +199,14 @@ $(HAVK_BOOTLOADER): $(EFI_SO_FILE)
 $(HAVK_LIBRARY): | $(HAVK_ADAINCLUDE_DIR) $(BUILD_DIR)
 	$(call echo, "BUILDING THE HAVK RUNTIME TO $@")
 
-	gprbuild -P $(HAVK_RUNTIME) -XBuild=$(BUILD) -p -eL \
-		$(GPR_RTS_FLAGS) -j0 -s -o ./../$@
+	@gprbuild -P $(HAVK_RUNTIME) -XBuild=$(BUILD) -p -eL \
+		--complete-output $(GPR_RTS_FLAGS) -j0 -s -o ./../$@
 
 $(HAVK_KERNEL): $(HAVK_LIBRARY) | $(BUILD_DIR)
 	$(call echo, "BUILDING THE HAVK KERNEL TO $@")
 
-	gprbuild -P $(HAVK_PROJECT) -XBuild=$(BUILD) -p -eL \
-		$(GPR_KERNEL_FLAGS) -j0 -s -o ./../$@
+	@gprbuild -P $(HAVK_PROJECT) -XBuild=$(BUILD) -p -eL \
+		--complete-output $(GPR_KERNEL_FLAGS) -j0 -s -o ./../$@
 
 $(HAVK_PARTITION): $(HAVK_BOOTLOADER) $(HAVK_KERNEL)
 	$(call echo, "CREATING EFI SYSTEM PARTITION FILE")
