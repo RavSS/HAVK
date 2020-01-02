@@ -5,27 +5,13 @@
 -- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
 -------------------------------------------------------------------------------
 
-WITH
-   HAVK_Kernel.Paging;
-USE
-   HAVK_Kernel.Paging;
-
--- This package contains logic for memory operations. As of now, there's an
--- extremely lazy/primitive allocator that purposefully disallows deallocation
--- and does things in a last-in-never-out fashion like a corrupted stack.
--- NOTE: If really needed, replace this with K&R `malloc()` repurposed for the
--- kernel level and a real page frame allocator.
--- TODO: I went back to the original ZFP RTS and found out that there's a near
--- identical implementation of the allocation function which imports symbols
--- for where the heap begins and ends, meaning that this package could be moved
--- to the runtime directory and replaced with the "s-memory.ad{b,s}" file.
+-- This package contains logic for memory operations.
 PACKAGE HAVK_Kernel.Memory
 IS
-   -- This maps the heap in the respective page structure layout.
-   -- It must be called before any heap allocations are made, or else all of
-   -- the allocations will fail.
-   PROCEDURE Prepare_Heap(
-      Page_Structure : IN OUT page_layout);
+   -- Returns the total usable memory limit that is not reserved for hardware
+   -- or any other firmware purposes.
+   FUNCTION System_Limit
+   RETURN num;
 
    -- Takes in a value and aligns it to the power-of-2 alignment specified.
    -- Note that it rounds down, not up, if no third argument is provided.
@@ -43,53 +29,124 @@ IS
       Inline => true,
       Pre    => Alignment /= 0 AND THEN (Alignment AND -Alignment) = Alignment;
 
-   -- This value is the amount of conventional memory the running system has.
-   System_Memory_Limit : num := 0;
-
-PRIVATE
-   -- For now, I've hard-coded in a maximum heap size of 128 MiB. It would be
-   -- better to make this extendable depending on additional required memory.
-   -- This cannot exceed 2-GiB minus the size of the kernel and any unused
-   -- space before it. It also does not factor in any reserved memory, so the
-   -- actual heap size depending on the memory map may not be this exact value.
-   Kernel_Heap_Size : CONSTANT num := 128 * MiB;
-
-   -- The heap starts right after the kernel's end, which is page aligned.
-   SUBTYPE kernel_heap_virtual  IS num RANGE
-      Kernel_End .. Kernel_End + Kernel_Heap_Size;
-
-   -- The same as the "kernel_heap_virtual" range type, but has the virtual
-   -- base subtracted from the heap's beginning and end.
-   SUBTYPE kernel_heap_physical IS num RANGE
-      kernel_heap_virtual'first - Kernel_Virtual_Base
-      ..
-      kernel_heap_virtual'last  - Kernel_Virtual_Base;
-
-   -- After the heap is prepared, this will contain the amount of memory left
-   -- for usage. Once this hits zero (again), heap allocation will not be
-   -- possible and a null pointer will be returned.
-   Kernel_Heap_Left : num RANGE 0 .. Kernel_Heap_Size := 0;
-
-   -- A pointer that cannot be freed. A character is used to represent a byte,
-   -- as the size of the type being accessed is not truly consequential here.
-   -- The compiler will ignore it and implicitly use the size of the type
-   -- being allocated on the heap.
-   TYPE pointer IS NOT NULL ACCESS character
+   Kernel_Base           : CONSTANT num
    WITH
-      Convention => C;
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_base_address";
 
-   -- This should never be called directly and instead the "NEW" keyword
-   -- should be utilised. This is normally in the "s-memory.ad{b,s}" RTS file,
-   -- but I cannot (and would rather not) fit it there, as it requires
-   -- freestanding knowledge of how the system's memory is laid out during
-   -- runtime, not prior to it. TODO: See this package's description for more.
-   FUNCTION Allocate(
-      Size : IN num)
-   RETURN pointer
+   Kernel_End            : CONSTANT num
    WITH
-      SPARK_Mode    => off, -- The function must effect "Kernel_Heap_Left".
-      Export        => true,
-      Convention    => C,
-      External_Name => "__gnat_malloc";
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_end_address";
+
+   Kernel_Virtual_Base   : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_virtual_base_address";
+
+   Kernel_Physical_Base  : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_physical_base_address";
+
+   Kernel_Text_Base      : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_text_base_address";
+
+   Kernel_Text_End       : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_text_end_address";
+
+   Kernel_RO_Data_Base   : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_rodata_base_address";
+
+   Kernel_RO_Data_End    : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_rodata_end_address";
+
+   Kernel_Data_Base      : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_data_base_address";
+
+   Kernel_Data_End       : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_data_end_address";
+
+   Kernel_BSS_Base       : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_bss_base_address";
+
+   Kernel_BSS_End        : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_bss_end_address";
+
+   Kernel_Heap_Base      : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_heap_base_address";
+
+   Kernel_Heap_End       : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_heap_end_address";
+
+   Kernel_Size           : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_size_address";
+
+   Kernel_Text_Size      : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_text_size_address";
+
+   Kernel_RO_Data_Size   : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_rodata_size_address";
+
+   Kernel_Data_Size      : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_data_size_address";
+
+   Kernel_BSS_Size       : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_bss_size_address";
+
+   Kernel_Heap_Size      : CONSTANT num
+   WITH
+      Import        => true,
+      Convention    => NASM,
+      External_Name => "__kernel_heap_size_address";
 
 END HAVK_Kernel.Memory;

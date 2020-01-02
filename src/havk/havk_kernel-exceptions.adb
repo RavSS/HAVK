@@ -45,7 +45,11 @@ IS
             Convention    => C,
             Address       => Source_Location;
       BEGIN
-         Log("Crashed - """ & C_String & ":" & Line'img & """!", fatal);
+         IF Line /= 0 THEN
+            Log("Crashed - """ & C_String & ":" & Line'img & """!", fatal);
+         ELSE
+            Log("Crashed - """ & C_String & """!", fatal);
+         END IF;
          LOOP
             Asm(  -- Works for now as a quick indicator.
                "MOV RAX, %0;" &

@@ -39,8 +39,9 @@ BXFLAGS='--enable-3dnow --enable-all-optimizations --enable-clgd54xx
 
 cd $1
 
+# "--enable-smp" doesn't seem to work. Hangs on loading OVMF.
 make dist-clean || true
-./configure $BXFLAGS --enable-debugger --enable-smp && configure_defines
+./configure $BXFLAGS --enable-debugger && configure_defines
 make
 mv bochs "$2/bochs"
 

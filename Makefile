@@ -13,7 +13,7 @@ BUILD?=Debug
 ifeq ("$(BUILD)", "Debug")
 	VERSION=UPCOMING
 else
-	VERSION=$(shell git describe --abbrev=0 --tags)
+	VERSION=$(shell git describe --abbrev=8 --always --tags)
 endif
 
 # This only has any effect when the build is Debug. As of now, this
@@ -79,12 +79,12 @@ EFI_LINK=$(EFI_SRC_DIR)elf_x86_64_efi.lds
 # in it. For better analyzing, it's wise to use the same optimisation level
 # for both of the bootloader application's files.
 EFI_C_STD=-std=c11 # Intel ASM syntax does not work with GNU-EFI functionality.
-EFI_C_WARN=-Wall -Wextra
+EFI_C_WARN=-Wall -Wextra -Werror
 EFI_C_OPT=-nostdlib -fpic -fno-stack-protector -fno-strict-aliasing \
-	-fno-builtin -fshort-wchar -mno-red-zone
+	-fno-builtin -fshort-wchar -mno-red-zone -funsigned-char
 EFI_C_INC=-I $(EFI_DIR) -I $(EFI_DIR)x86_64 -I $(EFI_DIR)protocol
 EFI_C_LIB=-l efi -l gnuefi
-EFI_C_DEF=-D EFI_FUNCTION_WRAPPER -D HAVK_VERSION=L\"$(VERSION)\"
+EFI_C_DEF=-D EFI_FUNCTION_WRAPPER -D HAVK_VERSION=u\"$(VERSION)\"
 EFI_C_FLAGS=$(EFI_C_STD) $(EFI_C_WARN) $(EFI_C_OPT) $(EFI_C_INC) \
 	$(EFI_C_LIB) $(EFI_C_DEF)
 
@@ -99,7 +99,7 @@ ifeq ("$(DEBUG_LEVEL)", "2")
 endif
 
 ifneq ("$(EFI_IMAGE_BASE)", "")
-	EFI_TEXT_SECTION=$$(( $(EFI_IMAGE_BASE) + $(EFI_TEXT_SECTION_OFFSET)))
+	EFI_TEXT_SECTION=$$(($(EFI_IMAGE_BASE) + $(EFI_TEXT_SECTION_OFFSET)))
 	EFI_DATA_SECTION=$$(($(EFI_IMAGE_BASE) + $(EFI_DATA_SECTION_OFFSET)))
 endif
 
@@ -109,12 +109,21 @@ EFI_LD_LIB=-l efi -l gnuefi
 EFI_LD_FLAGS=$(EFI_LD_OPT) $(EFI_LD_INC) $(EFI_CRT0)
 
 GDB_REMOTE_DEBUG_PORT?=40404
-QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) \
-	-d guest_errors -m 1024 -cpu host,+x2apic,enforce -net none \
-	-no-reboot -no-shutdown -nic user,model=e1000e -enable-kvm -smp 2
+QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) -m 1024 \
+	-net none -no-reboot -no-shutdown -nic user,model=e1000e -smp 2
 
-ifeq ("$(QEMU_INT)", "1")
-	QEMU_FLAGS+= -d int,cpu_reset
+ifeq ("$(QEMU_DEBUG)", "1")
+	# The interesting settings e.g. "int" doesn't work when the host CPU
+	# is being utilised instead of the QEMU64 CPU.
+	QEMU_FLAGS+= -d guest_errors,cpu_reset,pcall,page,int
+else
+	QEMU_FLAGS+= -d guest_errors
+endif
+
+ifeq ("$(QEMU_HOST)", "1")
+	QEMU_FLAGS+= -cpu host,+x2apic,enforce -enable-kvm
+else
+	QEMU_FLAGS+= -cpu qemu64,check
 endif
 
 EFI_NAME=boot
@@ -184,7 +193,7 @@ $(EFI_SO_FILE): $(EFI_O_FILE)
 	$(LD) $(EFI_LD_FLAGS) $< -o $@ $(EFI_LD_LIB)
 
 $(HAVK_BOOTLOADER): $(EFI_SO_FILE)
-	$(call echo, "FIXING GNU-EFI UTILIZING BOOTLOADER")
+	$(call echo, "FIXING GNU-EFI BOOTLOADER\'S SECTIONS")
 
 	objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
 		-j .rel -j .rela -j .reloc  -j .debug_info -j .debug_abbrev \
@@ -197,7 +206,7 @@ $(HAVK_BOOTLOADER): $(EFI_SO_FILE)
 		$< $@
 
 $(HAVK_LIBRARY): | $(HAVK_ADAINCLUDE_DIR) $(BUILD_DIR)
-	$(call echo, "BUILDING THE HAVK RUNTIME TO $@")
+	$(call echo, "BUILDING THE HAVK RUNTIME IN $(BUILD_DIR)")
 
 	@gprbuild -P $(HAVK_RUNTIME) -XBuild=$(BUILD) -p -eL \
 		--complete-output $(GPR_RTS_FLAGS) -j0 -s -o ./../$@

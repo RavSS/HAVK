@@ -61,25 +61,11 @@ IS
       -- Map the virtual null address to the physical null address.
       Kernel_Paging_Layout.Map_Address(0, 0);
 
-      -- This mapping is just so the higher level page structures have a set
-      -- permission to them, the later section specific mappings will not
-      -- cascade their privilege settings down all the page levels below L3.
-      Kernel_Paging_Layout.Map_Address_Range(
-         Align(Kernel_Base,          Huge_Page),
-         Align(Kernel_Physical_Base, Huge_Page),
-         Kernel_Size,
-         Page_Size          => Huge_Page,
-         Cascade_Privileges =>      true,
-         Cascade_Presence   =>     false,
-         Write_Access       =>      true,
-         No_Execution       =>     false);
-
       -- Mark the text section as read-only, but executable.
       Kernel_Paging_Layout.Map_Address_Range(
          Kernel_Text_Base,
          Kernel_Text_Base - Kernel_Virtual_Base,
          Kernel_Text_Size,
-         Page_Size    =>  Page,
          Write_Access => false,
          No_Execution => false);
 
@@ -88,7 +74,6 @@ IS
          Kernel_RO_Data_Base,
          Kernel_RO_Data_Base - Kernel_Virtual_Base,
          Kernel_RO_Data_Size,
-         Page_Size    =>  Page,
          Write_Access => false,
          No_Execution =>  true);
 
@@ -97,7 +82,6 @@ IS
          Kernel_Data_Base,
          Kernel_Data_Base - Kernel_Virtual_Base,
          Kernel_Data_Size,
-         Page_Size    => Page,
          Write_Access => true,
          No_Execution => true);
 
@@ -106,19 +90,26 @@ IS
          Kernel_BSS_Base,
          Kernel_BSS_Base - Kernel_Virtual_Base,
          Kernel_BSS_Size,
-         Page_Size    => Page,
          Write_Access => true,
          No_Execution => true);
 
       -- Identity-map the framebuffer address space.
       Kernel_Paging_Layout.Map_Address_Range(
-         Align(Bootloader.Framebuffer_Address, Huge_Page),
-         Align(Bootloader.Framebuffer_Address, Huge_Page),
+         Bootloader.Framebuffer_Address,
+         Bootloader.Framebuffer_Address,
          Bootloader.Framebuffer_Size,
-         Page_Size          => Huge_Page,
-         Cascade_Privileges =>      true,
-         Write_Access       =>      true,
-         No_Execution       =>      true);
+         Page_Size    => Huge_Page,
+         Write_Access =>      true,
+         No_Execution =>      true);
+
+      -- Map the heap.
+      Kernel_Paging_Layout.Map_Address_Range(
+         Kernel_Heap_Base,
+         Kernel_Heap_Base - Kernel_Virtual_Base,
+         Kernel_Heap_Size,
+         Page_Size    => Huge_Page,
+         Write_Access =>      true,
+         No_Execution =>      true);
 
       -- Identity-map the loader and ACPI regions sent to us by the UEFI
       -- bootloader. One of the MMIO regions is basically guaranteed to be
@@ -129,9 +120,6 @@ IS
                  Map(I).Memory_Region_Type = loader_data OR
             ELSE Map(I).Memory_Region_Type = ACPI_table_data
          THEN
-            -- I'm starting to run out of 4-KiB pages, so 2-MiB will do.
-            -- Otherwise, previous page entries in L1 start getting
-            -- overwritten, and that is fatal.
             Kernel_Paging_Layout.Map_Address_Range(
                Align(Map(I).Start_Address_Physical, Huge_Page),
                Align(Map(I).Start_Address_Physical, Huge_Page),
@@ -360,9 +348,6 @@ IS
    PROCEDURE Memory_Map_Info(
       Terminal : IN OUT textbox)
    IS
-      USE
-         HAVK_Kernel.Memory;
-
       Map : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map;
    BEGIN
       -- TODO: Needs work.
@@ -373,7 +358,7 @@ IS
       Terminal.Newline;
 
       Terminal.Print("   TOTAL USABLE MEMORY:" &
-         num'image(System_Memory_Limit / MiB) & " MEBIBYTES");
+         num'image(Memory.System_Limit / MiB) & " MEBIBYTES");
       Terminal.Newline;
    END Memory_Map_Info;
 

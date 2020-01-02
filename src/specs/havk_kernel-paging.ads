@@ -203,46 +203,50 @@ IS
    -- requires less work, both technically and mentally.
    SUBTYPE page_mask IS num RANGE 0 .. 511;
 
-   -- The page structures below are of limited sizes. They cannot represent
-   -- every possible virtual address, so use them sparingly.
-
-   -- Level 4 structure. 1 page map table with 512 entries.
-   TYPE map_table
-      IS ARRAY(page_mask)            OF ALIASED map_entry
+   -- Level 4 structure. A page map table with 512 entries.
+   TYPE map_table               IS ARRAY(page_mask) OF
+      ALIASED map_entry
    WITH
       Component_Size => 64,
       Alignment      => Page;
 
-   -- Level 3 structure. 512 page directory pointer tables with 512 entries.
-   TYPE pointer_tables
-      IS ARRAY(page_mask, page_mask) OF ALIASED directory_pointer_entry
+   -- Level 3 structure. A page directory pointer table with 512 entries.
+   TYPE directory_pointer_table IS ARRAY(page_mask) OF
+      ALIASED directory_pointer_entry
    WITH
       Component_Size => 64,
       Alignment      => Page;
 
-   -- Level 2 structure. 512 page directory tables with 512 entries.
-   TYPE directory_tables
-      IS ARRAY(page_mask, page_mask) OF ALIASED directory_entry
+   -- Level 2 structure. A page directory table with 512 entries.
+   TYPE directory_table         IS ARRAY(page_mask) OF
+      ALIASED directory_entry
    WITH
       Component_Size => 64,
       Alignment      => Page;
 
-   -- Level 1 structure. 512 page tables with 512 entries.
-   TYPE page_tables
-      IS ARRAY(page_mask, page_mask) OF ALIASED page_entry
+   -- Level 1 structure. A page table with 512 entries.
+   TYPE page_table              IS ARRAY(page_mask) OF
+      ALIASED page_entry
    WITH
       Component_Size => 64,
       Alignment      => Page;
+
+   -- Access types that should point towards a table in the kernel's heap.
+   -- A pointer table is guaranteed to be allocated, as the map table is not
+   -- capable of defining a physical frame of any size alone. The page map can
+   -- be statically allocated in the BSS section, not the heap.
+   TYPE access_directory_pointer_table IS ACCESS directory_pointer_table;
+   TYPE access_directory_table         IS ACCESS directory_table;
+   TYPE access_page_table              IS ACCESS page_table;
 
    -- The default page layout class. Can be freely expanded if needed.
+   -- Only the address of the L4 (PML4/page map) must be accessible, all other
+   -- record fields will not impact the paging mechanism. Don't use the address
+   -- of the record as a substitute for the page map's address, as the hidden
+   -- "_tag" field is likely before it.
    TYPE page_layout IS TAGGED RECORD
       L4        : ALIASED map_table;
-      L3        : ALIASED pointer_tables;
-      L2        : ALIASED directory_tables;
-      L1        : ALIASED page_tables;
-   END RECORD
-   WITH
-      Pack   => false; -- Respect the alignments.
+   END RECORD;
 
    -- Moves the base 4-KiB aligned address of the directory map table
    -- to the CR3 register to switch virtual address mappings.
@@ -261,16 +265,6 @@ IS
                 Alignment =  Huge_Page OR ELSE
                 Alignment = Giant_Page;
 
-   FUNCTION Get_Level_Pointer(
-      Object    : IN page_layout;
-      Level     : IN num;
-      Offset_1  : IN page_mask;
-      Offset_2  : IN page_mask)
-   RETURN num
-   WITH
-      Pre'class  => Level IN 1 .. 3,
-      Post'class => Get_Level_Pointer'result  <= 16#FFFFFFFFFF#;
-
    -- Maps a virtual address to a physical address. Handles all page sizes.
    -- While it does align pages for the caller just to be sure, it rounds
    -- them downwards. Note that it supports a very limited amount of pages
@@ -281,17 +275,14 @@ IS
       Virtual_Address    : IN num;
       Physical_Address   : IN num;
       Page_Size          : IN page_frame_variant :=  Page;
-      Cascade_Privileges : IN boolean            := false;
-      Cascade_Presence   : IN boolean            :=  true;
       Present            : IN boolean            :=  true;
       Write_Access       : IN boolean            := false;
       User_Access        : IN boolean            := false;
       No_Execution       : IN boolean            :=  true)
-   WITH -- Can't use XOR for W^X, but the truth table for this works.
-      Pre'class => (IF Write_Access AND THEN Cascade_Presence
-                      THEN Write_Access = No_Execution) AND THEN
-                   (Page_Size =       Page               OR ELSE
-                    Page_Size =  Huge_Page               OR ELSE
+   WITH -- You can either write or execute. You can also do neither.
+      Pre'class => (IF Write_Access THEN No_Execution) AND THEN
+                   (Page_Size =       Page              OR ELSE
+                    Page_Size =  Huge_Page              OR ELSE
                     Page_Size = Giant_Page);
 
    -- Shortcut procedure for mapping a virtual address range to a physical
@@ -304,107 +295,21 @@ IS
       Physical_Address   : IN num;
       Size               : IN num;
       Page_Size          : IN page_frame_variant :=  Page;
-      Cascade_Privileges : IN boolean            := false;
-      Cascade_Presence   : IN boolean            :=  true;
       Present            : IN boolean            :=  true;
       Write_Access       : IN boolean            := false;
       User_Access        : IN boolean            := false;
       No_Execution       : IN boolean            :=  true)
    WITH
-      Inline    => true,
-      -- See `Map_Address` for an explanation about W^X.
-      Pre'class => (IF Write_Access AND THEN Cascade_Presence
-                      THEN Write_Access = No_Execution) AND THEN
-                   (Page_Size =       Page               OR ELSE
-                    Page_Size =  Huge_Page               OR ELSE
+      Inline    => true, -- See `Map_Address` for the explanation about W^X.
+      Pre'class => (IF Write_Access THEN No_Execution) AND THEN
+                   (Page_Size =       Page              OR ELSE
+                    Page_Size =  Huge_Page              OR ELSE
                     Page_Size = Giant_Page);
 
    PROCEDURE Page_Fault_Handler(
       Error_Code         : IN num)
    WITH
-      Inline        => true,
-      Pre           => Error_Code <= 16#FFFF_FFFF#; -- Error codes are 32-bits.
+      Inline    => true,
+      Pre       => Error_Code <= 16#FFFFFFFF#; -- Error codes are 32-bits.
 
-   Kernel_Base           : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_base_address";
-
-   Kernel_End            : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_end_address";
-
-   Kernel_Virtual_Base   : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_virtual_base_address";
-
-   Kernel_Physical_Base  : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_physical_base_address";
-
-   Kernel_Text_Base      : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_text_base_address";
-
-   Kernel_Text_End       : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_text_end_address";
-
-   Kernel_RO_Data_Base   : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_rodata_base_address";
-
-   Kernel_RO_Data_End    : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_rodata_end_address";
-
-   Kernel_Data_Base      : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_data_base_address";
-
-   Kernel_Data_End       : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_data_end_address";
-
-   Kernel_BSS_Base       : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_bss_base_address";
-
-   Kernel_BSS_End        : CONSTANT num
-   WITH
-      Import        => true,
-      Convention    => NASM,
-      External_Name => "kernel_bss_end_address";
-
-   Kernel_Size           : CONSTANT num :=
-      Kernel_End         - Kernel_Base;
-   Kernel_Text_Size      : CONSTANT num :=
-      Kernel_Text_End    - Kernel_Text_Base;
-   Kernel_RO_Data_Size   : CONSTANT num :=
-      Kernel_RO_Data_End - Kernel_RO_Data_Base;
-   Kernel_Data_Size      : CONSTANT num :=
-      Kernel_Data_End    - Kernel_Data_Base;
-   Kernel_BSS_Size       : CONSTANT num :=
-      Kernel_BSS_End     - Kernel_BSS_Base;
 END HAVK_Kernel.Paging;
