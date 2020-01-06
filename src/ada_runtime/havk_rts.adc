@@ -1,0 +1,50 @@
+-------------------------------------------------------------------------------
+-- Program         -- The HAVK Operating System                              --
+-- Filename        -- havk_rts.adc                                           --
+-- License         -- GNU General Public License Version 3.0                 --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
+-------------------------------------------------------------------------------
+
+PRAGMA License(GPL);
+PRAGMA SPARK_Mode(off); -- Assume that the GNAT ZFP RTS files are flawless.
+PRAGMA Normalize_Scalars;
+PRAGMA Assertion_Policy(CHECK);
+PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);
+
+PRAGMA Restrictions(No_Access_Parameter_Allocators);
+PRAGMA Restrictions(No_Anonymous_Allocators);
+PRAGMA Restrictions(No_Calendar);
+PRAGMA Restrictions(No_Delay);
+PRAGMA Restrictions(No_Direct_Boolean_Operators);
+PRAGMA Restrictions(No_Dispatch);
+PRAGMA Restrictions(No_Dynamic_Attachment);
+PRAGMA Restrictions(No_Entry_Calls_In_Elaboration_Code);
+PRAGMA Restrictions(No_Exception_Handlers);
+PRAGMA Restrictions(No_Exception_Propagation);
+PRAGMA Restrictions(No_Exception_Registration);
+PRAGMA Restrictions(No_Finalization);
+PRAGMA Restrictions(No_Implicit_Dynamic_Code);
+PRAGMA Restrictions(No_Implicit_Heap_Allocations);
+PRAGMA Restrictions(No_Implicit_Protected_Object_Allocations);
+PRAGMA Restrictions(No_Implicit_Task_Allocations);
+PRAGMA Restrictions(No_IO);
+PRAGMA Restrictions(No_Multiple_Elaboration);
+PRAGMA Restrictions(No_Nested_Finalization);
+PRAGMA Restrictions(No_Obsolescent_Features);
+PRAGMA Restrictions(No_Protected_Type_Allocators);
+PRAGMA Restrictions(No_Protected_Types);
+PRAGMA Restrictions(No_Reentrancy);
+PRAGMA Restrictions(No_Relative_Delay);
+PRAGMA Restrictions(No_Select_Statements);
+PRAGMA Restrictions(No_Specific_Termination_Handlers);
+PRAGMA Restrictions(No_Streams);
+PRAGMA Restrictions(No_Task_Allocators);
+PRAGMA Restrictions(No_Task_At_Interrupt_Priority);
+PRAGMA Restrictions(No_Task_Attributes_Package);
+PRAGMA Restrictions(No_Task_Termination);
+PRAGMA Restrictions(No_Tasking);
+PRAGMA Restrictions(No_Terminate_Alternatives);
+PRAGMA Restrictions(No_Wide_Characters);
+PRAGMA Restrictions(Simple_Barriers);
+PRAGMA Restrictions(Static_Priorities);
+PRAGMA Restrictions(Static_Storage_Size);

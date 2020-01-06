@@ -10,7 +10,7 @@ You can type and count seconds.
 Expect it to do nothing until I decide to release the first major version, as
 it is still under heavy development.
 
-The next big step is to manage paging and memory.
+The next big step is to implement multi-tasking and user mode.
 
 The end goal is to get a text-based web browser working at the very least.
 
@@ -23,7 +23,6 @@ to obtain GNAT Community 2019.
 2. GNU Make. This is pretty obvious.
 3. GNU-EFI. The bootloader I created uses UEFI to boot HAVK, not BIOS.
 4. GNU Mtools & GNU Parted. Used for creating a hard drive image.
-5. NASM. All x86(-64) assembly is assembled with this assembler.
 
 Clone this repository, install those requirements, and enter `make`
 to create a hard drive image inside "build" called "HAVK.img". Then, simply

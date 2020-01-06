@@ -1,33 +1,37 @@
 -------------------------------------------------------------------------------
 -- Program         -- The HAVK Operating System                              --
 -- Filename        -- HAVK_RTS.gpr                                           --
--- License         -- GNU General Public License Version 3.0                 --
--- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-- License         -- GNU General Public License version 3.0                 --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-LIBRARY PROJECT HAVK_RTS IS
+-- Before compiling the runtime, make sure you have copied over the files
+-- to the source directory listed below.
+LIBRARY PROJECT HAVK_RTS
+IS
    FOR Default_Language USE "Ada";
-   FOR Languages USE("Ada");
-   FOR Source_Dirs USE("./../build/adainclude/"); -- Copy over "runtime" prior.
-   FOR Object_Dir USE "./../build/";
-   FOR Exec_Dir USE "./";
-
-   FOR Library_Name USE "HAVK";
-   FOR Library_Kind USE "static";
-   FOR Library_Dir  USE "./../build/adalib/";
+   FOR Languages        USE("Ada");
+   FOR Source_Dirs      USE("./../build/adainclude/");
+   FOR Object_Dir       USE "./../build/";
+   FOR Exec_Dir         USE "./";
+   FOR Library_Name     USE "HAVK";
+   FOR Library_Kind     USE "static";
+   FOR Library_Dir      USE "./../build/adalib/";
 
    TYPE Runtime_Type IS("Final", "Debug");
    Build : Runtime_Type := EXTERNAL("Build");
 
-   PACKAGE Builder IS -- `gprbuild`
-      Ada_Basic_Switches := (
-         -- We're compiling parts of GNAT, so this is necessary.
+   PACKAGE Builder
+   IS -- `gprbuild`
+      Ada_Basic_Switches :=
+        (-- We're compiling parts of GNAT, so this is necessary.
          "-gnatg",
          -- Create the source and output directories if they don't exist.
          "-x",
          -- May as well use the latest version of Ada, there is no harm in it.
          "-gnat2012",
-         -- Disable the style enforcement and configure it later.
+         -- Disable the style enforcement for the RTS. It's not written by me
+         -- at this stage.
          "-gnatyN",
          -- Enable all warnings by default.
          "-gnatwa",
@@ -39,49 +43,8 @@ LIBRARY PROJECT HAVK_RTS IS
          -- No standard include paths.
          "-nostdinc");
 
-      Ada_Style_Switches := (
-         -- Indentation of 3 spaces. I would have really liked to stick to
-         -- tabs with 8 character width, but it doesn't seem to
-         -- suit Ada at a column length of around 80.
-         "-gnaty3",
-         -- Array length attributes e.g. "range" must indicate the
-         -- dimension if the array is multidimensional. By default, Ada
-         -- automatically assumes it for singular-dimension arrays, but
-         -- it's better to be more terse.
-         "-gnatyA",
-         -- No blank spaces after semi-colon statement terminations.
-         -- Your editor should really handle this.
-         "-gnatyb",
-         -- A comment must have a single space after the dashes.
-         "-gnatyC",
-         -- No CRLF line terminators, only LF.
-         "-gnatyd",
-         -- No vertical tabs, although I don't even know how you would use
-         -- them in a source file.
-         "-gnatyf",
-         -- Disable horizontal tabs as we're just using spaces.
-         "-gnatyh",
-         -- "THEN" must appear on the same line as "IF" or on a line below
-         -- it with a condition above it.
-         "-gnatyi",
-         -- Set a 79th column limit and then enable it. Same as "-gnatym".
-         "-gnatyM79",
-         -- Pragmas must be mixed case, aside from "SPARK_Mode".
-         "-gnatyp",
-         -- All references to identifiers must have the same casing as
-         -- the one the identifier was declared with.
-         "-gnatyr",
-         -- Nothing must come after "THEN" or "ELSE" on the same line.
-         "-gnatyS",
-         -- Ada subprograms must have specifications.
-         "-gnatys",
-         -- Check for unnecessary parentheses, as they are not required.
-         "-gnatyx");
-
-      Ada_Final_Switches := (
-         -- Reasonable optimization level for the final version.
-         "-O2",
-         -- No debug information at all for obvious reasons.
+      Ada_Final_Switches :=
+        (-- No debug information at all for obvious reasons.
          "-g0",
          -- Default validity checks. Specified by default regardless.
          "-gnatVd",
@@ -89,39 +52,36 @@ LIBRARY PROJECT HAVK_RTS IS
          -- the "ali" files. Also saves a little space.
          "-gnatx");
 
-      Ada_Debug_Switches := (
-         -- Zero optimization by default. Makes reading `objdump -d` a little
-         -- easier for me personally when debugging. Change it if the
-         -- final optimization breaks something and you also need the
-         -- symbols for debugging.
-         "-O0",
-         -- Maximum debug information for GDB specifically.
+      Ada_Debug_Switches :=
+        (-- Maximum debug information for GDB specifically.
          "-ggdb3",
          -- All validity checks for debugging.
          "-gnatVa",
          -- Creates "rep" files showing the bit representation of types etc.
          "-gnatR2s");
 
-      CASE Build IS
+      CASE
+         Build
+      IS
          WHEN "Final" =>
             FOR Default_Switches("Ada") USE
                Ada_Basic_Switches &
-               Ada_Style_Switches &
                Ada_Final_Switches;
          WHEN "Debug" =>
             FOR Default_Switches("Ada") USE
                Ada_Basic_Switches &
-               Ada_Style_Switches &
                Ada_Debug_Switches;
       END CASE;
 
-      -- Add my Ada configuration file and apply it everywhere.
-      FOR Global_Configuration_Pragmas USE "specs/havk.adc";
+      -- A separate configuration file is used for the runtime system.
+      -- It is not too different.
+      FOR Global_Configuration_Pragmas USE "ada_runtime/havk_rts.adc";
    END Builder;
 
-   PACKAGE Compiler IS -- `gcc` / `x86_64-pc-linux-gnu-gcc` & `nasm`
-      GCC_Basic_Switches := (
-         -- Stack protector fully enabled, because why not.
+   PACKAGE Compiler
+   IS -- `gcc`
+      GCC_Basic_Switches :=
+        (-- Stack protector fully enabled, because why not.
          "-fstack-protector-all",
          -- Add some extra instructions that check if we've gone
          -- over the stack space limit. Usually that just causes an

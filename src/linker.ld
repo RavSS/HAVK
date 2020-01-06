@@ -1,12 +1,12 @@
 /*****************************************************************************/
 /* Program         -- The HAVK Operating System                              */
 /* Filename        -- linker.ld                                              */
-/* License         -- GNU General Public License Version 3.0                 */
-/* Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    */
+/* License         -- GNU General Public License version 3.0                 */
+/* Original Author -- Ravjot Singh Samra, Copyright 2019-2020                */
 /*****************************************************************************/
 
 OUTPUT_FORMAT(elf64-x86-64)
-ENTRY(entry)
+ENTRY(assembly__entry)
 STARTUP(entry.o)
 
 SECTIONS
@@ -87,9 +87,9 @@ SECTIONS
 	/  so we waste less time and space mapping the range. */
 	. = ALIGN(2M);
 	__kernel_heap_base = .;
-	
+
 	. += __kernel_heap_size;
-	
+
 	. = ALIGN(2M);
 	__kernel_heap_end = .;
 

@@ -1,8 +1,8 @@
 ###############################################################################
 ## Program         -- The HAVK Operating System                              ##
 ## Filename        -- Makefile                                               ##
-## License         -- GNU General Public License Version 3.0                 ##
-## Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    ##
+## License         -- GNU General Public License version 3.0                 ##
+## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
 
 NAME:=HAVK
@@ -50,13 +50,13 @@ MAKEFLAGS+=--no-builtin-rules --no-builtin-variables
 # common among installations (no matter bfd or gold).
 CC:=gcc
 LD:=ld
-AS:=nasm
+AS:=as
 
 HAVK_PROJECT:=$(SRC_DIR)$(NAME).gpr
 HAVK_RUNTIME:=$(SRC_DIR)$(NAME)_RTS.gpr
 
 # Copy the source directory to the directory structure GNAT demands.
-HAVK_RUNTIME_DIR:=$(SRC_DIR)runtime/
+HAVK_RUNTIME_DIR:=$(SRC_DIR)ada_runtime/
 HAVK_ADAINCLUDE_DIR:=$(BUILD_DIR)adainclude/
 HAVK_ADALIB_DIR:=$(BUILD_DIR)adalib/
 
@@ -71,7 +71,7 @@ OVMF_DIR=./ext/ovmf-x64/
 LIB_DIR=/usr/lib/
 
 EFI_DIR=/usr/include/efi/
-EFI_SRC_DIR=$(SRC_DIR)uefi/
+EFI_SRC_DIR=$(SRC_DIR)c/
 EFI_CRT0=$(EFI_SRC_DIR)crt0-efi-x86_64.o
 EFI_LINK=$(EFI_SRC_DIR)elf_x86_64_efi.lds
 

@@ -5,16 +5,16 @@
 
 !src
 src/*
-!src/havk
-!src/havk/*.adb
-!src/specs
-!src/specs/*.ads
-!src/runtime
-!src/runtime/*.ad?
-!src/uefi
-!src/uefi/*
-!src/nasm
-!src/nasm/*
+!src/ada
+!src/ada/*.adb
+!src/ada_specifications
+!src/ada_specifications/*.ads
+!src/ada_runtime
+!src/ada_runtime/*.ad?
+!src/assembly
+!src/assembly/*
+!src/c
+!src/c/*
 !src/*.gpr
 !src/*.ld
 

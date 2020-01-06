@@ -1,39 +1,39 @@
 -------------------------------------------------------------------------------
 -- Program         -- The HAVK Operating System                              --
 -- Filename        -- HAVK.gpr                                               --
--- License         -- GNU General Public License Version 3.0                 --
--- Original Author -- Ravjot Singh Samra (ravss@live.com), Copyright 2019    --
+-- License         -- GNU General Public License version 3.0                 --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 PROJECT HAVK
 IS
    FOR Default_Language USE "Ada";
-   FOR Languages        USE("Ada", "NASM");
-   FOR Source_Dirs      USE("./havk/", "./specs/", "./nasm/");
+   FOR Languages        USE("Ada", "ASM");
+   FOR Source_Dirs      USE("./ada/", "./ada_specifications/", "./assembly/");
    FOR Object_Dir       USE "./../build/";
    FOR Exec_Dir         USE "./";
    FOR Main             USE("havk.adb");
+   -- Object directory must contain "adainclude" (RTS files) and "adalib".
+   FOR Runtime("Ada")   USE HAVK'Object_Dir;
 
    TYPE Kernel_Type IS("Final", "Debug");
    Build : Kernel_Type := EXTERNAL("Build");
 
-   -- I have gone back to using my own runtime system, as the ZFP RTS lacked
-   -- secondary stack support and tagged records. Note that the object
-   -- directory must contain "adainclude" and "adalib". They are handled
-   -- by the "HAVK_RTS.gpr" project, which compiles HAVK's runtime system.
-   FOR Runtime("Ada")   USE HAVK'Object_Dir;
+   -- NOTE: Do not include extra spaces in the switches or else `gprbuild`
+   -- will fail to parse them properly.
 
-   -- NOTE: none of the arguments are allowed to have spaces, or
-   -- else they somehow become corrupted when passed to the
-   -- programs used for compilation. I don't think GPR allows spaces.
-
-   PACKAGE Naming  IS
-      FOR Body_Suffix("NASM") USE ".asm";
+   PACKAGE Naming
+   IS
+      -- Switch the suffix from ".s" to ".S". The latter indicates that the
+      -- assembly file has not gone through preprocessing before being passed
+      -- to the compiler/driver.
+      FOR Body_Suffix("ASM") USE ".S";
    END Naming;
 
-   PACKAGE Builder IS -- `gprbuild`
-      Ada_Basic_Switches := (
-         -- May as well use the latest version of Ada, there is no harm in it.
+   PACKAGE Builder
+   IS -- `gprbuild`
+      Ada_Basic_Switches :=
+        (-- May as well use the latest version of Ada, there is no harm in it.
          "-gnat2012",
          -- Strictly 7-bit ASCII only in source code. Disallow the upper
          -- half of the byte for the extra ISO 8859-1 (Latin-1) characters.
@@ -64,8 +64,8 @@ IS
          -- No standard include paths.
          "-nostdinc");
 
-      Ada_Style_Switches := (
-         -- Indentation of 3 spaces. I would have really liked to stick to
+      Ada_Style_Switches :=
+        (-- Indentation of 3 spaces. I would have really liked to stick to
          -- tabs with 8 character width, but it doesn't seem to
          -- suit Ada at a column length of around 80.
          "-gnaty3",
@@ -105,8 +105,8 @@ IS
          -- Check for unnecessary parentheses, as they are not required.
          "-gnatyx");
 
-      Ada_Final_Switches := (
-         -- No debug information at all for obvious reasons.
+      Ada_Final_Switches :=
+        (-- No debug information at all for obvious reasons.
          "-g0",
          -- Default validity checks. Specified by default regardless.
          "-gnatVd",
@@ -114,80 +114,42 @@ IS
          -- the "ali" files. Also saves a little space.
          "-gnatx");
 
-      Ada_Debug_Switches := (
-         -- Maximum debug information for GDB specifically.
+      Ada_Debug_Switches :=
+        (-- Maximum debug information for GDB specifically.
          "-ggdb3",
          -- All validity checks for debugging.
          "-gnatVa",
          -- Creates "rep" files showing the bit representation of types etc.
          "-gnatR2s");
 
-      NASM_Basic_Switches := (
-         -- Enable all warnings by default.
-         "-Wall",
-         -- GNU style warnings.
-         "-Xgnu",
-         -- Specify the debug format DWARF (works with GDB). Disabled so far.
-         "-Fdwarf");
-
-      NASM_Final_Switches := (
-         -- Enable the default optimizations again, just for clarity.
-         "-Ox");
-
-      NASM_Debug_Switches := (
-         -- Disable the default optimizations.
-         "-O0",
-         -- Include debug information in the DWARF format.
-         "-g");
-
-      CASE Build IS
+      CASE
+         Build
+      IS
          WHEN "Final" =>
-            FOR Default_Switches("Ada")  USE
+            FOR Default_Switches("Ada") USE
                Ada_Basic_Switches &
                Ada_Style_Switches &
                Ada_Final_Switches;
-            FOR Default_Switches("NASM") USE
-               NASM_Basic_Switches &
-               NASM_Final_Switches;
          WHEN "Debug" =>
-            FOR Default_Switches("Ada")  USE
+            FOR Default_Switches("Ada") USE
                Ada_Basic_Switches &
                Ada_Style_Switches &
                Ada_Debug_Switches;
-            FOR Default_Switches("NASM") USE
-               NASM_Basic_Switches &
-               NASM_Debug_Switches;
       END CASE;
 
       -- Add my Ada configuration file and apply it everywhere.
-      FOR Global_Configuration_Pragmas   USE "./specs/havk.adc";
+      FOR Global_Configuration_Pragmas  USE "./ada_specifications/havk.adc";
 
       -- Just a default output. The Makefile should control it, so this
       -- is only a fallback.
-      FOR Executable("havk.adb")         USE "../build/No_Makefile_HAVK.elf";
-      FOR Executable_Suffix              USE ".elf";
+      FOR Executable("havk.adb")        USE "../build/No_Makefile_HAVK.elf";
+      FOR Executable_Suffix             USE ".elf";
    END Builder;
 
-   PACKAGE Compiler IS -- `gcc` / `x86_64-pc-linux-gnu-gcc` & `nasm`
-      -- Define my "new language's" configuration for NASM/assembly.
-      -- Use the `nasm` executable. Expect it in the user's path.
-      FOR Driver("NASM")                    USE "nasm";
-      -- We're only assembling ELF-64 format binaries with HAVK.
-      FOR Leading_Required_Switches("NASM") USE ("-felf64");
-      -- Specify the object file's suffix as ".o", set as default anyway.
-      FOR Object_File_Suffix("NASM")        USE ".o";
-      -- This needs to be specified even when it's "supposedly"
-      -- the default setting. Doesn't work without it for me as NASM
-      -- just generates the object file into the source directory.
-      FOR Object_File_Switches("NASM")      USE ("-o");
-      -- Don't think I need this, but NASM does include some Makefile
-      -- specific options. Set it anyway.
-      FOR Dependency_Kind("NASM")           USE "Makefile";
-      -- This will pass all source directories to NASM.
-      FOR Include_Switches("NASM")          USE ("-I");
-
-      GCC_Basic_Switches := (
-         -- Stack protector fully enabled, because why not. Doesn't seem to
+   PACKAGE Compiler
+   IS -- `gcc`
+      GCC_Basic_Switches :=
+        (-- Stack protector fully enabled, because why not. Doesn't seem to
          -- actually do anything that Ada's checks don't do already.
          "-fstack-protector-all",
          -- Add some extra instructions that check if we've gone
@@ -202,8 +164,9 @@ IS
          -- I've allocated in the entry assembly file.
          "-fstack-usage",
          -- This informs GCC of where the stack ends, so HAVK can appropriately
-         -- raise a signal during a stack overflow.
-         "-fstack-limit-symbol=stack.end",
+         -- raise a signal during a stack overflow. I don't think it's very
+         -- effective, but assembly is generated where it uses the symbol.
+         "-fstack-limit-symbol=__stack_end",
          -- The x86-64 red zone is a problem when handling interrupts as the
          -- stack is shared with the ISR and whatever was executing before.
          "-mno-red-zone",
@@ -226,14 +189,14 @@ IS
          -- Optimize code for no particular CPU family.
          "-mtune=generic");
 
-      GCC_Debug_Switches := (
-         -- TODO: This allows for a more general and less efficient memory
+      GCC_Debug_Switches :=
+        (-- TODO: This allows for a more general and less efficient memory
          -- model, but GDB is able to connect to QEMU with the ability to
          -- debug properly via a working backtrace.
-         "-mcmodel=large");
+         "-mcmodel=kernel");
 
-      GCC_Final_Switches := (
-         -- TODO: This allows for a more appropriate memory model at the slight
+      GCC_Final_Switches :=
+        (-- TODO: This allows for a more appropriate memory model at the slight
          -- expense of GDB debugging functionality. I don't think there's any
          -- real reason why this couldn't work. Breaking randomly is not
          -- perfect with this, as e.g. sometimes GDB thinks there's a call
@@ -242,16 +205,44 @@ IS
          "-mcmodel=kernel");
 
       -- Switches to be used by any files that generate interrupt handlers.
-      GCC_Interrupt_Switches := (
-         -- Disable the usage of 80387/x87 instructions as GCC refuses
+      GCC_Interrupt_Switches :=
+        (-- Disable the usage of 80387/x87 instructions as GCC refuses
          -- to create an interrupt handler with the possibility of them being
          -- used in it. Apparently due to unimplemention. I believe this is
          -- because the ancient x87 coprocessors did something with the stack.
          "-mno-80387",
-         -- Make sure only the general registers are being utilized.
+         -- Make sure only the general registers are being utilised.
          "-mgeneral-regs-only");
 
-      CASE Build IS
+      GAS_Basic_Switches :=
+        (-- Use the AMD64 ISA. This is often default, but specify it anyway.
+         "-Wa,-mamd64",
+         -- Always output machine code for long mode by default (SysV ABI).
+         "-Wa,--64",
+         -- Don't suppress any warnings and make them into errors.
+         "-Wa,--warn", "-Wa,--fatal-warnings",
+         -- Define the stack as non-executable for paging purposes.
+         "-Wa,--noexecstack",
+         -- For the ".size" directive, raise an error if the size is invalid.
+         "-Wa,--size-check=error",
+         -- Optimise the machine code for no particular CPU family.
+         "-Wa,-mtune=generic64",
+         -- Raise an error if certain operands are invalid.
+         "-Wa,-moperand-check=error",
+         -- GAS supports Intel syntax. Prefer using that at all times.
+         "-Wa,-msyntax=intel",
+         -- Also use Intel-style mnemonics/instruction names. They're cleaner.
+         "-Wa,-mmnemonic=intel",
+         -- Avoid the pointless AT&T-style register prefix.
+         "-Wa,-mnaked-reg");
+
+      GAS_Debug_Switches :=
+        (-- Output debugging information in any preferred format.
+         "-Wa,--gen-debug");
+
+      CASE
+         Build
+      IS
          WHEN "Final" =>
             FOR Default_Switches("Ada") USE
                GCC_Basic_Switches &
@@ -260,7 +251,8 @@ IS
                GCC_Basic_Switches &
                GCC_Final_Switches &
                GCC_Interrupt_Switches;
-
+            FOR Default_Switches("ASM") USE
+               GAS_Basic_Switches;
          WHEN "Debug" =>
             FOR Default_Switches("Ada") USE
                GCC_Basic_Switches &
@@ -269,12 +261,16 @@ IS
                GCC_Basic_Switches &
                GCC_Debug_Switches &
                GCC_Interrupt_Switches;
+            FOR Default_Switches("ASM") USE
+               GAS_Basic_Switches &
+               GAS_Debug_Switches;
       END CASE;
    END Compiler;
 
-   PACKAGE Binder IS -- `gnatbind`
-      FOR Default_Switches("Ada") USE(
-         -- Static GNAT run-time.
+   PACKAGE Binder
+   IS -- `gnatbind`
+      FOR Default_Switches("Ada") USE
+        (-- Static GNAT run-time.
          "-static",
          -- Check if the source files actually exist and are findable,
          -- otherwise, raise an error.
@@ -289,11 +285,12 @@ IS
          "-D16384");
    END Binder;
 
-   PACKAGE Linker IS -- `gnatlink`
-      Linker_Basic_Switches := (
-         -- Static GNAT run-time.
+   PACKAGE Linker
+   IS -- `gnatlink`
+      Linker_Basic_Switches :=
+        (-- Static GNAT run-time.
          "-static",
-         -- No standard library initialization e.g. constructors.
+         -- No standard library initialisation e.g. constructors.
          "-nostartfiles",
          -- The custom linker script to be used which defines the entry
          -- point to the assembly file turned object.
@@ -309,20 +306,22 @@ IS
          -- Specify the main library (libHAVK.a) to be used by the executable.
          "-lHAVK");
 
-      Linker_Final_Switches := (
-         -- Remove any unused dead code and data from the kernel file,
+      Linker_Final_Switches :=
+        (-- Remove any unused dead code and data from the kernel file,
          -- just to make it smaller.
          "-Wl,--gc-sections",
          -- Strip the symbols in the discarded sections.
          "-Wl,--strip-discarded");
 
-      Linker_Debug_Switches := (
-         -- Do not discard any local symbols.
+      Linker_Debug_Switches :=
+        (-- Do not discard any local symbols.
          "-Wl,--discard-none",
          -- The binder source file now is compiled with debug information.
          "-g");
 
-      CASE Build IS
+      CASE
+         Build
+      IS
          WHEN "Final" =>
             FOR Default_Switches("Ada") USE
                Linker_Basic_Switches &
