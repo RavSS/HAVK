@@ -8,7 +8,8 @@
 WITH
    HAVK_Kernel.Interrupts.PIC,
    HAVK_Kernel.PS2.Keyboard,
-   HAVK_Kernel.PS2.Mouse;
+   HAVK_Kernel.PS2.Mouse,
+   HAVK_Kernel.Tasking;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.IRQs
 IS
@@ -20,6 +21,7 @@ IS
    IS
    BEGIN
       Ticker := Ticker + 1;
+      Tasking.Scheduler;
       PIC.Master_Reset;
    END ISR_32_Handler;
 

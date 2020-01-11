@@ -27,23 +27,23 @@ IS
       Data              : textbox_data(0 .. Height, 0 .. Width) :=
          (OTHERS => (OTHERS => character'val(0)));
       -- The X index of the text cursor, which is the column (textbox width).
-      Current_X_Index   : number   := 0;
+      Current_X_Index   : number := 0;
       -- The Y index of the text cursor, which is the row (textbox height).
-      Current_Y_Index   : number   := 0;
+      Current_Y_Index   : number := 0;
       -- Set to a black background by default.
-      Background_Colour : pixel := 0;
-      -- Set to white text by default.
-      Foreground_Colour : pixel := 16#FFFFFF#;
+      Background_Colour : pixel  := 0;
+      -- Set to white text by de   fault.
+      Foreground_Colour : pixel  := 16#FFFFFF#;
       -- The distance between drawn characters is 2 pixels by default.
-      Kerning           : number   := 2;
+      Kerning           : number := 2;
       -- TODO: Font size is currently unused, but I think I can "upscale"
       -- the font if I want?
-      Font_Size         : number   := 1;
+      Font_Size         : number := 1;
       -- The line separation between rows is 3 pixels by default.
       -- This does not include the font height, that is handled automatically.
-      Line_Separation   : number   := 3;
+      Line_Separation   : number := 3;
       -- Where the textbox should be drawn on a framebuffer.
-      Start_Position    : number   := 0;
+      Start_Position    : number := 0;
    END RECORD;
 
    -- Adds a string into a textbox.
@@ -86,6 +86,16 @@ IS
       ASCII   : IN character := character'val(0))
    WITH
       Inline => true;
+
+   -- This draws a character onto the framebuffer type which is defined
+   -- in this very procedure's parent package.
+   PROCEDURE Draw_Character
+     (Buffer            : IN view;
+      Pixel_Start       : IN number;
+      Foreground_Colour : IN pixel;
+      Background_Colour : IN pixel;
+      ASCII             : IN character);
+
 PRIVATE
    -- Shifts every row upwards and clears out the row at the bottom.
    PROCEDURE Scroll_Down
@@ -98,13 +108,4 @@ PRIVATE
    WITH
       Post'class => Object.Current_Y_Index <= Object.Data'last(1) AND THEN
                     Object.Current_X_Index <= Object.Data'last(2);
-
-   -- This draws a character onto the framebuffer type which is defined
-   -- in this very procedure's parent package.
-   PROCEDURE Draw_Character
-     (Buffer            : IN view;
-      Pixel_Start       : IN number;
-      Foreground_Colour : IN pixel;
-      Background_Colour : IN pixel;
-      ASCII             : IN character);
 END HAVK_Kernel.Graphics.Text;

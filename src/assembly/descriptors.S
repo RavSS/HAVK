@@ -53,3 +53,35 @@ assembly__load_global_descriptor_table:
 assembly__load_interrupt_descriptor_table:
 	LIDT [RDI]
 	RET
+
+# NOTE: This isn't really needed or even called from Ada, I've just been toying
+# around with ring-3 and this showcases it, so I've kept it for reference.
+.GLOBAL assembly__user_mode_call
+# (RDI => unmodified CS descriptor index for user mode,
+#  RSI => unmodified DS descriptor index for user mode,
+#  RDX => address of the function to call in user mode)
+assembly__user_mode_call:
+	# Both of these are for ring 3, so OR bits 0 to 1 with 3.
+	OR DI, 3 # Ring 3 CS index.
+	OR SI, 3 # Ring 3 DS index.
+
+	MOV DS, SI # Load the DS descriptor index into the segment registers.
+	MOV ES, SI
+	MOV FS, SI
+	MOV GS, SI
+	# SS is automatically handled.
+
+	# NOTE: The 64-bit IRET (IRETQ) instruction pops off segment selectors
+	# as 64-bit values and ignores the higher 48 bits. Similiarly, it only
+	# uses 16-bits of the RFLAGS register. See all the microcode operations
+	# for the instruction in any x86 reference manual.
+
+	MOV RCX, RSP
+
+	PUSH RSI # Push the DS selector.
+	PUSH RCX # Push the stack.
+	PUSHFQ # Push RFLAGS. The mnemonic doesn't matter without prefixes.
+	PUSH RDI # Push the CS selector.
+	PUSH RDX # Push the function address.
+
+	REX.W IRET

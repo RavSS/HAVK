@@ -37,6 +37,11 @@ IS
    -- This type's limit and size is irrelevant, as it's just a placeholder.
    TYPE void IS MOD 1;
 
+   -- A broad exception identity to be used for simple kernel panics anywhere.
+   -- There's little point in declaring numerous exception identities, as we're
+   -- not actually allowed to handle them in SPARK 2014 (to my understanding).
+   Panic : EXCEPTION;
+
    -- This is for converting "address" to "number" and vice versa.
    FUNCTION Address_Value IS NEW Ada.Unchecked_Conversion
      (Source => address, Target =>  number);
@@ -73,7 +78,7 @@ PRIVATE
    -- This controls the maximum amount of log entries. Note that this is
    -- static, it does not use heap allocation. This reserves around 30 KiB as
    -- of now for logs.
-   TYPE log_entry_limit IS RANGE 1 .. 200;
+   SUBTYPE log_entry_limit IS number RANGE 1 .. 200;
 
    -- A record of a log containing its specific details.
    TYPE log_information IS RECORD

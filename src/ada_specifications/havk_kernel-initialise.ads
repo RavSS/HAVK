@@ -79,6 +79,19 @@ IS
    -- Initialises any debug utilities.
    PROCEDURE Debugger;
 
+   -- Does the PS/2 input and IRQ 0 count tests for now, but it can be expanded
+   -- to anything else as well.
+   PROCEDURE Tests
+     (Terminal : IN OUT textbox;
+      Display  : IN view);
+
+   -- Sets up the mechanisms for multi-tasking and enters Phase II as a task.
+   -- Everything that doesn't have support for concurrency needs to be called
+   -- before calling this is even considered.
+   PROCEDURE Enter_Phase_II
+   WITH
+      No_Return => true;
+
    -- The default paging layout.
    Kernel_Paging_Layout : Paging.page_layout;
 

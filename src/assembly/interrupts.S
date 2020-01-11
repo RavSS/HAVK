@@ -5,6 +5,17 @@
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
 
+# Unfortunately, the "INT" instruction can only take in a byte constant (imm8),
+# so I have to declare a function for every single interrupt I wish to raise.
+.MACRO DEFINE_INTERRUPT_FUNCTION VECTOR:req
+	.IFNDEF assembly__raise_interrupt_\VECTOR
+		.GLOBAL assembly__raise_interrupt_\VECTOR
+		assembly__raise_interrupt_\VECTOR:
+			INT \VECTOR
+			RET
+	.ENDIF
+.ENDM
+
 .SECTION .text
 
 .GLOBAL assembly__pic_master_end_interrupt
@@ -21,3 +32,5 @@ assembly__pic_dual_end_interrupt:
 	OUT 0x20, AL
 	OUT 0xA0, AL
 	RET
+
+DEFINE_INTERRUPT_FUNCTION 100

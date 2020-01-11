@@ -6,12 +6,14 @@
 -------------------------------------------------------------------------------
 
 WITH
+   HAVK_Phase_II,
    HAVK_Kernel.User_Input,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Interrupts.PIC,
    HAVK_Kernel.Interrupts.APIC,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Exceptions,
+   HAVK_Kernel.Tasking,
    HAVK_Kernel.Memory,
    HAVK_Kernel.Debug,
    HAVK_Kernel.UEFI,
@@ -169,8 +171,6 @@ IS
                Box_Size - 1);
          END LOOP;
       END LOOP;
-
-      Log("Grid test drawn to the main framebuffer.");
    END Grid_Test;
 
    PROCEDURE See_Magic
@@ -374,16 +374,8 @@ IS
    PROCEDURE Memory_Map_Info
      (Terminal : IN OUT textbox)
    IS
-      Map : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map;
    BEGIN
-      -- TODO: Needs work.
-      Terminal.Print("MEMORY MAP ENUMERATION:");
-      Terminal.Newline;
-
-      Terminal.Print("   MEMORY DESCRIPTORS:" & number'image(Map'length));
-      Terminal.Newline;
-
-      Terminal.Print("   TOTAL USABLE MEMORY:" &
+      Terminal.Print("TOTAL USABLE SYSTEM MEMORY:" &
          number'image(Memory.System_Limit / MiB) & " MEBIBYTES");
       Terminal.Newline;
    END Memory_Map_Info;
@@ -405,5 +397,53 @@ IS
    BEGIN
       PRAGMA Debug(Debug.Initialise);
    END Debugger;
+
+   PROCEDURE Tests
+     (Terminal : IN OUT textbox;
+      Display  : IN view)
+   IS
+   BEGIN
+      Terminal.Print("PRESS ENTER TO INITIALISE ALL TESTS.");
+      Terminal.Newline;
+      Terminal.Print("PRESS ESCAPE TO SKIP ALL TESTS.");
+      Terminal.Newline(2);
+      Terminal.Draw_On(Display);
+
+      LOOP
+         IF
+            User_Input.Get_Key_Name(1 .. 5) = "ENTER"
+         THEN
+            -- Test the PS/2 input.
+            Initialise.Input_Key_Test(Terminal, Display);
+            -- Count seconds until the user exits it.
+            Initialise.Seconds_Count(Terminal,  Display);
+            EXIT WHEN true;
+         ELSIF
+            User_Input.Get_Key_Name(1 .. 6) = "ESCAPE"
+         THEN
+            Terminal.Print("TESTS HAVE BEEN SKIPPED.");
+            Terminal.Newline;
+            Terminal.Draw_On(Display);
+            EXIT WHEN true;
+         END IF;
+      END LOOP;
+   END Tests;
+
+   PROCEDURE Enter_Phase_II
+   WITH
+      SPARK_Mode => off -- Address attribute is used to create the task.
+   IS
+   BEGIN
+      -- TODO: Maybe it would be better if this procedure took in an access
+      -- type to another procedure instead of using its address directly.
+      Tasking.Create("HAVK Phase II", HAVK_Phase_II'address);
+
+      Log("Now beginning multi-tasking environment.", nominal);
+      Tasking.Start; -- If this somehow returns, then something is wrong.
+
+      RAISE Program_Error
+      WITH
+         "Failed to enter Phase II.";
+   END Enter_Phase_II;
 
 END HAVK_Kernel.Initialise;

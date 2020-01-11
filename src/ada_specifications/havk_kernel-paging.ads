@@ -62,7 +62,7 @@ IS
       -- The NX (non-executable) bit. Self-explanatory.
       NX           : boolean                          := false;
    END RECORD;
-   FOR map_entry         USE RECORD
+   FOR map_entry USE RECORD
       Present          AT 0 RANGE 00 .. 00;
       Write_Access     AT 0 RANGE 01 .. 01;
       User_Access      AT 0 RANGE 02 .. 02;
@@ -249,6 +249,11 @@ IS
    TYPE page_layout IS TAGGED RECORD
       L4        : ALIASED map_table;
    END RECORD;
+
+   -- In some cases, we want the object on the heap instead for e.g. a
+   -- processes virtual space. This lets us put it inside another record
+   -- without heavily expanding that parent record itself.
+   TYPE access_page_layout IS ACCESS page_layout;
 
    -- Moves the base 4-KiB aligned address of the directory map table
    -- to the CR3 register to switch virtual address mappings.

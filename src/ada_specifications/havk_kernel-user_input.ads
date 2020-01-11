@@ -45,19 +45,17 @@ IS
    FUNCTION Get_Key
       RETURN character
    WITH
-      Inline => true,
-      Post   => Get_Key'result = Last_Key_State.ASCII OR ELSE
-                Get_Key'result = Last_Key_State.ASCII_Shifted;
+      Inline => true;
 
    -- Shortcut function to retrieve the name as a string of the key pressed.
+   -- Remember that the string returned is padded to 32 characters, so an
+   -- array slice is required if you wish to test for a specific key.
    FUNCTION Get_Key_Name
       RETURN string
    WITH
       Inline => true,
-      Post   => Get_Key_Name'result'first = key_string'first       AND THEN
-                Get_Key_Name'result'last  = key_string'last        AND THEN
-               (Get_Key_Name'result       = Last_Key_State.Name     OR ELSE
-                Get_Key_Name'result       = Last_Key_State.Name_Shifted);
+      Post   => Get_Key_Name'result'first = key_string'first AND THEN
+                Get_Key_Name'result'last  = key_string'last;
 
    -- Returns true if the last key pressed is printable/visible.
    FUNCTION Key_Is_Visible

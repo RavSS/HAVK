@@ -26,7 +26,7 @@ IS
      (Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      RAISE Program_Error WITH "Unexpected ISR 31 handler entry";
+      RAISE Program_Error WITH "Unexpected ISR 0 handler entry";
    END ISR_0_Handler;
 
    PROCEDURE ISR_1_Handler
@@ -53,7 +53,9 @@ IS
          Export   => true,
          Volatile => true;
    BEGIN
-      WHILE NOT GDB_Ready LOOP
+      WHILE
+         NOT GDB_Ready
+      LOOP
          Spinlock_Pause;
       END LOOP;
    END ISR_3_Handler;
@@ -131,10 +133,10 @@ IS
       Error_Code  : IN number)
    IS
    BEGIN
-      Log
-        ("ISR 13: General protection fault triggered - Error code:" &
+      Log("ISR 13: General protection fault triggered - Error code:" &
          number'image(Error_Code) & " - Fault address: 0x" &
          Hex_Image(Stack_Frame.RIP) & '.', warning);
+      RAISE Program_Error WITH "Unexpected ISR 13 handler entry (GPF)";
    END ISR_13_Handler;
 
    PROCEDURE ISR_14_Handler -- Page fault.

@@ -235,15 +235,22 @@ IS
       Reserved_2                 AT 0 RANGE 108 .. 127;
    END RECORD;
 
-   -- Increase the amount of GDT entries if need be.
-   -- Tip: Bits 3 through 15 indicate the segment selector/descriptor index.
+   -- Increase the amount of GDT entries if need be. Bits 2 through 15 indicate
+   -- the segment selector/descriptor index that I have indicated below whereas
+   -- 0 to 1 indicate the RPL (requested privilege level).
    TYPE GDT_entries IS RECORD
-      Descriptor_Null      : GDT_entry;       --  0x4 =    100.
-      Descriptor_Kernel_CS : GDT_entry;       --  0x8 =   1000.
-      Descriptor_Kernel_DS : GDT_entry;       -- 0x10 =  10000.
-      Descriptor_User_CS   : GDT_entry;       -- 0x20 = 100000.
-      Descriptor_User_DS   : GDT_entry;       -- 0x24 = 100100.
-      Descriptor_TSS64     : GDT_entry_TSS64; -- 0x28 = 101000.
+      -- The null descriptor, which is never touched by the processor.
+      Descriptor_Null      : GDT_entry;
+      -- The CS descriptor for ring 0 code. The index is 0x08.
+      Descriptor_Kernel_CS : GDT_entry;
+      -- The DS descriptor for ring 0 data. The index is 0x10.
+      Descriptor_Kernel_DS : GDT_entry;
+      -- The CS descriptor for ring 3 code. The index is 0x18.
+      Descriptor_User_CS   : GDT_entry;
+      -- The DS descriptor for ring 3 data. The index is 0x20.
+      Descriptor_User_DS   : GDT_entry;
+      -- The TSS descriptor for software multi-tasking. The index is 0x28.
+      Descriptor_TSS64     : GDT_entry_TSS64;
    END RECORD;
    FOR GDT_entries USE RECORD
       Descriptor_Null      AT 00 RANGE 0 .. 063;
@@ -264,7 +271,7 @@ IS
    END RECORD;
 
    -- Increase this later on if need be.
-   TYPE IDT_gates IS ARRAY(number RANGE 0 .. 47) OF IDT_gate
+   TYPE IDT_gates IS ARRAY(number RANGE 0 .. 100) OF IDT_gate
    WITH
       Component_Size => 128,
       Pack           => true;
@@ -277,7 +284,9 @@ IS
      (Index          : IN number;
       ISR            : IN address;
       Exception_Type : IN IDT_gate_type;
-      Ring           : IN number);
+      Callable_DPL   : IN number)
+   WITH
+      Pre => Index <= IDT_gates'last AND THEN Callable_DPL <= 3;
 
    -- Sets up the interrupt descriptor table.
    PROCEDURE Prepare_IDT;

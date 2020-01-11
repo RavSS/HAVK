@@ -24,10 +24,27 @@ IS
      (Value     : IN number;
       Alignment : IN number;
       Round_Up  : IN boolean := false)
-   RETURN number
+      RETURN number
    WITH
       Inline => true,
       Pre    => Alignment /= 0 AND THEN (Alignment AND -Alignment) = Alignment;
+
+   -- Allocates a valid stack on the heap that can go inside the RSP register
+   -- and then returns a pointer to the top of it. The size starts from one.
+   -- TODO: The issue with the `Align()` post-condition occurs with this
+   -- as well. Could be a bug with `gnatprove`?
+   FUNCTION Allocate_System_Stack
+     (Size : IN number)
+     RETURN address
+   WITH
+      Pre  => Size >= 16 AND THEN Size MOD 16 = 0,
+      Post => Allocate_System_Stack'result >= Address_Value(Kernel_Heap_Base)
+              AND THEN
+              Allocate_System_Stack'result <= Address_Value(Kernel_Heap_End);
+
+   -- What follows below are useful symbol pointer values. Note that some of
+   -- them have ranges on them to make `gnatprove` have some notion of what
+   -- values it can realistically expect without needing assumptions.
 
    Kernel_Base           : CONSTANT number
    WITH
@@ -42,6 +59,7 @@ IS
       External_Name => "__kernel_end_address";
 
    Kernel_Virtual_Base   : CONSTANT number
+      RANGE 16#FFFFFFFF80000000# .. 16#FFFFFFFF80000000#
    WITH
       Import        => true,
       Convention    => Assembler,
@@ -54,64 +72,81 @@ IS
       External_Name => "__kernel_physical_base_address";
 
    Kernel_Text_Base      : CONSTANT number
+      RANGE Kernel_Virtual_Base .. number'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_text_base_address";
 
    Kernel_Text_End       : CONSTANT number
+      RANGE Kernel_Virtual_Base .. number'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_text_end_address";
 
    Kernel_RO_Data_Base   : CONSTANT number
+      RANGE Kernel_Virtual_Base .. number'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_rodata_base_address";
 
    Kernel_RO_Data_End    : CONSTANT number
+      RANGE Kernel_Virtual_Base .. number'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_rodata_end_address";
 
    Kernel_Data_Base      : CONSTANT number
+      RANGE Kernel_Virtual_Base .. number'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_data_base_address";
 
    Kernel_Data_End       : CONSTANT number
+      RANGE Kernel_Virtual_Base .. number'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_data_end_address";
 
    Kernel_BSS_Base       : CONSTANT number
+      RANGE Kernel_Virtual_Base .. number'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_bss_base_address";
 
    Kernel_BSS_End        : CONSTANT number
+      RANGE Kernel_Virtual_Base .. number'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_bss_end_address";
 
    Kernel_Heap_Base      : CONSTANT number
+      RANGE Kernel_Virtual_Base .. number'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_heap_base_address";
 
    Kernel_Heap_End       : CONSTANT number
+      RANGE Kernel_Heap_Base + address'size / 8 .. number'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_heap_end_address";
+
+   Kernel_Heap_Top       : CONSTANT number
+      RANGE Kernel_Heap_Base .. Kernel_Heap_End
+   WITH
+      Import        => true,
+      Convention    => Ada,
+      External_Name => "__kernel_heap_top";
 
    Kernel_Size           : CONSTANT number
    WITH

@@ -53,6 +53,7 @@ PACKAGE BODY System.Memory IS
    --  The address of the variable is the end of the heap
 
    Top : ALIASED address := Heap_Start'Address;
+   PRAGMA Export (Ada, Top, "__kernel_heap_top");
    --  First not used address (always aligned to the maximum alignment).
 
    ----------------

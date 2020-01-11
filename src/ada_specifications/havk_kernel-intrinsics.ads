@@ -13,7 +13,8 @@
 -- It's also implementation defined, whereas importation is in the standard.
 -- With contracts which are proven to be fulfilled, this should be quite safe.
 -- The only drawback is inlining, which no longer seems to work. I've still
--- specified the inline aspect if I want to use link-time optimisations later.
+-- specified the inline aspect if I want to use link-time optimisations later
+-- (although I don't think that will make a difference at linkage).
 PACKAGE HAVK_Kernel.Intrinsics
 IS
    -- Does a bit test on a specific value and returns true for a set bit etc.
@@ -46,6 +47,18 @@ IS
       External_Name => "assembly__output_byte",
       Pre           => Port <= 16#FFFF# AND THEN Value <= 16#FF#;
 
+   -- Writes a 64-bit value to a model-specific register.
+   PROCEDURE Write_MSR
+     (MSR   : IN number;
+      Value : IN number)
+   WITH
+      Global        => NULL,
+      Inline        => true,
+      Import        => true,
+      Convention    => Assembler,
+      Pre           => MSR <= 16#FFFFFFFF#,
+      External_Name => "assembly__write_model_specific_register";
+
    -- Inputs/reads a byte from an I/O port.
    FUNCTION Input_Byte
      (Port  : IN number)
@@ -59,6 +72,19 @@ IS
       External_Name     => "assembly__input_byte",
       Pre               => Port              <= 16#FFFF#,
       Post              => Input_Byte'result <= 16#00FF#;
+
+   -- Reads a 64-bit value from a model-specific register.
+   FUNCTION Read_MSR
+     (MSR   : IN number)
+     RETURN number
+   WITH
+      Volatile_Function => true,
+      Global            => NULL,
+      Inline            => true,
+      Import            => true,
+      Convention        => Assembler,
+      Pre               => MSR <= 16#FFFFFFFF#,
+      External_Name     => "assembly__read_model_specific_register";
 
    -- Halts the CPU.
    PROCEDURE Halt

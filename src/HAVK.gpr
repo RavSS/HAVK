@@ -12,7 +12,7 @@ IS
    FOR Source_Dirs      USE("./ada/", "./ada_specifications/", "./assembly/");
    FOR Object_Dir       USE "./../build/";
    FOR Exec_Dir         USE "./";
-   FOR Main             USE("havk.adb");
+   FOR Main             USE("havk_phase_i.adb");
    -- Object directory must contain "adainclude" (RTS files) and "adalib".
    FOR Runtime("Ada")   USE HAVK'Object_Dir;
 

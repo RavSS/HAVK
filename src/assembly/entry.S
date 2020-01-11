@@ -87,8 +87,7 @@ assembly__entry:
 	POPFQ # Clean 8-bytes off the stack and into the RFLAGS register.
 
 	# Begin to enter HAVK.
-	.EXTERN havk # Not required for GAS. Just compatibility with NASM.
-	CALL havk
+	CALL havk_phase_i
 
 	# HAVK should not exit like this in a version at or above V00-01-00.
 	# It should handle a shutdown properly instead.

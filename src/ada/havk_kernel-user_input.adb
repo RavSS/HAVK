@@ -5,6 +5,9 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   HAVK_Kernel.Intrinsics;
+
 PACKAGE BODY HAVK_Kernel.User_Input
 IS
    FUNCTION Key_String_Format
@@ -15,7 +18,7 @@ IS
    BEGIN
       IF
          Unformatted'first >= Formatted'first AND THEN
-         Unformatted'last <= Formatted'last
+         Unformatted'last  <= Formatted'last
       THEN
          FOR
             I IN Unformatted'range
@@ -30,8 +33,12 @@ IS
    FUNCTION Get_Key
       RETURN character
    IS
-      Current_Key_State : CONSTANT key_state := Last_Key_State;
+      Current_Key_State : key_state;
    BEGIN
+      Intrinsics.Disable_Interrupts;
+      Current_Key_State := Last_Key_State;
+      Intrinsics.Enable_Interrupts;
+
       IF
          Current_Key_State.Shifted
       THEN
@@ -44,8 +51,12 @@ IS
    FUNCTION Get_Key_Name
       RETURN string
    IS
-      Current_Key_State : CONSTANT key_state := Last_Key_State;
+      Current_Key_State : key_state;
    BEGIN
+      Intrinsics.Disable_Interrupts;
+      Current_Key_State := Last_Key_State;
+      Intrinsics.Enable_Interrupts;
+
       IF
          Current_Key_State.Shifted
       THEN

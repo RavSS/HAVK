@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
 -- Program         -- The HAVK Operating System                              --
--- Filename        -- havk.adb                                               --
+-- Filename        -- havk_phase_i.adb                                       --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -16,8 +16,11 @@ USE
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 
--- This is the main procedure, it is where HAVK starts itself after entry.
-PROCEDURE HAVK
+-- This is the first phase and it is the main procedure. Information critical
+-- to the system should be parsed in mono-tasking mode first.
+PROCEDURE HAVK_Phase_I
+WITH
+   No_Return => true
 IS
    -- Get an object which describes the system display.
    Display        : CONSTANT view := Get_Display(UEFI.Get_Arguments);
@@ -39,10 +42,11 @@ BEGIN
    -- As of now, this only sends information over a serial connection.
    PRAGMA Debug(Initialise.Debugger);
 
-   Log("Entered main kernel procedure.");
+   Log("Entered Phase I successfully.", nominal);
 
    -- Show a basic graphical shape on screen.
    Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
+   Log("Grid test drawn to the main framebuffer.");
 
    -- Set up the terminal.
    Terminal.Start_Position    := Terminal_Start;
@@ -84,16 +88,15 @@ BEGIN
 
    -- Prepare primitive forms of input via PS/2.
    Initialise.PS2_Input;
-   Initialise.Input_Key_Test(Terminal, Display);
 
-   -- Count seconds until the user exits it.
-   Initialise.Seconds_Count(Terminal,  Display);
+   -- Do a variety of tests if the user wishes to do so.
+   Initialise.Tests(Terminal, Display);
 
-   -- Don't call the last chance handler on return, instead stop the processor.
-   Log("End of HAVK procedure reached. CPU reset imminent.", warning);
+   Terminal.Print("START-UP WAS SUCCESSFUL.");
    Terminal.Newline(2);
-   Terminal.Print("HAVK IS A WORK-IN-PROGRESS FROM HERE, EXITING...");
-   Terminal.Newline(2);
-   Terminal.Print("THE CPU HAS BEEN RESET", Centre => true);
+   Terminal.Print("ENTERING PHASE II.", Centre => true);
    Terminal.Draw_On(Display);
-END HAVK; -- Upon return, the entry routine resets the CPU and halts forever.
+
+   -- Begin multi-tasking and leave this phase.
+   Initialise.Enter_Phase_II;
+END HAVK_Phase_I;
