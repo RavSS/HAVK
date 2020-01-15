@@ -7,33 +7,28 @@
 
 PACKAGE HAVK_Kernel.Exceptions
 IS
+   -- This is is entered upon any and all Ada exceptions. We simply crash.
    PROCEDURE Last_Chance_Handler
      (Source_Location : IN address;
       Line            : IN integer)
    WITH
-      Export     => true,
-      No_Return  => true,
-      Convention => Ada,
-      Link_Name  => "__gnat_last_chance_handler";
+      Export        => true,
+      No_Return     => true,
+      External_Name => "__gnat_last_chance_handler";
 
    -- Just a wrapper for the last chance handler for now, as a
    -- symbol is created for the stack check fail if stack protection
    -- is enabled during compilation.
    PROCEDURE Stack_Smash_Handler
    WITH
-      Export     => true,
-      No_Return  => true,
-      Convention => Ada,
-      Link_Name  => "__stack_chk_fail";
+      Export        => true,
+      No_Return     => true,
+      External_Name => "__stack_chk_fail";
 
-   -- A way to raise a fatal exception without using actual Ada exceptions.
-   -- For now, just use this for unimplemented features etc. Only use this very
-   -- sparingly, like if the hardware doesn't do what we want it to do e.g. no
-   -- PS/2 input or a UEFI boot service bit block transfer only framebuffer.
-   PROCEDURE Tears_In_Rain
-     (Message : IN string;
-      File    : IN string;
-      Line    : IN integer)
+   -- If an error occurs during elaboration, then make an attempt to
+   -- signify that fact.
+   Elaborated : boolean := false
    WITH
-      No_Return => true;
+      Volatile => true;
+
 END HAVK_Kernel.Exceptions;

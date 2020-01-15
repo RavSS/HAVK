@@ -7,12 +7,15 @@
 
 WITH
    HAVK_Kernel.Paging,
+   HAVK_Kernel.System_Call,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 USE
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 
+-- This package contains all of the initialisation routines for the other
+-- packages. The reason is to keep the main procedures more readable.
 PACKAGE HAVK_Kernel.Initialise
 IS
    -- Prepares the descriptor tables, which is necessary for interrupts
@@ -67,6 +70,10 @@ IS
 
    -- Initialises the PS/2 controller for keyboard input purposes (as of now).
    PROCEDURE PS2_Input;
+
+   -- Initialises the system call instruction's handler by preparing the MSRs.
+   PROCEDURE System_Call_Instruction
+   RENAMES System_Call.Set_MSRs;
 
    -- Retrieves the date and time in ISO 8601 format of when the current
    -- running version of the kernel was compiled and built.

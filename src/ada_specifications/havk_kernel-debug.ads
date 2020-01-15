@@ -73,14 +73,6 @@ IS
       Import     => true,
       Convention => Intrinsic;
 
-   -- Returns the current file and current line number of where this procedure
-   -- was called in a "file:line" string format.
-   FUNCTION Source_Location
-      RETURN string
-   WITH
-      Import     => true,
-      Convention => Intrinsic;
-
    -- Returns the current package/procedure/function name of where this
    -- procedure was called depending on what encloses it.
    FUNCTION Enclosing_Entity

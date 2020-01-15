@@ -43,12 +43,17 @@ IS
             Address       => Source_Location;
       BEGIN
          IF
+            NOT Elaborated
+         THEN
+            Log("Elaboration failed.", fatal);
+         END IF;
+
+         IF
             Line /= 0
          THEN
-            Log("Crashed - """ & C_String &
-               ":" & integer'image(Line) & """!", fatal);
+            Log(C_String & ":" & integer'image(Line), fatal);
          ELSE
-            Log("Crashed - """ & C_String & """!", fatal);
+            Log(C_String, fatal);
          END IF;
       END Crash_Message;
    BEGIN
@@ -63,24 +68,9 @@ IS
 
    PROCEDURE Stack_Smash_Handler
    IS
-      Message : CONSTANT string := "stack smashed" & character'val(0);
    BEGIN
-      Log("The stack has been smashed.", fatal);
-      Last_Chance_Handler(Message'address, 0);
-      -- Do not continue going.
+      RAISE Panic
+      WITH
+         "The stack has been smashed.";
    END Stack_Smash_Handler;
-
-   PROCEDURE Tears_In_Rain
-     (Message : IN string;
-      File    : IN string;
-      Line    : IN integer)
-   IS
-      Fatal_Message : CONSTANT string := Message & " - " & File &
-         character'val(0);
-   BEGIN
-      -- TODO: After logging has been fully completed, use the functions here.
-      Log("Manual kernel panic called.", fatal);
-      Last_Chance_Handler(Fatal_Message'address, Line);
-      -- Do not continue going.
-   END Tears_In_Rain;
 END HAVK_Kernel.Exceptions;

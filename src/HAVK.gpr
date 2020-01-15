@@ -181,8 +181,8 @@ IS
          -- supported by any CPU that supports long mode, but I've just
          -- disabled them for now.
          "-mno-sse", "-mno-sse2",
-         -- Intel syntax for inline x86-64 assembly, since I like it more
-         -- and it's less messy.
+         -- Intel syntax for inline x86-64 assembly, since I like it more and
+         -- it's less messy. Note that inline assembly won't be used anyway.
          "-masm=intel",
          -- Explicitly mention x86-64, just to be sure.
          "-march=x86-64",

@@ -42,6 +42,14 @@ IS
    -- not actually allowed to handle them in SPARK 2014 (to my understanding).
    Panic : EXCEPTION;
 
+   -- Returns the current file and current line number of where this procedure
+   -- was called in a "file:line" string format. Use with the panic exception.
+   FUNCTION Source_Location
+      RETURN string
+   WITH
+      Import     => true,
+      Convention => Intrinsic;
+
    -- This is for converting "address" to "number" and vice versa.
    FUNCTION Address_Value IS NEW Ada.Unchecked_Conversion
      (Source => address, Target =>  number);

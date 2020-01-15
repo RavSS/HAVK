@@ -44,7 +44,7 @@ IS
                           TSS_Offset <= 16#FFFF#;
    BEGIN
       -- See the "GDT_entries" record type on how the offsets are determined.
-      LGDT(GDTR'address, 16#08#, 16#10#, 16#28#);
+      LGDT(GDTR'address, 16#08#, 16#10#, 16#30#);
    END Prepare_GDT;
 
    PROCEDURE Setup_Interrupt

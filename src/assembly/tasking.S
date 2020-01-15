@@ -5,42 +5,48 @@
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
 
-# TODO: These are obviously incomplete and lack the SIMD registers.
-# Resolve it later when it matters. No attempt to check the stack limits
-# is made either, which should probably be crucial to add later. The registers
-# below are all of the callee-saved ones for the System V AMD64 ABI. There
-# is no need to save the stack since we save it to a task control block.
-.MACRO SAVE_REGISTERS_TO_STACK # Requires 48 available bytes on the stack.
-	PUSH RBX
-	PUSH RBP
-	PUSH R12
-	PUSH R13
-	PUSH R14
-	PUSH R15
-.ENDM
-.MACRO LOAD_REGISTERS_FROM_STACK # Takes 48 bytes off the stack.
-	POP R15
-	POP R14
-	POP R13
-	POP R12
-	POP RBP
-	POP RBX
+# This structure must match the Ada "callee-saved register" record.
+.STRUCT 0 # RSP is specially treated (i.e. not here).
+	RBX_STATE:
+.STRUCT RBX_STATE + 8
+	RBP_STATE:
+.STRUCT RBP_STATE + 8
+	R12_STATE:
+.STRUCT R12_STATE + 8
+	R13_STATE:
+.STRUCT R13_STATE + 8
+	R14_STATE:
+.STRUCT R14_STATE + 8
+	R15_STATE:
+.STRUCT R15_STATE + 8
+	# In long mode, SS is basically always the same as the other segment
+	# selector registers. I'll treat FS and GS specially later on.
+	SS_STATE:
+.STRUCT SS_STATE + 8
+
+.MACRO SAVE_REGISTERS_TO_STATE REGISTER_WITH_STATE_POINTER:req
+	MOV [\REGISTER_WITH_STATE_POINTER + RBX_STATE], RBX
+	MOV [\REGISTER_WITH_STATE_POINTER + RBP_STATE], RBP
+	MOV [\REGISTER_WITH_STATE_POINTER + R12_STATE], R12
+	MOV [\REGISTER_WITH_STATE_POINTER + R13_STATE], R13
+	MOV [\REGISTER_WITH_STATE_POINTER + R14_STATE], R14
+	MOV [\REGISTER_WITH_STATE_POINTER + R15_STATE], R15
+	# Don't bother saving segment register states. Assign SS
+	# statically at task creation based on the DPL.
 .ENDM
 
-# Add a bunch of (to be) zeroed registers. I'm not sure what initial
-# values they should have, but this seems to work.
-# TODO: Maybe cram a return address to a function that indicates the
-# new task has finished.
-.MACRO SAVE_DEFAULT_REGISTERS_TO_STACK ZEROED_REGISTER:req
-	# There's no `PUSH imm64`. A blank register must be used for speed if
-	# we are to assume that the memory is not already zeroed out. Be safe.
-	XOR \ZEROED_REGISTER, \ZEROED_REGISTER # Empty values for now.
-	PUSH \ZEROED_REGISTER # RBX
-	PUSH \ZEROED_REGISTER # RBP
-	PUSH \ZEROED_REGISTER # R12
-	PUSH \ZEROED_REGISTER # R13
-	PUSH \ZEROED_REGISTER # R14
-	PUSH \ZEROED_REGISTER # R15
+.MACRO LOAD_REGISTERS_FROM_STATE REGISTER_WITH_STATE_POINTER:req
+	MOV RBX, [\REGISTER_WITH_STATE_POINTER + RBX_STATE]
+	MOV RBP, [\REGISTER_WITH_STATE_POINTER + RBP_STATE]
+	MOV R12, [\REGISTER_WITH_STATE_POINTER + R12_STATE]
+	MOV R13, [\REGISTER_WITH_STATE_POINTER + R13_STATE]
+	MOV R14, [\REGISTER_WITH_STATE_POINTER + R14_STATE]
+	MOV R15, [\REGISTER_WITH_STATE_POINTER + R15_STATE]
+	MOV DS, [\REGISTER_WITH_STATE_POINTER + SS_STATE]
+	MOV ES, [\REGISTER_WITH_STATE_POINTER + SS_STATE]
+	MOV FS, [\REGISTER_WITH_STATE_POINTER + SS_STATE]
+	MOV GS, [\REGISTER_WITH_STATE_POINTER + SS_STATE]
+	# CS and SS are already handled.
 .ENDM
 
 .SECTION .bss
@@ -60,12 +66,12 @@ __task_management_stack_base:
 
 .SECTION .text
 
-.GLOBAL assembly__prepare_task
+.GLOBAL assembly__prepare_task_stack
 # (RDI => index of the pre-modified CS descriptor for whichever ring,
 #  RSI => index of the pre-modified DS descriptor for whichever ring,
 #  RDX => initial instruction pointer for the new task,
 #  RCX => the top of the new task's stack)
-assembly__prepare_task:
+assembly__prepare_task_stack:
 	CLI # Disable interrupts (hopefully again) just to be sure.
 	XCHG RCX, RSP # Switch to the task's stack.
 
@@ -78,39 +84,33 @@ assembly__prepare_task:
 	PUSH RDI # Push the CS.
 	PUSH RDX # The initial RIP value.
 
-	SAVE_DEFAULT_REGISTERS_TO_STACK RAX # Use RAX as the null register.
-
 	XCHG RCX, RSP # Switch back to the original stack.
 	MOV RAX, RCX # Return the subtracted RSP value in RAX.
-
 	RET
 
+# Reminder that this is an ISR. It is not a simple procedure/function.
+# It can be called from another interrupt handler via interrupt nesting.
 .GLOBAL assembly__switch_task
-# ()
+# (RDI => active task's register state)
 assembly__switch_task:
-	# Begin state save.
-	SAVE_REGISTERS_TO_STACK
-	# Begin stack switch.
+	SAVE_REGISTERS_TO_STATE RDI # Save and continue to clobber if required.
 
 	MOV RDI, RSP # Get ready to pass the task stack in RDI.
 	LEA RSP, [RIP + __task_management_stack_base] # Load the special stack.
-	PUSH RDI # Pass it as the "Task_Stack" argument.
 
-	# Store the stack indicated in RDI and change the active task.
+	# Takes in an argument in RDI indicating the active task's stack and
+	# then changes the active task index, as a store happens in a switch.
 	CALL ada__store_task
-	POP RDI # Clean up the arguments just in case.
 
-	# Get the next task's stack in RAX.
-	CALL ada__get_task
-	MOV RSP, RAX
-	# Now we've switched to the next task's stack and can load registers.
+	# We are now ready to get the new task's register state.
+	CALL ada__get_task_state # The state record pointer is in RAX.
+	LOAD_REGISTERS_FROM_STATE RAX # Load them and don't touch them.
 
-	# End stack switch.
-	LOAD_REGISTERS_FROM_STACK
-	# End state load.
+	CALL ada__get_task_stack # Get the next task's stack in RAX.
+	MOV RSP, RAX # Now we've switched to the next task's stack.
 
-	# Since this can either be called in IRQ0 or independently at interrupt
-	# vector 100, reset the master PIC to cover the former case.
+	# Since this can either be called in IRQ 0 or independently at
+	# interrupt vector 100, reset the master PIC to cover the former case.
 	MOV AL, 0x20 # RAX does not need to be restored.
 	OUT 0x20, AL
 	REX.W IRET # We're now at the next task.
@@ -119,12 +119,14 @@ assembly__switch_task:
 # ()
 assembly__start_tasking:
 	CLI # Disable any interrupts just in case as usual.
-	MOV BYTE PTR [ada__tasking_enabled], 1 # Enable tasking.
+	LOCK INC BYTE PTR [ada__tasking_enabled] # Enable tasking.
 
 	LEA RSP, [RIP + __task_management_stack_base] # Load the special stack.
-	CALL ada__get_task # Get the active task's stack.
-	MOV RSP, RAX # Switch to it.
 
-	LOAD_REGISTERS_FROM_STACK # Loads the default registers we pushed.
+	CALL ada__get_task_state # The state record pointer is in RAX.
+	LOAD_REGISTERS_FROM_STATE RAX
+
+	CALL ada__get_task_stack # Get the active task's stack.
+	MOV RSP, RAX # Switch to it.
 
 	REX.W IRET # We have finally entered multi-tasking mode.

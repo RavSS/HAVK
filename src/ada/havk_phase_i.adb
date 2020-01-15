@@ -57,6 +57,8 @@ BEGIN
    Terminal.Print(Welcome, Centre => true);
    Terminal.Newline;
    Terminal.Print("COMPILED AT " & Date_Of_Build, Centre => true);
+   Terminal.Newline;
+   Terminal.Print("COMPILER WAS " & Standard'compiler_version, Centre => true);
    Terminal.Newline(2);
 
    -- Show the magic number value.
@@ -85,6 +87,9 @@ BEGIN
 
    -- Use a new page structure and map the kernel, UEFI/ACPI data, etc.
    Initialise.Default_Page_Layout;
+
+   -- Set-up the system call instruction's functionality and options.
+   Initialise.System_Call_Instruction;
 
    -- Prepare primitive forms of input via PS/2.
    Initialise.PS2_Input;

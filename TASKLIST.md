@@ -1,15 +1,13 @@
 # Tasklist for the HAVK operating system
-### Last Updated: 2020-01-11
+### Last Updated: 2020-01-16
 #### High priority
 - Create a CPUID package so things like 1-GiB pages can be used without fear.
 - After implementing more OS functionality, implement LAPIC and IOAPIC
 features by parsing some of the ACPI tables. Required for SMT support.
-- Get rid of the awful co-operative round robin scheduler and replace it
-with anything pre-emptive which can properly terminate tasks.
-- Let the tasking package handle ring-3 processes and create a system call
-package. Use either `INT 0x80` or `SYSCALL` for now.
-- Start work on a functional user mode including a real memory manager
-and not a static buffer like the one for the kernel's heap as of now.
+- Get rid of the awful pre-emptive round robin scheduler and replace it
+with anything less laggy which can properly terminate tasks.
+- Start work on a real memory manager and not a static buffer like the one
+for the kernel's heap as of now.
 
 #### Low priority
 - Begin to create a solution for PS/2 mouse capabilities.

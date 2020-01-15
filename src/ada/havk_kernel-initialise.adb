@@ -246,10 +246,11 @@ IS
       IF
          Check_Condition /= functional
       THEN
-         Log("PS/2 controller is inoperable.", fatal);
-
-         Exceptions.Tears_In_Rain("Non-working PS/2 controller detected",
-            Debug.File, Debug.Line);
+         RAISE Panic
+         WITH
+            Source_Location & " - Non-working PS/2 controller detected.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "HAVK needs a PS/2 controller for any and all input as of now.");
       ELSE
          Log("PS/2 controller is initialised.", nominal);
       END IF;
@@ -395,6 +396,7 @@ IS
    PROCEDURE Debugger
    IS
    BEGIN
+      Exceptions.Elaborated := true; -- Should silence an "unused" warning.
       PRAGMA Debug(Debug.Initialise);
    END Debugger;
 
@@ -436,14 +438,15 @@ IS
    BEGIN
       -- TODO: Maybe it would be better if this procedure took in an access
       -- type to another procedure instead of using its address directly.
-      Tasking.Create("HAVK Phase II", HAVK_Phase_II'address);
+      Tasking.Create("HAVK Phase II", HAVK_Phase_II'address,
+         User_Task => false);
 
       Log("Now beginning multi-tasking environment.", nominal);
       Tasking.Start; -- If this somehow returns, then something is wrong.
 
-      RAISE Program_Error
+      RAISE Panic
       WITH
-         "Failed to enter Phase II.";
+         Source_Location & " - Failed to enter Phase II.";
    END Enter_Phase_II;
 
 END HAVK_Kernel.Initialise;

@@ -17,6 +17,9 @@
 -- (although I don't think that will make a difference at linkage).
 PACKAGE HAVK_Kernel.Intrinsics
 IS
+   -- For usage with the special registers. MSRs (indices) are only 32-bits.
+   SUBTYPE model_specific_register IS number RANGE 0 .. 16#FFFFFFFF#;
+
    -- Does a bit test on a specific value and returns true for a set bit etc.
    -- The second argument refers to the bits in the first argument from zero.
    FUNCTION Bit_Test
@@ -49,14 +52,13 @@ IS
 
    -- Writes a 64-bit value to a model-specific register.
    PROCEDURE Write_MSR
-     (MSR   : IN number;
+     (MSR   : IN model_specific_register;
       Value : IN number)
    WITH
       Global        => NULL,
       Inline        => true,
       Import        => true,
       Convention    => Assembler,
-      Pre           => MSR <= 16#FFFFFFFF#,
       External_Name => "assembly__write_model_specific_register";
 
    -- Inputs/reads a byte from an I/O port.
@@ -75,7 +77,7 @@ IS
 
    -- Reads a 64-bit value from a model-specific register.
    FUNCTION Read_MSR
-     (MSR   : IN number)
+     (MSR   : IN model_specific_register)
      RETURN number
    WITH
       Volatile_Function => true,
@@ -83,7 +85,6 @@ IS
       Inline            => true,
       Import            => true,
       Convention        => Assembler,
-      Pre               => MSR <= 16#FFFFFFFF#,
       External_Name     => "assembly__read_model_specific_register";
 
    -- Halts the CPU.

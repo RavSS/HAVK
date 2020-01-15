@@ -11,6 +11,7 @@
 // that loads an ELF file to memory, then create a random freestanding
 // program via e.g. C and change the "HAVK_LOCATION" to point towards your
 // program. There is no guarantee it will work, as I may have parsed it wrong.
+// You will also need to provide some additional symbols for e.g. heap memory.
 #include <efi.h>
 #include <efilib.h>
 

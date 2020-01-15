@@ -157,7 +157,8 @@ IS
       -- The lower 16-bits of the 64-bit address belonging to the location
       -- of the ISR handler which handles this interrupt.
       ISR_Address_Low    : number  RANGE 0 .. 16#0000FFFF# := 0;
-      -- Points to the code segment in our GDT. Not sure which DPL CS, though.
+      -- Points to a code segment in our GDT depending on which ring can
+      -- raise the interrupt.
       CS_Selector        : number  RANGE 0 .. 16#0000FFFF# := 0;
       -- Only the first 3-bits do something, and they point to the
       -- the interrupt stack table offset (IST). The remaining 6 bits must
@@ -186,17 +187,17 @@ IS
 
    TYPE TSS_structure IS RECORD
       Reserved_1  : number RANGE 0 .. 16#FFFFFFFF# := 000;
-      RSP_Ring_0  : number                         := 000; -- Ring 0 stack.
-      RSP_Ring_1  : number                         := 000; -- Ring 1 stack.
-      RSP_Ring_2  : number                         := 000; -- Ring 2 stack.
+      RSP_Ring_0  : address                        := 000;
+      RSP_Ring_1  : address                        := 000;
+      RSP_Ring_2  : address                        := 000;
       Reserved_2  : number                         := 000;
-      IST_1       : number                         := 000;
-      IST_2       : number                         := 000;
-      IST_3       : number                         := 000;
-      IST_4       : number                         := 000;
-      IST_5       : number                         := 000;
-      IST_6       : number                         := 000;
-      IST_7       : number                         := 000;
+      IST_1       : address                        := 000;
+      IST_2       : address                        := 000;
+      IST_3       : address                        := 000;
+      IST_4       : address                        := 000;
+      IST_5       : address                        := 000;
+      IST_6       : address                        := 000;
+      IST_7       : address                        := 000;
       Reserved_3  : number                         := 000;
       Reserved_4  : number RANGE 0 .. 16#0000FFFF# := 000;
       -- IOPB disabled by default (byte size of TSS).
@@ -237,7 +238,8 @@ IS
 
    -- Increase the amount of GDT entries if need be. Bits 2 through 15 indicate
    -- the segment selector/descriptor index that I have indicated below whereas
-   -- 0 to 1 indicate the RPL (requested privilege level).
+   -- 0 to 1 indicate the RPL (requested privilege level). The order is very
+   -- important.
    TYPE GDT_entries IS RECORD
       -- The null descriptor, which is never touched by the processor.
       Descriptor_Null      : GDT_entry;
@@ -245,20 +247,24 @@ IS
       Descriptor_Kernel_CS : GDT_entry;
       -- The DS descriptor for ring 0 data. The index is 0x10.
       Descriptor_Kernel_DS : GDT_entry;
-      -- The CS descriptor for ring 3 code. The index is 0x18.
-      Descriptor_User_CS   : GDT_entry;
+      -- The reserved descriptor for the system call instruction calculations.
+      -- The index is 0x18.
+      Descriptor_Reserved  : GDT_entry;
       -- The DS descriptor for ring 3 data. The index is 0x20.
       Descriptor_User_DS   : GDT_entry;
-      -- The TSS descriptor for software multi-tasking. The index is 0x28.
+      -- The CS descriptor for ring 3 code. The index is 0x28.
+      Descriptor_User_CS   : GDT_entry;
+      -- The TSS descriptor for software multi-tasking. The index is 0x30.
       Descriptor_TSS64     : GDT_entry_TSS64;
    END RECORD;
    FOR GDT_entries USE RECORD
       Descriptor_Null      AT 00 RANGE 0 .. 063;
       Descriptor_Kernel_CS AT 08 RANGE 0 .. 063;
       Descriptor_Kernel_DS AT 16 RANGE 0 .. 063;
-      Descriptor_User_CS   AT 24 RANGE 0 .. 063;
+      Descriptor_Reserved  AT 24 RANGE 0 .. 063;
       Descriptor_User_DS   AT 32 RANGE 0 .. 063;
-      Descriptor_TSS64     AT 40 RANGE 0 .. 127;
+      Descriptor_User_CS   AT 40 RANGE 0 .. 063;
+      Descriptor_TSS64     AT 48 RANGE 0 .. 127;
    END RECORD;
 
    TYPE descriptor_table IS RECORD
@@ -309,6 +315,32 @@ PRIVATE
    GDT         : ALIASED GDT_entries :=
    (
       Descriptor_Null               => -- Never accessed by the CPU.
+      (
+         End_Address_Low            => 0,
+         Start_Address_Low          => 0,
+         Start_Address_Middle       => 0,
+         Segment_Access             =>
+         (
+            Accessed                => false,
+            Readable_Or_Writable    => false,
+            Direction_Or_Conforming => false,
+            Executable              => false,
+            Descriptor_Type         => false,
+            Privilege_Ring          => 0,
+            Present                 => false
+         ),
+         End_Address_High           => 0,
+         Flags                      =>
+         (
+            Zeroed                  => 0,
+            Long_Descriptor_Size    => false,
+            Legacy_Descriptor_Size  => false,
+            Granularity             => false
+         ),
+         Start_Address_High         => 0
+      ),
+      -------------------------------------------------------------------------
+      Descriptor_Reserved           => -- A gap between the descriptors.
       (
          End_Address_Low            => 0,
          Start_Address_Low          => 0,
@@ -440,7 +472,7 @@ PRIVATE
       -------------------------------------------------------------------------
       Descriptor_TSS64              => (Descriptor_TSS =>
       (
-         End_Address_Low            => TSS'size, -- Must be 104 bytes.
+         End_Address_Low            => 16#FFFF#, -- TODO: Confused on this.
          Start_Address_Low          => TSS_address AND 16#FFFF#,
          Start_Address_Middle       => Shift_Right(TSS_address, 16) AND 16#FF#,
          Segment_Access             => -- Must be 0x89.
@@ -464,8 +496,6 @@ PRIVATE
          ),
          Start_Address_High         => Shift_Right(TSS_address, 24) AND
                                           16#FF#),
-         -- TODO: 64-bit extension starts here. Is this even correct?
-         -- Might be responsible for causing a crash on AMD processors.
          Start_Address_Extended     => Shift_Right(TSS_address, 32) AND
                                           16#FFFFFFFF#,
          Reserved_1                 => 0,

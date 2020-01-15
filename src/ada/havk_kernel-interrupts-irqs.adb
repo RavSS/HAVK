@@ -21,7 +21,7 @@ IS
    IS
    BEGIN
       Ticker := Ticker + 1;
-      Tasking.Scheduler;
+      Tasking.Schedule; -- This won't reset the master PIC without a switch.
       PIC.Master_Reset;
    END ISR_32_Handler;
 

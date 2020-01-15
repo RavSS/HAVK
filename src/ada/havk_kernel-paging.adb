@@ -7,12 +7,9 @@
 
 WITH
    HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.Debug,
-   HAVK_Kernel.Exceptions,
    HAVK_Kernel.Memory;
 USE
    HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.Exceptions,
    HAVK_Kernel.Memory;
 
 PACKAGE BODY HAVK_Kernel.Paging
@@ -157,9 +154,13 @@ IS
       IF
          L3 = NULL
       THEN
-         Exceptions.Tears_In_Rain("Heap has been exhausted; can't create a " &
-            "page directory pointer table for a page mapping.",
-            Debug.File, Debug.Line);
+         RAISE Panic
+         WITH
+            Source_Location & " - Heap has been exhausted; can't create a " &
+            "page directory pointer table for a page mapping.";
+         PRAGMA Annotate(GNATprove, False_Positive,
+            "exception might be raised",
+            "The pointer arithmetic is fine. Heap issues crash externally.");
       END IF;
 
       IF
@@ -177,9 +178,13 @@ IS
       IF
          Page_Size /= Giant_Page AND THEN L2 = NULL
       THEN
-         Exceptions.Tears_In_Rain("Heap has been exhausted; can't create a " &
-            "page directory table for a 2-MiB or 4-KiB page mapping.",
-            Debug.File, Debug.Line);
+         RAISE Panic
+         WITH
+            Source_Location & " - Heap has been exhausted; can't create a " &
+            "page directory table for a 2-MiB or 4-KiB page mapping.";
+         PRAGMA Annotate(GNATprove, False_Positive,
+            "exception might be raised",
+            "The pointer arithmetic is fine. Heap issues crash externally.");
       END IF;
 
       IF
@@ -197,9 +202,13 @@ IS
       IF
          Page_Size = Page AND THEN L1 = NULL
       THEN
-         Exceptions.Tears_In_Rain("Heap has been exhausted; can't create a " &
-            "page table for a 4-KiB page mapping.",
-            Debug.File, Debug.Line);
+         RAISE Panic
+         WITH
+            Source_Location & " - Heap has been exhausted; can't create a " &
+            "page table for a 4-KiB page mapping.";
+         PRAGMA Annotate(GNATprove, False_Positive,
+            "exception might be raised",
+            "The pointer arithmetic is fine. Heap issues crash externally.");
       END IF;
 
       Object.L4(L4_Offset).Pointer      := Encode_Table(Table_Pointer(L3));
@@ -289,39 +298,29 @@ IS
 
    -- Took this function's equation from the UEFI macro `EFI_SIZE_TO_PAGES()`.
    FUNCTION Size_To_Pages
-     (Size       : IN number;
-      Alignment  : IN page_frame_variant := Page)
+     (Size         : IN number;
+      Alignment    : IN page_frame_variant := Page)
       RETURN number
    IS
-      Extra_Page : CONSTANT number := Size AND Alignment;
-      Pages      : number;
+      Aligned_Size : CONSTANT number       :=
+        Memory.Align(Size, Alignment, Round_Up => true);
    BEGIN
-      IF -- Handle zero bytes.
-         Size = 0
-      THEN
-         RETURN 0;
-      END IF;
-
       CASE -- Read the manuals to see which lower bits need to be zeroed.
          Alignment
       IS
-         WHEN       Page => Pages := Shift_Right(Size, 12);
-         WHEN  Huge_Page => Pages := Shift_Right(Size, 21);
-         WHEN Giant_Page => Pages := Shift_Right(Size, 30);
-         WHEN     OTHERS => Pages := Shift_Right(Size, 12); -- No precondition.
+         WHEN       Page =>
+            RETURN Shift_Right(Aligned_Size, 12);
+         WHEN  Huge_Page =>
+            RETURN Shift_Right(Aligned_Size, 21);
+         WHEN Giant_Page =>
+            RETURN Shift_Right(Aligned_Size, 30);
+         WHEN OTHERS     =>
+            RAISE Panic
+            WITH
+               Source_Location & " - Unsupported page frame size.";
       END CASE;
-
-      IF
-         Extra_Page /= 0
-      THEN
-         RETURN Pages + 1;
-      ELSE -- If the size is even a single byte, then it still needs one page.
-         RETURN (IF Pages /= 0 THEN Pages ELSE 1);
-      END IF;
    END Size_To_Pages;
 
-   -- Avoid inlining this, or else it makes it harder to pick up on weird
-   -- stack smash failure calls.
    PROCEDURE Load
      (Object : IN page_layout)
    WITH
@@ -385,7 +384,9 @@ IS
          Hex_Image(Fault_Address) & " - " & Present_Field  &
          Write_Field, warning);
 
-      Tears_In_Rain("Unexpected page fault as of this stage in development",
-         Debug.File, Debug.Line);
+      RAISE Panic
+      WITH
+         Source_Location &
+         " - Unexpected page fault as of this stage in development.";
    END Page_Fault_Handler;
 END HAVK_Kernel.Paging;
