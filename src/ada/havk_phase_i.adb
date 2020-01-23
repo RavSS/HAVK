@@ -44,10 +44,6 @@ BEGIN
 
    Log("Entered Phase I successfully.", nominal);
 
-   -- Show a basic graphical shape on screen.
-   Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
-   Log("Grid test drawn to the main framebuffer.");
-
    -- Set up the terminal.
    Terminal.Start_Position    := Terminal_Start;
    Terminal.Background_Colour := Display.Create_Pixel(  0,  0, 0);
@@ -65,6 +61,10 @@ BEGIN
    Initialise.See_Magic(Terminal);
    Terminal.Newline;
 
+   -- Show a basic graphical shape on screen.
+   Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
+   Log("Grid test drawn to the main framebuffer.");
+
    -- Print the font test.
    Initialise.Font_Test(Terminal);
    Terminal.Newline;
@@ -76,10 +76,7 @@ BEGIN
    Terminal.Draw_On(Display);
    Log("First terminal draw done.");
 
-   -- Parse information from the ACPI tables for multiple reasons.
-   Initialise.Parse_ACPI_Tables;
-
-   -- Remap the PICs and see the APICs.
+   -- Verify the ACPI implementation and set up the APICs if we can.
    Initialise.Interrupt_Controllers;
 
    -- Create new descriptor tables and make interrupts possible.

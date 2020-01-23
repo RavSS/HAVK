@@ -631,33 +631,33 @@ IS
    -- controllers relevant to us are the (local) x2APICs and the I/O APICs.
    -- x2APICs should be supported on systems that are new enough to use UEFI.
    TYPE interrupt_controller IS
-     (local_APIC,
-      IO_APIC,
-      interrupt_source_override,
-      NMI_source,
-      local_APIC_NMI,
-      local_APIC_address_override,
-      IO_SAPIC,
-      local_SAPIC,
-      platform_interrupt_source,
-      local_x2APIC,
-      local_x2APIC_NMI,
-      ARM_interrupt_controller) -- Ignore everything below this enumeration.
+     (local_APIC_entry,
+      IO_APIC_entry,
+      interrupt_source_override_entry,
+      NMI_source_entry,
+      local_APIC_NMI_entry,
+      local_APIC_address_override_entry,
+      IO_SAPIC_entry,
+      local_SAPIC_entry,
+      platform_interrupt_source_entry,
+      local_x2APIC_entry,
+      local_x2APIC_NMI_entry,
+      ARM_interrupt_controller_entry) -- Ignore all below this enumeration.
    WITH
       Size => 8;
    FOR interrupt_controller USE
-     (local_APIC                  => 00,
-      IO_APIC                     => 01,
-      interrupt_source_override   => 02,
-      NMI_source                  => 03,
-      local_APIC_NMI              => 04,
-      local_APIC_address_override => 05,
-      IO_SAPIC                    => 06,
-      local_SAPIC                 => 07,
-      platform_interrupt_source   => 08,
-      local_x2APIC                => 09,
-      local_x2APIC_NMI            => 10,
-      ARM_interrupt_controller    => 11);
+     (local_APIC_entry                  => 00,
+      IO_APIC_entry                     => 01,
+      interrupt_source_override_entry   => 02,
+      NMI_source_entry                  => 03,
+      local_APIC_NMI_entry              => 04,
+      local_APIC_address_override_entry => 05,
+      IO_SAPIC_entry                    => 06,
+      local_SAPIC_entry                 => 07,
+      platform_interrupt_source_entry   => 08,
+      local_x2APIC_entry                => 09,
+      local_x2APIC_NMI_entry            => 10,
+      ARM_interrupt_controller_entry    => 11);
 
    -- This record describes the I/O APIC layout found in the MADT's end.
    -- READ: ACPI Specification Version 6.3, Page 154 - 5.2.12.3.
@@ -667,33 +667,35 @@ IS
       Enumeration_Value : interrupt_controller;
       -- The length of the entire structure which describes the I/O APIC.
       -- This will always be twelve as of writing this.
-      Length            : number RANGE 00 .. 16#000000FF#;
+      Length            : number  RANGE 00 .. 16#000000FF#;
       -- The I/O APIC's identity. There can be multiple I/O APICs for a system.
-      IO_APIC_Identity  : number RANGE 00 .. 16#000000FF#;
+      IO_APIC_Identity  : number  RANGE 00 .. 16#000000FF#;
       -- Reserved field not used for anything.
-      Reserved          : number RANGE 00 .. 16#000000FF#;
+      Reserved          : number  RANGE 00 .. 16#000000FF#;
       -- The 32-bit MMIO physical address. Each I/O APIC has its own address.
-      IO_APIC_Address   : number RANGE 00 .. 16#FFFFFFFF#;
+      IO_APIC_Address   : address RANGE 00 .. 16#FFFFFFFF#;
       -- A global system interrupt number that indicates where the I/O APIC's
-      -- interrupt inputs begin from.
-      GSI_Value         : number RANGE 00 .. 16#FFFFFFFF#;
+      -- interrupt inputs begin from. To figure out the range, you will have
+      -- to consult the I/O APIC itself and check in the IOAPICVER register.
+      -- Here's Linus's explanation: https://yarchive.net/comp/linux/tla.html
+      GSI_Base          : number  RANGE 00 .. 16#FFFFFFFF#;
    END RECORD
    WITH
-      Dynamic_Predicate => Enumeration_Value = IO_APIC AND THEN Length = 12,
+      Dynamic_Predicate => Enumeration_Value = IO_APIC_entry AND THEN
+                           Length = 12,
       Convention        => C;
    FOR IO_APIC_descriptor USE RECORD
-      Enumeration_Value  AT 0 RANGE 0 .. 07;
-      Length             AT 1 RANGE 0 .. 07;
-      IO_APIC_Identity   AT 2 RANGE 0 .. 07;
-      Reserved           AT 3 RANGE 0 .. 07;
-      IO_APIC_Address    AT 4 RANGE 0 .. 31;
-      GSI_Value          AT 8 RANGE 0 .. 31;
+      Enumeration_Value      AT 0 RANGE 0 .. 07;
+      Length                 AT 1 RANGE 0 .. 07;
+      IO_APIC_Identity       AT 2 RANGE 0 .. 07;
+      Reserved               AT 3 RANGE 0 .. 07;
+      IO_APIC_Address        AT 4 RANGE 0 .. 31;
+      GSI_Base               AT 8 RANGE 0 .. 31;
    END RECORD;
 
    -- A record that describes the LAPIC in the MADT table.
    -- READ: ACPI Specification Version 6.3, Page 153 - 5.2.12.2.
-   TYPE local_APIC_descriptor
-   IS RECORD
+   TYPE local_APIC_descriptor IS RECORD
       -- The enumeration value of the interrupt controller. If the structure
       -- is valid, then this should reflect this record type's purpose.
       Enumeration_Value : interrupt_controller;
@@ -715,7 +717,7 @@ IS
       Reserved_Flags    : number RANGE 00 .. 16#3FFFFFFF#;
    END RECORD
    WITH
-      Dynamic_Predicate => Enumeration_Value = local_APIC       AND THEN
+      Dynamic_Predicate => Enumeration_Value = local_APIC_entry AND THEN
                            Length = 8                           AND THEN
                           (IF Enabled     THEN NOT Activatable) AND THEN
                           (IF Activatable THEN NOT Enabled),
@@ -762,7 +764,7 @@ IS
       ACPI_Identity     : number RANGE 00 .. 16#FFFFFFFF#;
    END RECORD
    WITH
-      Dynamic_Predicate => Enumeration_Value = local_APIC       AND THEN
+      Dynamic_Predicate => Enumeration_Value = local_APIC_entry AND THEN
                            Length = 8                           AND THEN
                           (IF Enabled     THEN NOT Activatable) AND THEN
                           (IF Activatable THEN NOT Enabled),
@@ -778,6 +780,64 @@ IS
       ACPI_Identity     AT 12 RANGE 0 .. 31;
    END RECORD;
 
+   -- Indicates how an e.g. overrided interrupt source's input signal differs
+   -- from a standard ISA/EISA input signal. Reused the polarity and trigger
+   -- mode representations and made them into one enumeration for convenience.
+   TYPE interrupt_signal IS
+     (default_ISA_or_EISA_signal,
+      active_high_or_edge_triggered_signal,
+      reserved_signal,
+      active_low_or_level_triggered_signal)
+   WITH
+      Size => 2;
+   FOR interrupt_signal USE
+     (default_ISA_or_EISA_signal           => 2#00#,
+      active_high_or_edge_triggered_signal => 2#01#,
+      reserved_signal                      => 2#10#,
+      active_low_or_level_triggered_signal => 2#11#);
+
+   -- This MADT entry describes how the old/legacy ISA IRQs work in conjuction
+   -- with the I/O APIC. It destroys any notion of identity-mapped IRQs and
+   -- overrides them with a new relation. Should be parsed with the I/O APIC.
+   -- READ: ACPI Specification Version 6.3, Page 155 - 5.2.12.5.
+   TYPE interrupt_source_override_descriptor IS RECORD
+      -- As usual, this is a static value. It should reflect the correct
+      -- value for the record's purpose.
+      Enumeration_Value : interrupt_controller;
+      -- The length of the entire MADT entry. For interrupt source overrides,
+      -- this will be ten every time unless corrupt.
+      Length            : number RANGE 0 .. 16#000000FF#;
+      -- Indicates what bus type this is for. As of ACPI Specification Version
+      -- 6.3, this can only be zero, which indicates it's for ISA.
+      Bus_Variant       : number RANGE 0 .. 16#000000FF#;
+      -- The legacy IRQ itself. If the override was for e.g. IRQ 1 (keyboard),
+      -- then this would be one as well.
+      IRQ_Value         : number RANGE 0 .. 16#000000FF#;
+      -- The global system interrupt (GSI) that corresponds to an I/O APIC.
+      -- Check this value against all of the I/O APIC entries.
+      GSI_Value         : number RANGE 0 .. 16#FFFFFFFF#;
+      -- The default or new polarity of the interrupt signal.
+      Polarity          : interrupt_signal;
+      -- The default or new trigger mode for the interrupt signal.
+      Trigger_Mode      : interrupt_signal;
+      -- A zeroed/reserved field.
+      Reserved          : number RANGE 0 .. 16#00000FFF#;
+   END RECORD
+   WITH
+      Dynamic_Predicate => Enumeration_Value = interrupt_source_override_entry
+                           AND THEN Length = 10 AND THEN Bus_Variant = 0,
+      Convention        => C;
+   FOR interrupt_source_override_descriptor USE RECORD
+      Enumeration_Value AT 0 RANGE 0 .. 07;
+      Length            AT 1 RANGE 0 .. 07;
+      Bus_Variant       AT 2 RANGE 0 .. 07;
+      IRQ_Value         AT 3 RANGE 0 .. 07;
+      GSI_Value         AT 4 RANGE 0 .. 31;
+      Polarity          AT 8 RANGE 0 .. 01;
+      Trigger_Mode      AT 8 RANGE 2 .. 03;
+      Reserved          AT 8 RANGE 4 .. 15;
+   END RECORD;
+
    -- Due to how the MADT's list of APICs is handled, a subprogram needs to
    -- scan the list and fill up an array containing this general describer of
    -- the interrupt controller, so we can later retrieve the full descriptor of
@@ -787,7 +847,8 @@ IS
       -- The type of interrupt controller found in the MADT. By default,
       -- this is an IA-64 centric structure so no "Present" field is needed.
       -- That should never ever come up on IA-32e/AMD64, which isn't Itanium.
-      Enumeration_Value : interrupt_controller := platform_interrupt_source;
+      Enumeration_Value : interrupt_controller :=
+         platform_interrupt_source_entry;
       -- The address location of its structure/record which can be imported.
       -- If is better if you check this for zero instead of the controller name
       -- for an x86 controller's presence.

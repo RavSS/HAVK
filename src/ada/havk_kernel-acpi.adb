@@ -121,7 +121,7 @@ IS
 
    FUNCTION Get_APICs
      (MADT_Address : IN address)
-   RETURN interrupt_controller_descriptors
+      RETURN interrupt_controller_descriptors
    WITH
       -- Address attributes are needed for this to work, as I store the APIC
       -- structure's raw address in another record which is then extended via

@@ -30,6 +30,33 @@ IS
       FOR Body_Suffix("ASM") USE ".S";
    END Naming;
 
+   PACKAGE Prove
+   IS -- `gnatprove`
+      Ada_Proof_Switches :=
+        (-- Use all CPU cores to speed up the provers.
+         "-j0",
+         -- Output assumption info in the build directory.
+         "--assumptions",
+         -- Strict interpretation of Ada to the standard.
+         "--pedantic",
+         -- Useful CWE identifiers for various issues and vulnerabilities.
+         "--cwe",
+         -- Highest/most powerful proof level. It's not too much slower.
+         "--level=4",
+         -- Prove absolutely everything.
+         "--mode=all",
+         -- Give warnings about proofs if there are any.
+         "--proof-warnings",
+         -- All range check failures and warnings are treated as errors.
+         "--checks-as-errors", "--warnings=error",
+         -- No memory limit.
+         "--memlimit=0");
+
+      FOR Proof_Dir             USE HAVK'Object_Dir;
+      FOR Proof_Switches("Ada") USE
+         Ada_Proof_Switches;
+   END Prove;
+
    PACKAGE Builder
    IS -- `gprbuild`
       Ada_Basic_Switches :=

@@ -15,6 +15,7 @@
 -- The only drawback is inlining, which no longer seems to work. I've still
 -- specified the inline aspect if I want to use link-time optimisations later
 -- (although I don't think that will make a difference at linkage).
+-- Using GCC intrinsics is fine and have little chance of going wrong.
 PACKAGE HAVK_Kernel.Intrinsics
 IS
    -- For usage with the special registers. MSRs (indices) are only 32-bits.
@@ -122,4 +123,13 @@ IS
       Import        => true,
       Convention    => Intrinsic,
       External_Name => "__builtin_ia32_pause";
+
+   -- Forces both a compiler fence and a memory fence. Should be equivalent
+   -- to the `MFENCE` instruction without needing a full assembly routine.
+   PROCEDURE Memory_Fence
+   WITH
+      Inline        => true,
+      Import        => true,
+      Convention    => Intrinsic,
+      External_Name => "__sync_synchronize";
 END HAVK_Kernel.Intrinsics;

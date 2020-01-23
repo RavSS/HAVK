@@ -32,7 +32,7 @@ IS
       Current_Y_Index   : number := 0;
       -- Set to a black background by default.
       Background_Colour : pixel  := 0;
-      -- Set to white text by de   fault.
+      -- Set to white text by default.
       Foreground_Colour : pixel  := 16#FFFFFF#;
       -- The distance between drawn characters is 2 pixels by default.
       Kerning           : number := 2;

@@ -9,7 +9,6 @@ WITH
    HAVK_Phase_II,
    HAVK_Kernel.User_Input,
    HAVK_Kernel.Interrupts,
-   HAVK_Kernel.Interrupts.PIC,
    HAVK_Kernel.Interrupts.APIC,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Exceptions,
@@ -39,11 +38,27 @@ IS
    PROCEDURE Interrupt_Controllers
    IS
    BEGIN
-      -- Remap the PIC's interrupt vector so no interrupts overlap.
-      Interrupts.PIC.Remap;
+      IF
+         NOT ACPI.Valid_Implementation
+      THEN
+         Log("Skipping ACPI tables due to corruption.", warning);
+         Interrupts.APIC.Remap_PICs(Disable_Emulation => false);
+         RETURN;
+      ELSE
+         Log("ACPI tables RSDP and XSDT are valid.");
+      END IF;
+
+      -- Disable the LAPIC's PIC-compatible mode.
+      Interrupts.APIC.Remap_PICs(Disable_Emulation => true);
 
       -- See what's in the ACPI MADT's APIC structure area.
-      Interrupts.APIC.Enumerate_MADT;
+      Interrupts.APIC.Enumerate_MADT(Kernel_Paging_Layout);
+
+      -- TODO: Check for the x2APIC bit in CPUID's output before enabling it.
+      Interrupts.APIC.x2APIC_Mode;
+
+      -- We need the PS/2 controller's interrupts.
+      Interrupts.APIC.Set_IO_APIC_Redirects;
 
       Log("Interrupt controllers have been set up.", nominal);
 
@@ -380,18 +395,6 @@ IS
          number'image(Memory.System_Limit / MiB) & " MEBIBYTES");
       Terminal.Newline;
    END Memory_Map_Info;
-
-   PROCEDURE Parse_ACPI_Tables
-   IS
-   BEGIN
-      IF
-         ACPI.Valid_Implementation
-      THEN
-         Log("ACPI tables RSDP and XSDT are valid.");
-      ELSE
-         Log("Skipping ACPI tables due to corruption.", warning);
-      END IF;
-   END Parse_ACPI_Tables;
 
    PROCEDURE Debugger
    IS

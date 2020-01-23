@@ -120,10 +120,15 @@ else
 	QEMU_FLAGS+= -d guest_errors
 endif
 
-ifeq ("$(QEMU_HOST)", "1")
-	QEMU_FLAGS+= -cpu host,+x2apic,enforce -enable-kvm
-else
+# I've decided not to support xAPIC and am only supporting x2APIC. In reality,
+# adding support for the former isn't difficult, but nearly every CPU at and
+# after Sandy Bridge should support it. If it doesn't, then it's likely that
+# the system itself doesn't even have UEFI firmware, so why bother with the
+# backwards compatibility.
+ifeq ("$(QEMU_SOFTWARE_CPU)", "1")
 	QEMU_FLAGS+= -cpu qemu64,check
+else
+	QEMU_FLAGS+= -cpu host,+x2apic,enforce -enable-kvm
 endif
 
 EFI_NAME=boot
@@ -298,9 +303,7 @@ uefi-gdb:
 proof: $(BUILD_DIR)
 	$(call echo, "PROVING HAVK KERNEL\'S CORRECTNESS")
 
-	@gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) $(PROVE_FILES) -j0 -k \
-		--assumptions --pedantic --cwe --level=4 --mode=all \
-		--proof-warnings --checks-as-errors --warnings=error
+	@gnatprove -P $(HAVK_PROJECT) -XBuild=$(BUILD) $(PROVE_FILES)
 
 .PHONY: stats
 stats:

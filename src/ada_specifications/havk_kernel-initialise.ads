@@ -22,8 +22,8 @@ IS
    -- and switching DPLs etc.
    PROCEDURE Descriptor_Tables;
 
-   -- Set up the interrupt controllers depending on which ones are available.
-   -- As of now, HAVK uses the legacy PICs, but it eventually might use APICs.
+   -- Set up the Advanced Programmable Interrupt Controllers (APICs) depending
+   -- on which ones are available. This also verifies the ACPI tables.
    PROCEDURE Interrupt_Controllers;
 
    -- Identity maps the kernel's address space to the default page layout.
@@ -64,9 +64,6 @@ IS
    -- Show arbitrary information about the memory map and its descriptors.
    PROCEDURE Memory_Map_Info
      (Terminal : IN OUT textbox);
-
-   -- Goes through the ACPI tables to initialise the system.
-   PROCEDURE Parse_ACPI_Tables;
 
    -- Initialises the PS/2 controller for keyboard input purposes (as of now).
    PROCEDURE PS2_Input;
