@@ -159,13 +159,9 @@ IS
       Index : CONSTANT number RANGE 0 .. 16#FFFFFFFF# :=
       (
          IF
-            Register = IOREDTBL_low
-         THEN
+            Register IN IOREDTBL_low | IOREDTBL_high
+         THEN -- The +1 offset is handled by the register's representation.
             Index_Number(Register) + GSI * 2 AND 16#FFFFFFFF#
-         ELSIF
-            Register = IOREDTBL_high
-         THEN
-            Index_Number(Register) + (GSI * 2 + 1) AND 16#FFFFFFFF#
          ELSE
             Index_Number(Register)
       );
@@ -385,7 +381,38 @@ IS
         (Destination => Current_APIC_Identity AND 2#1111#,
          Reserved    => 0);
    BEGIN
-      FOR
+      FOR -- First, we identity-map the non-remapped IRQs as an assumption.
+         IRQ IN IRQ_Remaps'range
+      LOOP
+         FOR
+            Mapped_IO_APIC OF IO_APICs
+         LOOP
+            IF
+               Mapped_IO_APIC.MMIO /= NULL
+            THEN
+               IF
+                  NOT IRQ_Remaps(IRQ).Present AND THEN
+                  IRQ IN Mapped_IO_APIC.GSI_Base .. Mapped_IO_APIC.GSI_Last
+               THEN
+                  -- ISA IRQs are edge triggered and active high by default.
+                  Redirection.Interrupt_Vector := IRQ_Base + IRQ;
+                  Redirection.Delivery_Mode    := fixed_delivery;
+                  Redirection.Active_Low       := false;
+                  Redirection.Level_Sensitive  := false;
+
+                  Switch_IO_APIC_Register(Mapped_IO_APIC, IOREDTBL_low,
+                     GSI => IRQ - Mapped_IO_APIC.GSI_Base);
+                  Set_Redirect(Mapped_IO_APIC, Redirection);
+
+                  Switch_IO_APIC_Register(Mapped_IO_APIC, IOREDTBL_high,
+                     GSI => IRQ - Mapped_IO_APIC.GSI_Base);
+                  Set_Destination(Mapped_IO_APIC, Destination);
+               END IF;
+            END IF;
+         END LOOP;
+      END LOOP;
+
+      FOR -- Secondly, we do the remaps accordingly.
          IRQ IN IRQ_Remaps'range
       LOOP
          FOR
@@ -413,23 +440,6 @@ IS
 
                   Switch_IO_APIC_Register(Mapped_IO_APIC, IOREDTBL_high,
                      GSI => IRQ_Remaps(IRQ).GSI - Mapped_IO_APIC.GSI_Base);
-                  Set_Destination(Mapped_IO_APIC, Destination);
-               ELSIF -- Identity-map it.
-                  NOT IRQ_Remaps(IRQ).Present AND THEN
-                  IRQ IN Mapped_IO_APIC.GSI_Base .. Mapped_IO_APIC.GSI_Last
-               THEN
-                  -- ISA IRQs are edge triggered and active high by default.
-                  Redirection.Interrupt_Vector := IRQ_Base + IRQ;
-                  Redirection.Delivery_Mode := fixed_delivery;
-                  Redirection.Active_Low := false;
-                  Redirection.Level_Sensitive := false;
-
-                  Switch_IO_APIC_Register(Mapped_IO_APIC, IOREDTBL_low,
-                     GSI => IRQ - Mapped_IO_APIC.GSI_Base);
-                  Set_Redirect(Mapped_IO_APIC, Redirection);
-
-                  Switch_IO_APIC_Register(Mapped_IO_APIC, IOREDTBL_high,
-                     GSI => IRQ - Mapped_IO_APIC.GSI_Base);
                   Set_Destination(Mapped_IO_APIC, Destination);
                END IF;
             END IF;

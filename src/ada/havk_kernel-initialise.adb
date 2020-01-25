@@ -10,6 +10,7 @@ WITH
    HAVK_Kernel.User_Input,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Interrupts.APIC,
+   HAVK_Kernel.Interrupts.APIC.Timer,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Exceptions,
    HAVK_Kernel.Tasking,
@@ -56,6 +57,9 @@ IS
 
       -- TODO: Check for the x2APIC bit in CPUID's output before enabling it.
       Interrupts.APIC.x2APIC_Mode;
+
+      -- No longer have the PIT, so start the LAPIC timer.
+      Interrupts.APIC.Timer.Setup;
 
       -- We need the PS/2 controller's interrupts.
       Interrupts.APIC.Set_IO_APIC_Redirects;

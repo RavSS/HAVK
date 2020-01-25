@@ -261,9 +261,9 @@ struct uefi_page_structure
 	#define SIZE_TO_HUGE_PAGES(x) \
 		(((x) >> HUGE_PAGE_SHIFT) + (((x) & HUGE_PAGE_MASK) ? 1 : 0))
 
-	UINT64 map[512] ALIGN(EFI_PAGE_SIZE);
-	UINT64 pointers[512][512] ALIGN(EFI_PAGE_SIZE);
-	UINT64 table[512][512] ALIGN(EFI_PAGE_SIZE);
+	VOLATILE UINT64 map[512] ALIGN(EFI_PAGE_SIZE);
+	VOLATILE UINT64 pointers[512][512] ALIGN(EFI_PAGE_SIZE);
+	VOLATILE UINT64 table[512][512] ALIGN(EFI_PAGE_SIZE);
 };
 
 // Since I am unable to give a prefix to the `__func__` macro, I think I have
@@ -654,7 +654,8 @@ VOID load_havk(struct elf64_file *havk_elf)
 
 EFI_VIRTUAL_ADDRESS prepare_entry(struct elf64_file *havk_elf)
 {
-	CONST EFI_VIRTUAL_ADDRESS entry = havk_elf->file_header.entry_address;
+	CONST VOLATILE EFI_VIRTUAL_ADDRESS entry
+		= havk_elf->file_header.entry_address;
 
 	// Close the files, as we (should) already have HAVK in memory at our
 	// specified physical address now.
@@ -850,7 +851,7 @@ VOID set_screen_resolution(UINTN max_graphics_mode)
 	SPIN_DELAY(10); // Wait for the graphics mode to finish switching.
 }
 
-VOID get_graphics_information(struct uefi_arguments *arguments)
+VOID get_graphics_information(VOLATILE struct uefi_arguments *arguments)
 {
 	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *graphics_information;
 
@@ -945,7 +946,8 @@ EFI_PHYSICAL_ADDRESS get_rsdp(EFI_SYSTEM_TABLE *system_table)
 
 // This also exits boot services, or else the memory map would quickly become
 // invalid for exiting boot services and also inaccurate.
-VOID get_memory_map(struct uefi_arguments *arguments, EFI_HANDLE image_handle)
+VOID get_memory_map(VOLATILE struct uefi_arguments *arguments,
+	EFI_HANDLE image_handle)
 {
 	// From here on out, do not call anything if it is not compulsory.
 	// Otherwise it can mess with the memory map and whatnot.
@@ -1015,7 +1017,7 @@ VOID *page_malloc(UINT64 size)
 // This maps the kernel's virtual space. Instead of creating a new dictionary,
 // I've just reused the UEFI dictionary. This must be called after the boot
 // services have ended, not before. Will always map the base address.
-VOID map_address_range(struct uefi_page_structure *structure,
+VOID map_address_range(VOLATILE struct uefi_page_structure *structure,
 	EFI_VIRTUAL_ADDRESS virtual, EFI_PHYSICAL_ADDRESS physical,
 	UINT64 size)
 {
@@ -1067,7 +1069,7 @@ VOID map_address_range(struct uefi_page_structure *structure,
 // These are the default mappings for now. Not bothered to precisely
 // map UEFI loader data, the kernel will do it soon enough.
 VOID default_mappings(struct elf64_file *havk_elf,
-	struct uefi_page_structure *structure)
+	VOLATILE struct uefi_page_structure *structure)
 {
 	CONST EFI_VIRTUAL_ADDRESS havk_base
 		= symbol_address(havk_elf, (CHAR8 *)"__kernel_base");
@@ -1182,8 +1184,8 @@ EFIAPI
 EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
 	struct elf64_file havk_elf = {0};
-	struct uefi_arguments *arguments = NULL;
-	struct uefi_page_structure *page_structure ALIGN(EFI_PAGE_SIZE) = NULL;
+	VOLATILE struct uefi_arguments *arguments = NULL;
+	VOLATILE struct uefi_page_structure *page_structure = NULL;
 
 	welcome(image_handle, system_table);
 
@@ -1225,8 +1227,8 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	// of passing arguments to our assembly entry function which is
 	// using the ELF format and adheres to the System V ABI.
 	__attribute__((sysv_abi))
-	VOID (*enter_havk) (struct uefi_arguments *arguments, UINT64 magic)
-		= (VOID *)prepare_entry(&havk_elf);
+	VOID (*enter_havk) (VOLATILE struct uefi_arguments *arguments,
+		UINT64 magic) = (VOLATILE VOID *)prepare_entry(&havk_elf);
 
 	Print(u"EXITING UEFI BOOT SERVICES\r\n");
 

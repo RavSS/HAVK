@@ -276,8 +276,8 @@ IS
       Start_Address     AT 2 RANGE 0 .. 63;
    END RECORD;
 
-   -- Increase this later on if need be.
-   TYPE IDT_gates IS ARRAY(number RANGE 0 .. 100) OF IDT_gate
+   -- The amount of interrupts a logical core can handle.
+   TYPE IDT_gates IS ARRAY(number RANGE 0 .. 255) OF IDT_gate
    WITH
       Component_Size => 128,
       Pack           => true;

@@ -16,12 +16,19 @@ IS
    PRAGMA Warnings(off, "formal parameter ""Stack_Frame"" is not referenced",
       Reason => "The ISRs must take the parameter in regardless of usage.");
 
+   PROCEDURE ISR_Spurious_Interrupt_Handler
+     (Stack_Frame : IN access_interrupt)
+   IS
+   BEGIN
+      -- I don't believe we have to signal EOI for spurious interrupts, at
+      -- least for when we're using the APIC. Only need to `REX.W IRET`.
+      NULL;
+   END ISR_Spurious_Interrupt_Handler;
+
    PROCEDURE ISR_32_Handler -- Timer.
      (Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      Ticker := Ticker + 1;
-      Tasking.Schedule;
       APIC.Reset;
    END ISR_32_Handler;
 
@@ -137,4 +144,15 @@ IS
    BEGIN
       APIC.Reset;
    END ISR_47_Handler;
+
+   -- The ISA IRQs have ended. The ones below are not defined by any standard.
+
+   PROCEDURE ISR_48_Handler
+     (Stack_Frame : IN access_interrupt)
+   IS
+   BEGIN
+      Ticker := Ticker + 1;
+      Tasking.Schedule;
+      APIC.Reset;
+   END ISR_48_Handler;
 END HAVK_Kernel.Interrupts.IRQs;

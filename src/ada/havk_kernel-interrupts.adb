@@ -128,7 +128,7 @@ IS
       Setup_Interrupt(030, ISR_30_Handler'address, interrupt_64_bit, 0);
       Setup_Interrupt(031, ISR_31_Handler'address, interrupt_64_bit, 0);
 
-      -- Now the IRQs.
+      -- Now the ISA IRQs.
       Setup_Interrupt(032, ISR_32_Handler'address, interrupt_64_bit, 0);
       Setup_Interrupt(033, ISR_33_Handler'address, interrupt_64_bit, 0);
       Setup_Interrupt(034, ISR_34_Handler'address, interrupt_64_bit, 0);
@@ -146,8 +146,16 @@ IS
       Setup_Interrupt(046, ISR_46_Handler'address, interrupt_64_bit, 0);
       Setup_Interrupt(047, ISR_47_Handler'address, interrupt_64_bit, 0);
 
-      -- Finally, map any other interrupts for scheduling etc.
+      -- Now the non-standard IRQs.
+      Setup_Interrupt(048, ISR_48_Handler'address, interrupt_64_bit, 0);
       Setup_Interrupt(100,    Switch_Task'address, interrupt_64_bit, 0);
+
+      FOR -- Cover the disabled PIC and the APIC spurious interrupt vectors.
+         I IN number RANGE 239 .. 255 -- It's okay if both overlap.
+      LOOP
+         Setup_Interrupt
+            (I, ISR_Spurious_Interrupt_Handler'address, interrupt_64_bit, 0);
+      END LOOP;
 
       LGDT(IDTR'address);
    END Prepare_IDT;

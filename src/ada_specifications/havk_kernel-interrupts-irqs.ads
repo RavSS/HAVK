@@ -16,7 +16,12 @@ IS
    PRAGMA Warnings(GNATprove, off, "unused variable ""Stack_Frame""",
       Reason => "The ISRs must take the parameter in regardless of usage.");
 
-   -- IRQ 0 - System timer.
+   -- Used for handling all spurious interrupt vectors.
+   PROCEDURE ISR_Spurious_Interrupt_Handler
+     (Stack_Frame : IN access_interrupt);
+   PRAGMA Machine_Attribute(ISR_Spurious_Interrupt_Handler, "interrupt");
+
+   -- IRQ 0 - PIT.
    PROCEDURE ISR_32_Handler
      (Stack_Frame : IN access_interrupt);
    PRAGMA Machine_Attribute(ISR_32_Handler, "interrupt");
@@ -27,7 +32,7 @@ IS
    PRAGMA Machine_Attribute(ISR_33_Handler, "interrupt");
 
    -- IRQ 2 (behaves like IRQ 9) - Cascades interrupts down to slave PIC.
-   PROCEDURE ISR_34_Handler
+   PROCEDURE ISR_34_Handler -- Not actually used when using the APICs.
      (Stack_Frame : IN access_interrupt);
    PRAGMA Machine_Attribute(ISR_34_Handler, "interrupt");
 
@@ -96,6 +101,11 @@ IS
      (Stack_Frame : IN access_interrupt);
    PRAGMA Machine_Attribute(ISR_47_Handler, "interrupt");
 
-   -- TODO: Add in ISR handlers for IRQ 16 to IRQ 23 (extra APIC IRQs).
+   -- The ISA IRQs have ended. The ones below are not defined by any standard.
+
+   -- IRQ 16 - Local APIC timer.
+   PROCEDURE ISR_48_Handler
+     (Stack_Frame : IN access_interrupt);
+   PRAGMA Machine_Attribute(ISR_48_Handler, "interrupt");
 
 END HAVK_Kernel.Interrupts.IRQs;

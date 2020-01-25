@@ -35,7 +35,8 @@ BXFLAGS='--enable-3dnow --enable-all-optimizations --enable-clgd54xx
 	--enable-e1000 --enable-gameport --enable-long-phy-address
 	--enable-ne2000 --enable-pci --enable-pnic --enable-sb16 --enable-svm
 	--enable-usb --enable-usb-ehci --enable-usb-ohci --enable-usb-xhci
-	--enable-vmx --enable-x86-64 --enable-x86-debugger --with-x11'
+	--enable-vmx --enable-x86-64 --enable-x86-debugger --disable-docbook
+	--enable-cpu-level=6 --enable-debugger-gui --with-x --with-x11'
 
 cd $1
 

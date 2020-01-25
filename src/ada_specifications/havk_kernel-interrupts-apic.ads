@@ -361,7 +361,7 @@ PRIVATE
       Trigger  : ACPI.interrupt_signal := ACPI.default_ISA_or_EISA_signal;
    END RECORD;
 
-   -- The index represents a legacy ISA IRQ.
+   -- The index represents a legacy ISA IRQ vector.
    IRQ_Remaps  : ARRAY(number RANGE 0 .. 15) OF ISA_IRQ_IO_APIC_mapping
    WITH
       Part_Of => Interrupt_Controller_State;
@@ -395,7 +395,7 @@ PRIVATE
       local_error_status_register,        -- Read/write.
       timer_initial_count_register,       -- Read/write.
       timer_current_count_register,       -- Read only.
-      timer_divide_register)              -- Read/write.
+      timer_divisor_register)             -- Read/write.
    WITH
       Size => 32;
    FOR LAPIC_MSR USE -- 0x800 is the base MSR for the register offsets.
@@ -417,7 +417,7 @@ PRIVATE
       local_error_status_register        => 16#800# + 16#37#,
       timer_initial_count_register       => 16#800# + 16#38#,
       timer_current_count_register       => 16#800# + 16#39#,
-      timer_divide_register              => 16#800# + 16#3E#);
+      timer_divisor_register             => 16#800# + 16#3E#);
 
    -- Reads an MSR's value into a number or a format depending on the
    -- instantiation.
