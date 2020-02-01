@@ -26,6 +26,9 @@ IS
    -- on which ones are available. This also verifies the ACPI tables.
    PROCEDURE Interrupt_Controllers;
 
+   -- Initialises any timers that are available.
+   PROCEDURE Timers;
+
    -- Identity maps the kernel's address space to the default page layout.
    PROCEDURE Default_Page_Layout;
 
@@ -41,15 +44,6 @@ IS
    -- Prints the nearly all of the current font's characters.
    PROCEDURE Font_Test
      (Terminal : IN OUT textbox);
-
-   -- Waits for a key to be inputted that is different from the old key
-   -- specified as an argument.
-   PROCEDURE Wait_For_New_Key
-     (Terminal : IN OUT textbox;
-      Display  : IN view;
-      Old_Key  : IN character;
-      New_Key  : IN character;
-      Message  : IN string);
 
    -- Outputs the character from the input handler to the textbox.
    PROCEDURE Input_Key_Test
@@ -69,8 +63,7 @@ IS
    PROCEDURE PS2_Input;
 
    -- Initialises the system call instruction's handler by preparing the MSRs.
-   PROCEDURE System_Call_Instruction
-   RENAMES System_Call.Set_MSRs;
+   PROCEDURE System_Call_Instruction RENAMES System_Call.Set_MSRs;
 
    -- Retrieves the date and time in ISO 8601 format of when the current
    -- running version of the kernel was compiled and built.
@@ -88,6 +81,11 @@ IS
    PROCEDURE Tests
      (Terminal : IN OUT textbox;
       Display  : IN view);
+
+   -- This executes the `CPUID` instruction and outputs a few bits of
+   -- interesting information.
+   PROCEDURE CPU_Feature_Check
+     (Terminal : IN OUT textbox);
 
    -- Sets up the mechanisms for multi-tasking and enters Phase II as a task.
    -- Everything that doesn't have support for concurrency needs to be called

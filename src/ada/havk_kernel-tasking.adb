@@ -110,7 +110,7 @@ IS
    PROCEDURE Schedule
    WITH
       Refined_Global => (In_Out => (Tasks, Active_Task, Enabled),
-                         Input  =>  Interrupts.Ticker)
+                         Input  =>  APIC.Timer.Ticks)
    IS
    BEGIN
       IF
@@ -136,7 +136,7 @@ IS
    IS
    BEGIN
       IF -- A true state-of-the-art scheduler.
-         Yield OR ELSE Interrupts.Ticker MOD Tasks(Active_Task).Max_Ticks = 0
+         Yield OR ELSE APIC.Timer.Ticks MOD Tasks(Active_Task).Max_Ticks = 0
       THEN
          Switch(Tasks(Active_Task).State);
       END IF;

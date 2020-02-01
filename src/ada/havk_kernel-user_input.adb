@@ -69,6 +69,13 @@ IS
    FUNCTION Key_Is_Visible
       RETURN boolean
    IS
-      (Last_Key_State.Printable);
+     (Last_Key_State.Printable);
+
+   PROCEDURE Invalidate_Key_State
+   IS
+      Null_Key_State : key_state;
+   BEGIN
+      Last_Key_State := Null_Key_State;
+   END Invalidate_Key_State;
 
 END HAVK_Kernel.User_Input;

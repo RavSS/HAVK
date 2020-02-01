@@ -7,7 +7,6 @@
 
 WITH
    System,
-   System.Address_Image,
    Ada.Unchecked_Conversion;
 USE
    System;
@@ -62,11 +61,15 @@ IS
    GiB : CONSTANT number := KiB**3;
    TiB : CONSTANT number := KiB**4;
 
-   -- Avoids a "WITH" for "System.Address_Image" everywhere.
+   -- Avoids a "WITH" for "System.Address_Image" everywhere and adds some
+   -- contracts to it so it's easier for proving its return string.
    FUNCTION Hex_Image
      (Value : IN address)
       RETURN string
-   RENAMES System.Address_Image;
+   WITH
+      Inline => true,
+      Post   => Hex_Image'result'first = 01 AND THEN
+                Hex_Image'result'last  = 16;
 
    -- A type that describes certain levels of urgency. This is mainly used
    -- for logging purposes as of now.

@@ -223,29 +223,45 @@ $(HAVK_KERNEL): $(HAVK_LIBRARY) | $(BUILD_DIR)
 		--complete-output $(GPR_KERNEL_FLAGS) -j0 -s -o ./../$@
 
 $(HAVK_PARTITION): $(HAVK_BOOTLOADER) $(HAVK_KERNEL)
-	$(call echo, "CREATING EFI SYSTEM PARTITION FILE")
+	$(call echo, "CREATING EFI SYSTEM PARTITION AT $@")
 
-	dd if=/dev/zero of=$@ bs=$(IMAGE_BLOCK_SIZE) count=$(ESP_SECTOR_SIZE)
-	mkfs.fat -v -F $(FAT_SIZE) -s 1 -S $(IMAGE_BLOCK_SIZE) $@
+	@if [ ! -f "$@" ]; then \
+		dd if=/dev/zero of=$@ bs=$(IMAGE_BLOCK_SIZE) \
+			count=$(ESP_SECTOR_SIZE); \
+		mkfs.fat -v -F $(FAT_SIZE) -s 1 -S $(IMAGE_BLOCK_SIZE) $@; \
+	fi
 
-	mmd -i $@ ::/EFI
-	mmd -i $@ ::/EFI/BOOT
-	mmd -i $@ ::/$(NAME)
+	@if ! mdir -i $@ /EFI 2>&1 > /dev/null; then \
+		mmd -i $@ /EFI; \
+	fi
 
-	mcopy -i $@ $(HAVK_BOOTLOADER) ::/EFI/BOOT/BOOTX64.EFI
-	mcopy -i $@ $(HAVK_KERNEL) ::/$(NAME)/$(NAME).elf
+	@if ! mdir -i $@ /EFI/BOOT 2>&1 > /dev/null; then \
+		mmd -i $@ /EFI/BOOT; \
+	fi
+
+	@if ! mdir -i $@ /$(NAME) 2>&1 > /dev/null; then \
+		mmd -i $@ /$(NAME); \
+	fi
+
+	@mcopy -D o -i $@ $(HAVK_BOOTLOADER) ::/EFI/BOOT/BOOTX64.EFI
+	@echo "::/EFI/BOOT/BOOTX64.EFI"
+
+	@mcopy -D o -i $@ $(HAVK_KERNEL) ::/$(NAME)/$(NAME).elf
+	@echo "::/$(NAME)/$(NAME).elf"
 
 $(HAVK_IMAGE): $(HAVK_PARTITION)
-	$(call echo, "CREATING IMAGE AT $@")
+	$(call echo, "CREATING BOOTABLE IMAGE AT $@")
 
-	dd if=/dev/zero of=$@ bs=$(IMAGE_BLOCK_SIZE) count=$(IMAGE_SECTORS)
-
-	parted $@ --align minimal --script \
-		mktable gpt \
-		mkpart primary fat$(FAT_SIZE) \
-			$(ESP_SECTOR_START)s $(ESP_SECTOR_END)s \
-		name 1 EFI \
-		set 1 esp on
+	@if [ ! -f "$@" ]; then \
+		dd if=/dev/zero of=$@ bs=$(IMAGE_BLOCK_SIZE) \
+			count=$(IMAGE_SECTORS); \
+		parted $@ --align minimal --script \
+			mktable gpt \
+			mkpart primary fat$(FAT_SIZE) \
+				$(ESP_SECTOR_START)s $(ESP_SECTOR_END)s \
+			name 1 EFI \
+			set 1 esp on; \
+	fi
 
 	dd if=$< of=$@ bs=$(IMAGE_BLOCK_SIZE) count=$(ESP_SECTOR_SIZE) \
 		seek=$(ESP_SECTOR_START) conv=notrunc

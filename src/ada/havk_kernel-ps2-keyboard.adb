@@ -126,8 +126,8 @@ IS
          WHEN 16#29# =>
             Key.Name          := Key_String_Format("SPACEBAR");
             Key.Name_Shifted  := Key.Name;
-            Key.ASCII         := character'val(20);
-            Key.ASCII_Shifted := character'val(20);
+            Key.ASCII         := character'val(32);
+            Key.ASCII_Shifted := character'val(32);
 
          -- Letter keys.
          WHEN 16#15# =>

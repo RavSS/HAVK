@@ -12,13 +12,15 @@ WITH
    HAVK_Kernel.Interrupts.APIC,
    HAVK_Kernel.Interrupts.APIC.Timer,
    HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Intrinsics.CPUID,
    HAVK_Kernel.Exceptions,
    HAVK_Kernel.Tasking,
    HAVK_Kernel.Memory,
    HAVK_Kernel.Debug,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.ACPI,
-   HAVK_Kernel.PS2;
+   HAVK_Kernel.PS2,
+   HAVK_Kernel.PIT;
 USE
    HAVK_Kernel.User_Input,
    HAVK_Kernel.Intrinsics;
@@ -58,9 +60,6 @@ IS
       -- TODO: Check for the x2APIC bit in CPUID's output before enabling it.
       Interrupts.APIC.x2APIC_Mode;
 
-      -- No longer have the PIT, so start the LAPIC timer.
-      Interrupts.APIC.Timer.Setup;
-
       -- We need the PS/2 controller's interrupts.
       Interrupts.APIC.Set_IO_APIC_Redirects;
 
@@ -69,6 +68,21 @@ IS
       Log("Detected" & number'image(Interrupts.APIC.CPU_Cores) & " CPU cores.",
          nominal);
    END Interrupt_Controllers;
+
+   PROCEDURE Timers
+   IS
+   BEGIN
+      -- We will actually always have a PIT (to my knowledge). I'm not sure
+      -- if it's emulated by a present HPET or something along those lines.
+      PIT.Setup;
+
+      IF
+         ACPI.Valid_Implementation
+      THEN
+         -- Start the LAPIC timer. It will be calibrated using the PIT.
+         Interrupts.APIC.Timer.Setup;
+      END IF;
+   END Timers;
 
    PROCEDURE Default_Page_Layout
    IS
@@ -199,15 +213,15 @@ IS
       IF -- Inform if the magic number is wrong or corrupted.
          Magic = 16#55_45_46_49#
       THEN
-         Terminal.Print("BOOT METHOD: UEFI");
+         Terminal.Print("Boot method: UEFI.");
          Log("Successful UEFI boot.");
       ELSIF
          Magic = 16#42_49_4F_53#
       THEN
-         Terminal.Print("BOOT METHOD: BIOS"); -- If I bother with it.
+         Terminal.Print("Boot method: BIOS."); -- If I bother with it.
          Log("Successful BIOS boot.");
       ELSE
-         Terminal.Print("BOOT METHOD: UNKNOWN");
+         Terminal.Print("Boot method: Unknown.");
          Log("Unsuccessful boot via unknown method.");
       END IF;
    END See_Magic;
@@ -218,18 +232,14 @@ IS
       Uppercase      : CONSTANT string := "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
       Lowercase      : CONSTANT string := "abcdefghijklmnopqrstuvwxyz";
       Numeric_Digits : CONSTANT string := "0123456789";
-      Common_Symbols : CONSTANT string := "!@#$%^&*()_-+=[]{}\|;:'"",<.>/?";
+      Common_Symbols : CONSTANT string := "!@#$%^&*()_-+=[]{}\|;:`~'"",<.>/?";
    BEGIN
-      Terminal.Print("FONT TEST:");
-      Terminal.Newline;
-      Terminal.Print("   " & Uppercase);
-      Terminal.Newline;
-      Terminal.Print("   " & Lowercase);
-      Terminal.Newline;
-      Terminal.Print("   " & Numeric_Digits);
-      Terminal.Newline;
-      Terminal.Print("   " & Common_Symbols);
-      Terminal.Newline;
+      Terminal.Print("Font test:");
+      Terminal.Print("   Uppercase: " & Uppercase);
+      Terminal.Print("   Lowercase: ", Next_Line => false);
+      Terminal.Print(Lowercase, Uppercase => false); -- TODO: No support yet.
+      Terminal.Print("   Numbers:   " & Numeric_Digits);
+      Terminal.Print("   Symbols:   " & Common_Symbols);
    END Font_Test;
 
    FUNCTION HAVK_Build_Datetime
@@ -275,50 +285,14 @@ IS
       END IF;
    END PS2_Input;
 
-   PROCEDURE Wait_For_New_Key
-     (Terminal : IN OUT textbox;
-      Display  : IN view;
-      Old_Key  : IN character;
-      New_Key  : IN character;
-      Message  : IN string)
-   IS
-   BEGIN
-      IF
-         Get_Key = Old_Key AND THEN Get_Key /= New_Key
-      THEN
-         Terminal.Current_X_Index := Terminal.Data'first(2);
-         Terminal.Print(Message);
-         Terminal.Draw_On(Display);
-
-         -- Now wait for it to change.
-         WHILE
-            Get_Key /= New_Key
-         LOOP
-            Halt;
-         END LOOP;
-
-         -- TODO: Not sure how to make `gnatprove` understand that `Get_Key()`
-         -- can return anything depending on the keyboard.
-         PRAGMA Warnings(GNATprove, off, "unreachable code",
-            Reason => "After the key is changed, this is indeed reached.");
-
-         Terminal.Newline;
-      END IF;
-   END Wait_For_New_Key;
-
    PROCEDURE Input_Key_Test
      (Terminal : IN OUT textbox;
       Display  : IN view)
    IS
-      Formatted_Key      : character;
       Formatted_Key_Name : key_string;
    BEGIN
-      -- If the last key pressed was enter, then wait for the user to start it.
-      Wait_For_New_Key(Terminal, Display, character'val(10), character'val(20),
-         "PRESS SPACE TO BEGIN THE PS/2 INPUT TEST");
-
-      Terminal.Print("PS/2 INPUT TEST, PRESS ENTER TO EXIT:");
-      Terminal.Newline;
+      User_Input.Invalidate_Key_State;
+      Terminal.Print("PS/2 input test, press enter to exit:");
       Log("PS/2 key test has started.");
 
       WHILE
@@ -329,22 +303,20 @@ IS
 
          -- Avoid a race condition of the key state changing during print.
          Disable_Interrupts;
-
-         -- Change null to a space so it draws.
-         Formatted_Key      := (IF Key_Is_Visible THEN Get_Key ELSE ' ');
          Formatted_Key_Name := Get_Key_Name;
 
-         FOR
-            I IN Formatted_Key_Name'range
+         FOR -- Change all nulls to spaces so it draws over previous text.
+            ASCII OF Formatted_Key_Name
          LOOP
-            IF
-               Formatted_Key_Name(I)  = character'val(0)
-            THEN
-               Formatted_Key_Name(I) := ' '; -- Change nulls to spaces again.
-            END IF;
+            ASCII := (IF ASCII = character'val(0) THEN ' ' ELSE ASCII);
          END LOOP;
 
-         Terminal.Print("   " & Formatted_Key & " - " & Formatted_Key_Name);
+         PRAGMA Warnings(GNATprove, off,
+            "attribute ""Image"" has an implementation-defined length",
+            Reason => "The textbox object can handle whatever string length.");
+
+         Terminal.Print("   " & character'image(Get_Key) & " - " &
+            Formatted_Key_Name, Next_Line => false);
 
          -- Enable interrupts again for the next iteration or exit.
          Enable_Interrupts;
@@ -354,50 +326,52 @@ IS
       END LOOP;
 
       Terminal.Current_X_Index := Terminal.Data'first(2);
-      Terminal.Print("   ENTER KEY SUCCESSFULLY PRESSED.");
-      Terminal.Newline(2);
+      Terminal.Print("   Enter key successfully pressed.");
+      Terminal.Newline;
       Terminal.Draw_On(Display);
 
       Log("PS/2 key test ended.");
    END Input_Key_Test;
 
    PROCEDURE Seconds_Count
-     (Terminal : IN OUT textbox;
-      Display  : IN view)
+     (Terminal      : IN OUT textbox;
+      Display       : IN view)
    IS
+      Previous_Line : number;
    BEGIN
-      -- If the last key pressed was enter, then wait for the user to start it.
-      Wait_For_New_Key(Terminal, Display, character'val(10), character'val(20),
-         "PRESS SPACE TO COUNT SECONDS");
-
+      User_Input.Invalidate_Key_State;
       Log("Seconds count beginning.");
-      Terminal.Print("INACCURATE SECONDS COUNT, PRESS ENTER TO EXIT:");
-      Terminal.Newline;
+      Terminal.Print("Inaccurate seconds count, press enter to exit:");
+
+      Previous_Line := Terminal.Current_Y_Index;
 
       WHILE
          Get_Key /= character'val(10)
-      LOOP -- Loop showcasing interrupts.
+      LOOP
          Halt; -- Don't burn the CPU.
-         Terminal.Current_X_Index := 1;
+         Terminal.Current_X_Index := Terminal.Data'first(2);
 
-         -- This will count seconds, but if I remember correctly it depends on
-         -- the timer's frequency, which I have not retrieved from the UEFI
-         -- runtime service function `GetTime()`'s capabilities structure nor
-         -- have I programmed the legacy PIT to my settings.
-         Terminal.Print(number'image(Interrupts.Ticker / 100));
+         Terminal.Print("LAPIC timer:" & -- TODO: Presume the tick rate.
+            number'image(Interrupts.APIC.Timer.Ticks / 100));
+
+         Terminal.Print("PIT        :" &
+            number'image(PIT.Ticks / PIT.Tick_Rate),
+            Next_Line => false);
+
+         Terminal.Current_Y_Index := Previous_Line;
+
          Terminal.Draw_On(Display);
       END LOOP;
 
-      Terminal.Newline;
+      Terminal.Newline(2);
    END Seconds_Count;
 
    PROCEDURE Memory_Map_Info
      (Terminal : IN OUT textbox)
    IS
    BEGIN
-      Terminal.Print("TOTAL USABLE SYSTEM MEMORY:" &
-         number'image(Memory.System_Limit / MiB) & " MEBIBYTES");
-      Terminal.Newline;
+      Terminal.Print("Total usable system memory:" &
+         number'image(Memory.System_Limit / MiB) & " mebibytes.");
    END Memory_Map_Info;
 
    PROCEDURE Debugger
@@ -412,15 +386,16 @@ IS
       Display  : IN view)
    IS
    BEGIN
-      Terminal.Print("PRESS ENTER TO INITIALISE ALL TESTS.");
       Terminal.Newline;
-      Terminal.Print("PRESS ESCAPE TO SKIP ALL TESTS.");
-      Terminal.Newline(2);
+      Terminal.Print("Press space to initialise all tests.");
+      Terminal.Print("Press escape to skip all tests.");
+      Terminal.Newline;
       Terminal.Draw_On(Display);
+      User_Input.Invalidate_Key_State;
 
       LOOP
          IF
-            User_Input.Get_Key_Name(1 .. 5) = "ENTER"
+            User_Input.Get_Key_Name(1 .. 5) = "SPACE"
          THEN
             -- Test the PS/2 input.
             Initialise.Input_Key_Test(Terminal, Display);
@@ -430,13 +405,25 @@ IS
          ELSIF
             User_Input.Get_Key_Name(1 .. 6) = "ESCAPE"
          THEN
-            Terminal.Print("TESTS HAVE BEEN SKIPPED.");
-            Terminal.Newline;
+            Terminal.Print("Tests have been skipped.");
             Terminal.Draw_On(Display);
             EXIT WHEN true;
          END IF;
       END LOOP;
    END Tests;
+
+   PROCEDURE CPU_Feature_Check
+     (Terminal : IN OUT textbox)
+   IS
+      USE
+         HAVK_Kernel.Intrinsics.CPUID;
+
+      CPU_Identity : CONSTANT highest_function_parameter_leaf_format :=
+         Get_Highest_Function_Parameter(highest_function_parameter_leaf);
+   BEGIN
+      Terminal.Print("CPU ID: " & CPU_Identity.CPU_Identity_1 &
+         CPU_Identity.CPU_Identity_2 & CPU_Identity.CPU_Identity_3 & '.');
+   END CPU_Feature_Check;
 
    PROCEDURE Enter_Phase_II
    WITH

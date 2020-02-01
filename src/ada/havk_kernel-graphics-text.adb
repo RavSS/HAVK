@@ -6,9 +6,11 @@
 -------------------------------------------------------------------------------
 
 WITH
+   System.Case_Util,
    HAVK_Kernel.Font,
    HAVK_Kernel.Intrinsics;
 USE
+   System.Case_Util,
    HAVK_Kernel.Font,
    HAVK_Kernel.Intrinsics;
 
@@ -76,11 +78,11 @@ IS
          END LOOP;
       END IF;
 
-      -- Now blank out the last line.
+      -- Now blank out the last line with spaces so it clears out old text.
       FOR
          X IN Object.Data'range(2)
       LOOP
-         Object.Data(Object.Data'last(1), X) := character'val(0);
+         Object.Data(Object.Data'last(1), X) := character'val(32);
       END LOOP;
    END Scroll_Down;
 
@@ -105,37 +107,50 @@ IS
    END Update_Cursor;
 
    PROCEDURE Print
-     (Object  : IN OUT textbox;
-      Message : IN string;
-      Centre  : IN boolean := false)
+     (Object    : IN OUT textbox;
+      Message   : IN string;
+      Centre    : IN boolean := false;
+      Next_Line : IN boolean := true;
+      Uppercase : IN boolean := true)
    IS
+      Centre_Index         : number;
+      Centre_Message_Index : number;
    BEGIN
       IF
          Centre AND THEN Message'length /= 0
       THEN
-         DECLARE -- Index range checks for SPARK.
-            Centre_Index         : CONSTANT number := Object.Data'last(2) / 2;
-            Centre_Message_Index : CONSTANT number := Message'length / 2;
-         BEGIN
-            IF
-               Centre_Index          = 0 OR ELSE
-               Centre_Message_Index  = 0 OR ELSE
-               Centre_Index         <= Centre_Message_Index
-            THEN
-               Object.Current_X_Index := Object.Data'first(2);
-            ELSE
-               Object.Current_X_Index := Centre_Index - Centre_Message_Index;
-            END IF;
-         END;
+         Centre_Index         := Object.Data'last(2) / 2;
+         Centre_Message_Index :=      Message'length / 2;
+
+         IF -- Index range checks for `gnatprove`.
+            Centre_Index         = 0 OR ELSE
+            Centre_Message_Index = 0 OR ELSE
+            Centre_Index        <= Centre_Message_Index
+         THEN
+            Object.Current_X_Index := Object.Data'first(2);
+         ELSE
+            Object.Current_X_Index := Centre_Index - Centre_Message_Index;
+         END IF;
       END IF;
 
       FOR
          Letter OF Message
       LOOP
          Update_Cursor(Object);
-         Object.Data(Object.Current_Y_Index, Object.Current_X_Index) := Letter;
+
+         -- TODO: The framebuffer font does not currently support lowercase
+         -- characters, so I've forced them to be uppercase here by default.
+         Object.Data(Object.Current_Y_Index, Object.Current_X_Index) :=
+            (IF Uppercase THEN To_Upper(Letter) ELSE Letter);
+
          Object.Current_X_Index := Object.Current_X_Index + 1;
       END LOOP;
+
+      IF
+         Next_Line
+      THEN
+         Object.Newline;
+      END IF;
    END Print;
 
    PROCEDURE Newline

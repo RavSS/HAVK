@@ -6,6 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
+   System.Address_Image,
    HAVK_Kernel.Debug;
 
 PACKAGE BODY HAVK_Kernel
@@ -77,4 +78,19 @@ IS
          Logs.Last_Log := Logs.Last_Log + 1;
       END IF;
    END Log;
+
+   FUNCTION Hex_Image
+     (Value : IN address)
+      RETURN string
+   IS
+      Imaged : CONSTANT string := System.Address_Image(Value);
+   BEGIN
+      IF
+         Imaged'first = 1 AND THEN Imaged'last = 16
+      THEN
+         RETURN Imaged;
+      ELSE
+         RETURN "????????????????";
+      END IF;
+   END Hex_Image;
 END HAVK_Kernel;

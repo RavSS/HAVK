@@ -318,7 +318,8 @@ IS
    PROCEDURE Page_Fault_Handler
      (Error_Code : IN number)
    WITH
-      Inline => true,
-      Pre    => Error_Code <= 16#FFFFFFFF#; -- Error codes are 32-bits.
+      No_Return => true, -- Temporary handling of the page fault.
+      Inline    => true,
+      Pre       => Error_Code <= 16#FFFFFFFF#; -- Error codes are 32-bits.
 
 END HAVK_Kernel.Paging;

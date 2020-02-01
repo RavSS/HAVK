@@ -35,7 +35,7 @@ IS
       Display.Screen_Width  / 8,
       Display.Screen_Height / 8);
 
-   Welcome        : CONSTANT string := "WELCOME TO HAVK";
+   Welcome        : CONSTANT string := "Welcome to HAVK";
    Date_Of_Build  : CONSTANT string := Initialise.HAVK_Build_Datetime;
 BEGIN
    -- Initialise the debugging message mechanism if debugging is enabled.
@@ -51,15 +51,12 @@ BEGIN
 
    -- Print the welcome message and date of the current build's compilation.
    Terminal.Print(Welcome, Centre => true);
+   Terminal.Print("Compiled at " & Date_Of_Build, Centre => true);
+   Terminal.Print("Compiler was " & Standard'compiler_version, Centre => true);
    Terminal.Newline;
-   Terminal.Print("COMPILED AT " & Date_Of_Build, Centre => true);
-   Terminal.Newline;
-   Terminal.Print("COMPILER WAS " & Standard'compiler_version, Centre => true);
-   Terminal.Newline(2);
 
    -- Show the magic number value.
    Initialise.See_Magic(Terminal);
-   Terminal.Newline;
 
    -- Show a basic graphical shape on screen.
    Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
@@ -67,11 +64,12 @@ BEGIN
 
    -- Print the font test.
    Initialise.Font_Test(Terminal);
-   Terminal.Newline;
+
+   -- See what the processor can do and then output some text about it.
+   Initialise.CPU_Feature_Check(Terminal);
 
    -- Check the memory map.
    Initialise.Memory_Map_Info(Terminal);
-   Terminal.Newline;
 
    Terminal.Draw_On(Display);
    Log("First terminal draw done.");
@@ -81,6 +79,9 @@ BEGIN
 
    -- Create new descriptor tables and make interrupts possible.
    Initialise.Descriptor_Tables;
+
+   -- Now we can receive interrupts, prepare the timers properly.
+   Initialise.Timers;
 
    -- Use a new page structure and map the kernel, UEFI/ACPI data, etc.
    Initialise.Default_Page_Layout;
@@ -94,9 +95,9 @@ BEGIN
    -- Do a variety of tests if the user wishes to do so.
    Initialise.Tests(Terminal, Display);
 
-   Terminal.Print("START-UP WAS SUCCESSFUL.");
-   Terminal.Newline(2);
-   Terminal.Print("ENTERING PHASE II.", Centre => true);
+   Terminal.Print("Start-up was successful.");
+   Terminal.Newline;
+   Terminal.Print("Entering Phase II.", Centre => true);
    Terminal.Draw_On(Display);
 
    -- Begin multi-tasking and leave this phase.

@@ -7,9 +7,11 @@
 
 WITH
    HAVK_Kernel.Interrupts.APIC,
+   HAVK_Kernel.Interrupts.APIC.Timer,
    HAVK_Kernel.PS2.Keyboard,
    HAVK_Kernel.PS2.Mouse,
-   HAVK_Kernel.Tasking;
+   HAVK_Kernel.Tasking,
+   HAVK_Kernel.PIT;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.IRQs
 IS
@@ -25,10 +27,11 @@ IS
       NULL;
    END ISR_Spurious_Interrupt_Handler;
 
-   PROCEDURE ISR_32_Handler -- Timer.
+   PROCEDURE ISR_32_Handler -- Legacy timer.
      (Stack_Frame : IN access_interrupt)
    IS
    BEGIN
+      PIT.Interrupt_Handler;
       APIC.Reset;
    END ISR_32_Handler;
 
@@ -84,7 +87,7 @@ IS
       APIC.Reset;
    END ISR_39_Handler;
 
-   -- Slave PIC is used for interrupts below this line.
+   -- Slave PIC is used for interrupts below this line (if not using the APIC).
 
    PROCEDURE ISR_40_Handler
      (Stack_Frame : IN access_interrupt)
@@ -151,7 +154,7 @@ IS
      (Stack_Frame : IN access_interrupt)
    IS
    BEGIN
-      Ticker := Ticker + 1;
+      APIC.Timer.Ticks := APIC.Timer.Ticks + 1;
       Tasking.Schedule;
       APIC.Reset;
    END ISR_48_Handler;

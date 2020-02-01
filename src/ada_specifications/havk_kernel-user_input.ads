@@ -63,4 +63,8 @@ IS
    WITH
       Inline => true;
 
+   -- This resets the key state to an invalid one. Useful for making the user
+   -- redo a specific key press.
+   PROCEDURE Invalidate_Key_State;
+
 END HAVK_Kernel.User_Input;

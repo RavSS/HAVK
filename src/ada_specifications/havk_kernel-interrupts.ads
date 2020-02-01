@@ -297,11 +297,6 @@ IS
    -- Sets up the interrupt descriptor table.
    PROCEDURE Prepare_IDT;
 
-   -- TODO: Store IRQ 0 interrupts here temporarily in a counter.
-   -- No idea what the timer's frequency is, so I can't exactly
-   -- count seconds right now.
-   Ticker : number := 0;
-
    -- Declare the tables.
    IDT    : ALIASED IDT_gates;
    TSS    : ALIASED TSS_structure; -- TODO: Set the kernel stacks later.

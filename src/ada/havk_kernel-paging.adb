@@ -339,16 +339,15 @@ IS
 
    PROCEDURE Page_Fault_Handler
      (Error_Code    : IN number)
-   WITH
-      SPARK_Mode => off -- Assembly is used to get the page fault address.
    IS
       FUNCTION Read_CR2
          RETURN address
       WITH
-         Inline        => true,
-         Import        => true,
-         Convention    => Assembler,
-         External_Name => "assembly__get_page_fault_address";
+         Global            => NULL,
+         Volatile_Function => true,
+         Import            => true,
+         Convention        => Assembler,
+         External_Name     => "assembly__get_page_fault_address";
 
       -- The fault address is always in the CR2 register, which we presume is
       -- loaded already, as this should be called from ISR 14's handler.
@@ -388,5 +387,8 @@ IS
       WITH
          Source_Location &
          " - Unexpected page fault as of this stage in development.";
+      PRAGMA Annotate(GNATprove, Intentional,
+         "exception might be raised",
+         "We don't handle page faults as of now. We will later.");
    END Page_Fault_Handler;
 END HAVK_Kernel.Paging;

@@ -7,8 +7,12 @@
 
 WITH
    HAVK_Kernel.Interrupts,
+   HAVK_Kernel.Interrupts.APIC,
+   HAVK_Kernel.Interrupts.APIC.Timer,
    HAVK_Kernel.Memory,
    HAVK_Kernel.Paging;
+USE
+   HAVK_Kernel.Interrupts;
 
 -- TODO: I've had a look at the native RTS for GNAT CE 2019 on x86-64 Linux and
 -- I think I could shift some code to a new version of that RTS for proper Ada
@@ -47,7 +51,7 @@ IS
    -- For now, this is just a bad round-robin implementation.
    PROCEDURE Schedule
    WITH
-      Global => (In_Out => Tasking_State, Input => Interrupts.Ticker);
+      Global => (In_Out => Tasking_State, Input => APIC.Timer.Ticks);
 
    -- Changes HAVK from a mono-tasking kernel to a multi-tasking kernel.
    -- Does not return. The first task is the first one entered.
@@ -133,7 +137,7 @@ PRIVATE
      (Yield : IN boolean := false)
    WITH
       Global => (In_Out => (Tasks, Active_Task, Enabled),
-                 Input  =>  Interrupts.Ticker),
+                 Input  =>  APIC.Timer.Ticks),
       Pre    => Enabled AND THEN Tasks(Active_Task) /= NULL;
 
    -- Raises `INT 100`, which is the interrupt vector for the context switch
