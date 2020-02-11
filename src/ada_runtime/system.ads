@@ -74,6 +74,7 @@ IS
    Memory_Size  : CONSTANT := 2 ** 64;
 
    TYPE address IS MOD Memory_Size;
+   PRAGMA Provide_Shift_Operators(address);
    Null_Address : CONSTANT address := 0;
 
    --  Address comparison

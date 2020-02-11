@@ -1,10 +1,10 @@
 # HAVK
-HAVK is a x86-64 operating system and kernel created with Ada (SPARK subset).
+HAVK is an x86-64 operating system and kernel created with Ada (SPARK subset).
 It focuses on security (and only that) via writing minimal code and using
 formal verification techniques to help achieve program correctness.
 It is influenced by Unix, but it is not necessarily a Unix clone.
 
-### What can it do right now and what is next?
+### What can it do right now?
 You can type to test your keyboard and count seconds inaccurately.
 
 It currently has a primitive task scheduler, a custom text renderer, and is
@@ -13,7 +13,20 @@ working towards a functional user mode.
 Expect it to do nothing until I decide to release the first major version, as
 it is still under heavy development.
 
-The end goal is to get a text-based web browser working at the very least.
+### Goals
+
+This exists so I can experiment with intriguing security concepts such as
+capabilities and play around with how programs in ring 3 interact with
+anything in ring 0, with the main goal being how much I can harden and 
+lockdown the entire operating system itself for fun.
+
+I am more interested in any unique ideas you may have to do with operating
+system security as opposed to code contributions; however, issues and pull
+requests are very welcome, especially bug fixes.
+
+The end goal is to get a text-based web browser working at the very least, so
+one could consider this a nearly featureless but usable OS. There are no goals
+to port this to other platforms/architectures at this stage.
 
 ### Software requirements
 There are a few mandatory software requirements:

@@ -1,11 +1,14 @@
 -------------------------------------------------------------------------------
 -- Program         -- The HAVK Operating System                              --
--- Filename        -- havk_kernel-interrupts-apic.adb                        --
+-- Filename        -- havk_kernel-apic.adb                                   --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-PACKAGE BODY HAVK_Kernel.Interrupts.APIC
+WITH
+   Ada.Unchecked_Conversion;
+
+PACKAGE BODY HAVK_Kernel.APIC
 WITH
    Refined_State => (Interrupt_Controller_State => (IO_APICs, IRQ_Remaps))
 IS
@@ -240,8 +243,8 @@ IS
                         -- All of the I/O APICs could fit inside a single page
                         -- frame of 4-KiB, but repeat this just to be sure.
                         Paging_Structure.Map_Address
-                          (Address_Value(New_IO_APIC.IO_APIC_Address),
-                           Address_Value(New_IO_APIC.IO_APIC_Address),
+                          (New_IO_APIC.IO_APIC_Address,
+                           New_IO_APIC.IO_APIC_Address,
                            Write_Access => true);
 
                         Mapped_IO_APIC.MMIO := To_Pointer
@@ -447,4 +450,4 @@ IS
       END LOOP;
    END Set_IO_APIC_Redirects;
 
-END HAVK_Kernel.Interrupts.APIC;
+END HAVK_Kernel.APIC;

@@ -15,6 +15,8 @@ WITH
 -- using the PIT to calibrate the LAPIC timer and for sleeping.
 PACKAGE HAVK_Kernel.PIT
 IS
+   PRAGMA Preelaborate;
+
    -- Does the most basic set up for the PIT.
    PROCEDURE Setup;
 
@@ -27,7 +29,7 @@ IS
 
    -- Goes inside the IRQ 0 interrupt handler entry. Must not be called
    -- outside it.
-   PROCEDURE Interrupt_Handler
+   PROCEDURE Interrupt_Manager
    WITH
       Inline => true;
 

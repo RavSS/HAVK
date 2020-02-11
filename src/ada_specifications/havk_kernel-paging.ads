@@ -5,14 +5,13 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
--- This package has the purpose of managing page translation.
--- TODO: Please check the record/structure of "page_layout". I am unsure of
--- how many tables I need for each level. All I truly know is that there's only
--- a single page map (PML4) due to x86-64 only practically supporting a 48-bit
--- virtual address space instead of its theoretical max of 64-bit, as a single
--- page map covers 256 TiB (48 bits).
+-- This package has the purpose of managing page translation and mapping.
+-- It should be relatively bug free; however, all page map allocations are
+-- made on the kernel's heap for now.
 PACKAGE HAVK_Kernel.Paging
 IS
+   PRAGMA Preelaborate;
+
    -- READ: https://wiki.osdev.org/Page_Tables#48-bit_virtual_address_space
    -- See "Figure 5-1. Virtual to Physical Address Translation-Long Mode"
    -- in the AMD64 system programming manual (24593-Rev. 3.32-October 2019),
@@ -23,44 +22,46 @@ IS
    -- 4 kibibytes. Huge pages are 2 mebibytes and "giant" (as I call them)
    -- pages are 1 gibibyte, where only the latter may not be supported by the
    -- processor. It can be checked in CPUID's output (bit 26 of EAX).
-   SUBTYPE page_frame_variant IS number RANGE  4 * KiB .. 1 * GiB;
-   Page       : CONSTANT page_frame_variant := 4 * KiB;
-   Huge_Page  : CONSTANT page_frame_variant := 2 * MiB;
-   Giant_Page : CONSTANT page_frame_variant := 1 * GiB; -- Needs CPU support.
+   SUBTYPE page_frame_variant IS   number RANGE 4 * KiB .. 1 * GiB
+   WITH
+      Static_Predicate => page_frame_variant IN 4 * KiB | 2 * MiB | 1 * GiB;
+   Page       : CONSTANT page_frame_variant  := 4 * KiB;
+   Huge_Page  : CONSTANT page_frame_variant  := 2 * MiB;
+   Giant_Page : CONSTANT page_frame_variant  := 1 * GiB; -- Needs CPU support.
 
    -- This record contains the structure for a map entry.
    TYPE map_entry IS RECORD
       -- Whether the directory is "active".
-      Present      : boolean                          := false;
+      Present      : boolean                     := false;
       -- When true, both reading and writing is allowed.
-      Write_Access : boolean                          := false;
+      Write_Access : boolean                     := false;
       -- If this is set, ring 3 can access the page. Otherwise, only
       -- rings 0/1/2 can access it.
-      User_Access  : boolean                          := false;
+      User_Access  : boolean                     := false;
       -- If true, then this sets the caching policy to writethrough instead
       -- of writeback.
-      Writethrough : boolean                          := false;
+      Writethrough : boolean                     := false;
       -- True if the page entry this directory entry points to isn't cacheable.
-      Uncacheable  : boolean                          := false;
+      Uncacheable  : boolean                     := false;
       -- Whether the entry has been accessed. This is never reset to false by
       -- the CPU, it's your role to track it.
-      Accessed     : boolean                          := false;
+      Accessed     : boolean                     := false;
       -- There is no "dirty" field. This field is ignored and can be
       -- used for anything.
-      Ignored_1    : boolean                          := false;
+      Ignored_1    : boolean                     := false;
       -- There is no "huge" or "global" field. This field must be zeroed.
-      Zeroed       : number RANGE 0 .. 00000000000000 := 0;
+      Zeroed       : number RANGE 0 .. 0         := 0;
       -- Bits that are available for anything.
-      Available_1  : number RANGE 0 .. 00000000000007 := 0;
+      Available_1  : number RANGE 0 .. 7         := 0;
       -- A thin pointer to the base address of the directory pointer table
       -- this entry points to. Bits 11 to 0 are zero, as the address
       -- must be 4-KiB aligned regardless of page size. You must do a
       -- right shift of 12.
-      Pointer      : number RANGE 0 .. 16#FFFFFFFFFF# := 0;
+      Pointer      : number RANGE 0 .. 2**40 - 1 := 0;
       -- Bits that are available for anything.
-      Available_2  : number RANGE 0 .. 16#00000003FF# := 0;
+      Available_2  : number RANGE 0 .. 16#3FF#   := 0;
       -- The NX (non-executable) bit. Self-explanatory.
-      NX           : boolean                          := false;
+      NX           : boolean                     := false;
    END RECORD;
    FOR map_entry USE RECORD
       Present          AT 0 RANGE 00 .. 00;
@@ -80,23 +81,23 @@ IS
    -- This record contains the structure for a directory pointer table entry.
    TYPE directory_entry IS RECORD
       -- Whether the directory is "active".
-      Present      : boolean                          := false;
+      Present      : boolean                     := false;
       -- When true, both reading and writing is allowed.
-      Write_Access : boolean                          := false;
+      Write_Access : boolean                     := false;
       -- If this is set, ring 3 can access the page. Otherwise, only
       -- rings 0/1/2 can access it.
-      User_Access  : boolean                          := false;
+      User_Access  : boolean                     := false;
       -- If true, then this sets the caching policy to writethrough instead
       -- of writeback.
-      Writethrough : boolean                          := false;
+      Writethrough : boolean                     := false;
       -- True if the page entry this directory entry points to isn't cacheable.
-      Uncacheable  : boolean                          := false;
+      Uncacheable  : boolean                     := false;
       -- Whether the entry has been accessed. This is never reset to false by
       -- the CPU, it's your role to track it.
-      Accessed     : boolean                          := false;
+      Accessed     : boolean                     := false;
       -- There is no "dirty" field. This field is ignored and can be
       -- used for anything.
-      Ignored_1    : boolean                          := false;
+      Ignored_1    : boolean                     := false;
       -- Indicates whether or not the page entry is for a huge or giant page.
       -- If the entry is for a directory pointer table, then it is for a
       -- giant page. If the entry is for a directory table, then it is for a
@@ -105,20 +106,20 @@ IS
       -- zeroed, as the frame address should be aligned to its respective
       -- alignment. It is recommended not to use the more specialised fields
       -- before this if you are going to use a larger than normal page size.
-      Huge         : boolean                          := false;
+      Huge         : boolean                     := false;
       -- There is no "global" field. This is another ignored set of bits.
-      Ignored_2    : boolean                          := false;
+      Ignored_2    : boolean                     := false;
       -- Bits that are available for anything.
-      Available_1  : number RANGE 0 .. 00000000000007 := 0;
+      Available_1  : number RANGE 0 .. 7         := 0;
       -- A thin pointer to the base address of the page table this
       -- entry points to. Bits 11 to 0 are zero, as the address
       -- must be 4-KiB aligned regardless of page size. You must do a
       -- right shift of 12.
-      Pointer      : number RANGE 0 .. 16#FFFFFFFFFF# := 0;
+      Pointer      : number RANGE 0 .. 2**40 - 1 := 0;
       -- Bits that are available for anything.
-      Available_2  : number RANGE 0 .. 16#00000003FF# := 0;
+      Available_2  : number RANGE 0 .. 16#3FF#   := 0;
       -- The NX (non-executable) bit. Self-explanatory.
-      NX           : boolean                          := false;
+      NX           : boolean                     := false;
    END RECORD;
    FOR directory_entry USE RECORD
       Present          AT 0 RANGE 00 .. 00;
@@ -143,47 +144,45 @@ IS
    -- This record contains the structure for a page table entry.
    TYPE page_entry IS RECORD
       -- Whether the directory is "active".
-      Present      : boolean                          := false;
+      Present      : boolean                     := false;
       -- When true, both reading and writing is allowed.
-      Write_Access : boolean                          := false;
+      Write_Access : boolean                     := false;
       -- If this is set, ring 3 can access the page. Otherwise, only
       -- rings 0/1/2 can access it.
-      User_Access  : boolean                          := false;
+      User_Access  : boolean                     := false;
       -- If true, then this sets the caching policy to writethrough instead
       -- of writeback.
-      Writethrough : boolean                          := false;
+      Writethrough : boolean                     := false;
       -- True if the page entry this directory entry points to isn't cacheable.
-      Uncacheable  : boolean                          := false;
+      Uncacheable  : boolean                     := false;
       -- Whether the entry has been accessed. This is never reset to false by
       -- the CPU, it's your role to track it.
-      Accessed     : boolean                          := false;
+      Accessed     : boolean                     := false;
       -- True if the page has had physical data written to it. This again
       -- is never set to false by the processor, our code must reset it.
-      Dirty        : boolean                          := false;
+      Dirty        : boolean                     := false;
       -- TODO: This bit (also known as the PAT bit) does something with
       -- the other page attributes ("Writethrough" and "Uncacheable").
       -- Needs to be supported by the CPU. I need to learn more about
       -- this and the named "PAT register".
-      Attribute    : boolean                          := false;
+      Attribute    : boolean                     := false;
       -- Whether the physical page is global. When true, the TLB entry
       -- will not be invalidated if CR3 is changed e.g. `MOV CR*, *`.
       -- I believe the purpose of this is to help performance when some
       -- things in the directory don't change between paging structure
       -- switches for different processes etc. Only changeable for the
       -- lowest paging level, otherwise it's ignored and should be false.
-      Global       : boolean                          := false;
+      Global       : boolean                     := false;
       -- Bits that are available for anything.
-      Available_1  : number RANGE 0 .. 00000000000007 := 0;
+      Available_1  : number RANGE 0 .. 7         := 0;
       -- Points to the physical frame that is 4-KiB aligned. Must be shifted
       -- to the right by 12, much like the page structure pointers.
-      Frame        : number RANGE 0 .. 16#FFFFFFFFFF# := 0;
+      Frame        : number RANGE 0 .. 2**40 - 1 := 0;
       -- Bits that are available for anything.
-      Available_2  : number RANGE 0 .. 16#00000003FF# := 0;
+      Available_2  : number RANGE 0 .. 16#3FF#   := 0;
       -- The NX (non-executable) bit. Self-explanatory.
-      NX           : boolean                          := false;
-   END RECORD
-   WITH
-      Volatile => true;
+      NX           : boolean                     := false;
+   END RECORD;
    FOR page_entry USE RECORD
       Present       AT 0 RANGE 00 .. 00;
       Write_Access  AT 0 RANGE 01 .. 01;
@@ -203,7 +202,7 @@ IS
    -- The range of entries in any type of directory. I've started it from
    -- zero, so that way, converting a virtual address to a physical address
    -- requires less work, both technically and mentally.
-   SUBTYPE page_mask IS number RANGE 0 .. 511;
+   SUBTYPE page_mask IS number RANGE 0 .. 2**9 - 1;
 
    -- Level 4 structure. A page map table with 512 entries.
    TYPE map_table               IS ARRAY(page_mask) OF
@@ -281,8 +280,8 @@ IS
          Reason => "GNATprove is unaware of MMU page permissions.");
    PROCEDURE Map_Address
      (Object           : IN OUT page_layout;
-      Virtual_Address  : IN number;
-      Physical_Address : IN number;
+      Virtual_Address  : IN address;
+      Physical_Address : IN address;
       Page_Size        : IN page_frame_variant :=  Page;
       Present          : IN boolean            :=  true;
       Write_Access     : IN boolean            := false;
@@ -300,8 +299,8 @@ IS
    -- See the `Map_Address` procedure for more details.
    PROCEDURE Map_Address_Range
      (Object           : IN OUT page_layout;
-      Virtual_Address  : IN number;
-      Physical_Address : IN number;
+      Virtual_Address  : IN address;
+      Physical_Address : IN address;
       Size             : IN number;
       Page_Size        : IN page_frame_variant :=  Page;
       Present          : IN boolean            :=  true;
@@ -320,6 +319,6 @@ IS
    WITH
       No_Return => true, -- Temporary handling of the page fault.
       Inline    => true,
-      Pre       => Error_Code <= 16#FFFFFFFF#; -- Error codes are 32-bits.
+      Pre       => Error_Code <= 2**32 - 1; -- Error codes are 32-bits.
 
 END HAVK_Kernel.Paging;

@@ -7,6 +7,8 @@
 
 PACKAGE HAVK_Kernel.Exceptions
 IS
+   PRAGMA Preelaborate;
+
    -- This is is entered upon any and all Ada exceptions. We simply crash.
    PROCEDURE Last_Chance_Handler
      (Source_Location : IN address;

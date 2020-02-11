@@ -26,7 +26,7 @@ IS
    BEGIN
       Intrinsics.Write_MSR(IA32_EFER, EFER OR 1); -- OR'd here due to SPARK.
       Intrinsics.Write_MSR(IA32_STAR, Segments);
-      Intrinsics.Write_MSR(IA32_LSTAR, Address_Value(System_Call_Entry));
+      Intrinsics.Write_MSR(IA32_LSTAR, number(System_Call_Entry));
       Intrinsics.Write_MSR(IA32_FMASK, RFLAGS_Mask);
       Log("System calls ready.");
    END Set_MSRs;

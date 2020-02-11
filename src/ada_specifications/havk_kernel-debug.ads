@@ -14,6 +14,8 @@ USE
 -- a serial connection via a stub.
 PACKAGE HAVK_Kernel.Debug
 IS
+   PRAGMA Preelaborate;
+
    -- Variable for usage with kernel debugging. Used by two
    -- functions in the base package. For now, it exists to send messages
    -- over COM1 as a quick and easy alternative to proper debugging.
@@ -21,7 +23,7 @@ IS
    Debugger : CONSTANT serial_connection :=
    (
       -- Use COM1 for debugging purposes.
-      Port                    => COM(1),
+      Port                    => 16#3F8#, -- Port address declared statically.
       -- Going with a very safe baud rate.
       Baud_Rate               => 9600,
       -- Assume Windows line enders (CRLF), which should stay compatible

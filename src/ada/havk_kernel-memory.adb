@@ -32,7 +32,8 @@ IS
      (Size : IN number)
       RETURN address
    IS
-      TYPE kernel_stack IS ARRAY(1 .. Size) OF void
+      TYPE kernel_stack IS ARRAY(number RANGE 1 .. Size)
+         OF address RANGE 0 .. 2**8 - 1
       WITH
          Component_Size => 008, -- Each element is a single byte.
          Alignment      => 128; -- 16-byte alignment required for the ABI.
@@ -45,9 +46,8 @@ IS
       WITH
          Import     => true,
          Convention => Intrinsic,
-         Post       => To_Pointer'result >= Address_Value(Kernel_Heap_Base)
-                       AND THEN
-                       To_Pointer'result <= Address_Value(Kernel_Heap_End);
+         Post       => To_Pointer'result IN
+                          Kernel_Heap_Base .. Kernel_Heap_End;
 
       -- Creates the new stack for handling interrupts in ring 0.
       New_Stack_End  : CONSTANT access_kernel_stack :=
@@ -55,11 +55,10 @@ IS
 
       -- Remember that x86 stacks grow downwards.
       New_Stack_Base : CONSTANT address :=
-         To_Pointer(New_Stack_End) + Address_Value(kernel_stack'last);
+         To_Pointer(New_Stack_End) + address(kernel_stack'last);
    BEGIN
       IF
-         New_Stack_Base IN -- Conversion applied below instead to prove checks.
-            Address_Value(Kernel_Heap_Base) .. Address_Value(Kernel_Heap_End)
+         New_Stack_Base IN Kernel_Heap_Base .. Kernel_Heap_End
       THEN
          RETURN New_Stack_Base;
       ELSE
@@ -100,5 +99,31 @@ IS
          END LOOP;
       END RETURN;
    END System_Limit;
+
+   FUNCTION Kernel_Heap_Base
+      RETURN address
+   IS
+      Kernel_Heap_Base_Address : CONSTANT address
+         RANGE Kernel_Virtual_Base .. address'last
+      WITH
+         Import        => true,
+         Convention    => Assembler,
+         External_Name => "__kernel_heap_base_address";
+   BEGIN
+      RETURN Kernel_Heap_Base_Address;
+   END Kernel_Heap_Base;
+
+   FUNCTION Kernel_Heap_End
+      RETURN address
+   IS
+      Kernel_Heap_End_Address : CONSTANT address
+         RANGE Kernel_Heap_Base + address'size / 8 .. address'last
+      WITH
+         Import        => true,
+         Convention    => Assembler,
+         External_Name => "__kernel_heap_end_address";
+   BEGIN
+      RETURN Kernel_Heap_End_Address;
+   END Kernel_Heap_End;
 
 END HAVK_Kernel.Memory;

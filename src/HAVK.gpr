@@ -58,7 +58,7 @@ IS
    END Prove;
 
    PACKAGE Builder
-   IS -- `gprbuild`
+   IS -- `gnatmake`
       Ada_Basic_Switches :=
         (-- May as well use the latest version of Ada, there is no harm in it.
          "-gnat2012",
@@ -197,11 +197,10 @@ IS
          -- The x86-64 red zone is a problem when handling interrupts as the
          -- stack is shared with the ISR and whatever was executing before.
          "-mno-red-zone",
-         -- TODO: There's an issue with debugging for this - later explained.
          -- HAVK is a higher-half kernel that virtually lives in the -2 GiB
          -- address space. The "kernel" model does not allow PIC generation.
          -- It should result in better assembly than with the "large" model.
-         "-fno-PIC",
+         "-fno-PIC", "-mcmodel=kernel",
          -- No MMX instructions.
          "-mno-mmx",
          -- No SSE and SSE2 instructions. Please note that SSE and SSE2 are
@@ -215,21 +214,6 @@ IS
          "-march=x86-64",
          -- Optimize code for no particular CPU family.
          "-mtune=generic");
-
-      GCC_Debug_Switches :=
-        (-- TODO: This allows for a more general and less efficient memory
-         -- model, but GDB is able to connect to QEMU with the ability to
-         -- debug properly via a working backtrace.
-         "-mcmodel=kernel");
-
-      GCC_Final_Switches :=
-        (-- TODO: This allows for a more appropriate memory model at the slight
-         -- expense of GDB debugging functionality. I don't think there's any
-         -- real reason why this couldn't work. Breaking randomly is not
-         -- perfect with this, as e.g. sometimes GDB thinks there's a call
-         -- inside the HLT instruction intrinsic function, which is inlined and
-         -- does not actually contain any (intended) function calls at all.
-         "-mcmodel=kernel");
 
       -- Switches to be used by any files that generate interrupt handlers.
       GCC_Interrupt_Switches :=
@@ -272,21 +256,17 @@ IS
       IS
          WHEN "Final" =>
             FOR Default_Switches("Ada") USE
+               GCC_Basic_Switches;
+            FOR Switches("havk_kernel-interrupts*.adb") USE
                GCC_Basic_Switches &
-               GCC_Final_Switches;
-            FOR Switches("havk_kernel-interrupts-{exceptions,irqs}.adb") USE
-               GCC_Basic_Switches &
-               GCC_Final_Switches &
                GCC_Interrupt_Switches;
             FOR Default_Switches("ASM") USE
                GAS_Basic_Switches;
          WHEN "Debug" =>
             FOR Default_Switches("Ada") USE
+               GCC_Basic_Switches;
+            FOR Switches("havk_kernel-interrupts*.adb") USE
                GCC_Basic_Switches &
-               GCC_Debug_Switches;
-            FOR Switches("havk_kernel-interrupts-{exceptions,irqs}.adb") USE
-               GCC_Basic_Switches &
-               GCC_Debug_Switches &
                GCC_Interrupt_Switches;
             FOR Default_Switches("ASM") USE
                GAS_Basic_Switches &

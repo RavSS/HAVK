@@ -12,6 +12,8 @@ USE TYPE
 
 PACKAGE HAVK_Kernel.System_Call
 IS
+   PRAGMA Preelaborate;
+
    -- This sets the MSRs related to the `SYSCALL` address, notably for
    -- telling it where the system call entry address is and what the code
    -- segment's descriptor indices are for each ring. Also sets the flag mask.

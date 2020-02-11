@@ -73,7 +73,7 @@ IS
       END LOOP;
    END Sleep;
 
-   PROCEDURE Interrupt_Handler
+   PROCEDURE Interrupt_Manager
    IS
    BEGIN
       Ticks := Ticks + 1;
@@ -83,6 +83,6 @@ IS
       THEN
          Countdown := Countdown - 1;
       END IF;
-   END Interrupt_Handler;
+   END Interrupt_Manager;
 
 END HAVK_Kernel.PIT;

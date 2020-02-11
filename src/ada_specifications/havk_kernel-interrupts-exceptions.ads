@@ -9,177 +9,178 @@
 -- READ: https://wiki.osdev.org/Exceptions
 PACKAGE HAVK_Kernel.Interrupts.Exceptions
 IS
+   PRAGMA Preelaborate;
+
    PRAGMA Warnings(GNATprove, off, "pragma ""Machine_Attribute"" ignored",
       Reason => "The pragma must be used to create CPU exception ISRs.");
 
    -- Format: <exception name> - <mnemonic code> - <exception type>.
 
    -- Divide-by-zero error - DE - fault.
-   PROCEDURE ISR_0_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_0_Handler,  "interrupt");
+   PROCEDURE ISR_000_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_000_Handler, "interrupt");
 
    -- Debug exception - DB - fault/trap.
-   PROCEDURE ISR_1_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_1_Handler,  "interrupt");
+   PROCEDURE ISR_001_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_001_Handler, "interrupt");
 
    -- Non-maskable interrupt (NMI) exception - no mnemonic - interrupt.
-   PROCEDURE ISR_2_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_2_Handler,  "interrupt");
+   PROCEDURE ISR_002_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_002_Handler, "interrupt");
 
    -- Breakpoint exception - BP - trap.
-   PROCEDURE ISR_3_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_3_Handler,  "interrupt");
+   PROCEDURE ISR_003_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_003_Handler, "interrupt");
 
    -- Overflow exception - OF - trap.
-   PROCEDURE ISR_4_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_4_Handler,  "interrupt");
+   PROCEDURE ISR_004_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_004_Handler, "interrupt");
 
    -- Bound range exceeded exception - BR - fault.
-   PROCEDURE ISR_5_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_5_Handler,  "interrupt");
+   PROCEDURE ISR_005_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_005_Handler, "interrupt");
 
    -- Invalid opcode exception - UD - fault.
-   PROCEDURE ISR_6_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_6_Handler,  "interrupt");
+   PROCEDURE ISR_006_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_006_Handler, "interrupt");
 
    -- Device unavailable exception - NM - fault.
-   PROCEDURE ISR_7_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_7_Handler,  "interrupt");
+   PROCEDURE ISR_007_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_007_Handler, "interrupt");
 
    -- Double fault exception - DF - abort. Error code is always zero.
-   PROCEDURE ISR_8_Handler
-     (Stack_Frame : IN access_interrupt;
+   PROCEDURE ISR_008_Handler
+     (Stack_Frame : IN access_interrupted_state;
       Error_Code  : IN number);
-   PRAGMA Machine_Attribute(ISR_8_Handler,  "interrupt");
+   PRAGMA Machine_Attribute(ISR_008_Handler, "interrupt");
 
    -- Coprocessor segment overrun - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_9_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_9_Handler,  "interrupt");
+   PROCEDURE ISR_009_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_009_Handler, "interrupt");
 
    -- Invalid task state segment - TS - fault.
-   PROCEDURE ISR_10_Handler
-     (Stack_Frame : IN access_interrupt;
+   PROCEDURE ISR_010_Handler
+     (Stack_Frame : IN access_interrupted_state;
       Error_Code  : IN number);
-   PRAGMA Machine_Attribute(ISR_10_Handler, "interrupt");
+   PRAGMA Machine_Attribute(ISR_010_Handler, "interrupt");
 
    -- Segment not present - NP - fault.
-   PROCEDURE ISR_11_Handler
-     (Stack_Frame : IN access_interrupt;
+   PROCEDURE ISR_011_Handler
+     (Stack_Frame : IN access_interrupted_state;
       Error_Code  : IN number);
-   PRAGMA Machine_Attribute(ISR_11_Handler, "interrupt");
+   PRAGMA Machine_Attribute(ISR_011_Handler, "interrupt");
 
    -- Stack segment error - SS - fault.
-   PROCEDURE ISR_12_Handler
-     (Stack_Frame : IN access_interrupt;
+   PROCEDURE ISR_012_Handler
+     (Stack_Frame : IN access_interrupted_state;
       Error_Code  : IN number);
-   PRAGMA Machine_Attribute(ISR_12_Handler, "interrupt");
+   PRAGMA Machine_Attribute(ISR_012_Handler, "interrupt");
 
    -- General protection fault - GP - fault.
-   PROCEDURE ISR_13_Handler
-     (Stack_Frame : IN access_interrupt;
+   PROCEDURE ISR_013_Handler
+     (Stack_Frame : IN access_interrupted_state;
       Error_Code  : IN number);
-   PRAGMA Machine_Attribute(ISR_13_Handler, "interrupt");
+   PRAGMA Machine_Attribute(ISR_013_Handler, "interrupt");
 
    -- Page fault - PF - fault.
-   PROCEDURE ISR_14_Handler
-     (Stack_Frame : IN access_interrupt;
+   PROCEDURE ISR_014_Handler
+     (Stack_Frame : IN access_interrupted_state;
       Error_Code  : IN number);
-   PRAGMA Machine_Attribute(ISR_14_Handler, "interrupt");
+   PRAGMA Machine_Attribute(ISR_014_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_15_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_15_Handler, "interrupt");
+   PROCEDURE ISR_015_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_015_Handler, "interrupt");
 
    -- x87 floating-point error - MF - fault.
-   PROCEDURE ISR_16_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_16_Handler, "interrupt");
+   PROCEDURE ISR_016_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_016_Handler, "interrupt");
 
    -- Alignment check - AC - fault.
-   PROCEDURE ISR_17_Handler
-     (Stack_Frame : IN access_interrupt;
+   PROCEDURE ISR_017_Handler
+     (Stack_Frame : IN access_interrupted_state;
       Error_Code  : IN number);
-   PRAGMA Machine_Attribute(ISR_17_Handler, "interrupt");
+   PRAGMA Machine_Attribute(ISR_017_Handler, "interrupt");
 
    -- Machine check - MC - abort.
-   PROCEDURE ISR_18_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_18_Handler, "interrupt");
+   PROCEDURE ISR_018_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_018_Handler, "interrupt");
 
    -- SIMD floating-point error - XM/XF - fault.
-   PROCEDURE ISR_19_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_19_Handler, "interrupt");
+   PROCEDURE ISR_019_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_019_Handler, "interrupt");
 
    -- Virtualization exception - VE - fault.
-   PROCEDURE ISR_20_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_20_Handler, "interrupt");
+   PROCEDURE ISR_020_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_020_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_21_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_21_Handler, "interrupt");
+   PROCEDURE ISR_021_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_021_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_22_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_22_Handler, "interrupt");
+   PROCEDURE ISR_022_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_022_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_23_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_23_Handler, "interrupt");
+   PROCEDURE ISR_023_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_023_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_24_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_24_Handler, "interrupt");
+   PROCEDURE ISR_024_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_024_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_25_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_25_Handler, "interrupt");
+   PROCEDURE ISR_025_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_025_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_26_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_26_Handler, "interrupt");
+   PROCEDURE ISR_026_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_026_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_27_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_27_Handler, "interrupt");
+   PROCEDURE ISR_027_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_027_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_28_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_28_Handler, "interrupt");
+   PROCEDURE ISR_028_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_028_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_29_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_29_Handler, "interrupt");
+   PROCEDURE ISR_029_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_029_Handler, "interrupt");
 
    -- Security exception - SX - no type.
-   PROCEDURE ISR_30_Handler
-     (Stack_Frame : IN access_interrupt;
+   PROCEDURE ISR_030_Handler
+     (Stack_Frame : IN access_interrupted_state;
       Error_Code  : IN number);
-   PRAGMA Machine_Attribute(ISR_30_Handler, "interrupt");
+   PRAGMA Machine_Attribute(ISR_030_Handler, "interrupt");
 
    -- Reserved - no mnemonic - no type. Never raised.
-   PROCEDURE ISR_31_Handler
-     (Stack_Frame : IN access_interrupt);
-   PRAGMA Machine_Attribute(ISR_31_Handler, "interrupt");
-
+   PROCEDURE ISR_031_Handler
+     (Stack_Frame : IN access_interrupted_state);
+   PRAGMA Machine_Attribute(ISR_031_Handler, "interrupt");
 END HAVK_Kernel.Interrupts.Exceptions;

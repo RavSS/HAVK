@@ -16,8 +16,8 @@ PACKAGE BODY HAVK_Kernel.Paging
 IS
    PROCEDURE Map_Address
      (Object           : IN OUT page_layout;
-      Virtual_Address  : IN number;
-      Physical_Address : IN number;
+      Virtual_Address  : IN address;
+      Physical_Address : IN address;
       Page_Size        : IN page_frame_variant :=  Page;
       Present          : IN boolean            :=  true;
       Write_Access     : IN boolean            := false;
@@ -79,40 +79,40 @@ IS
 
       FUNCTION Encode_Table
         (Value        : IN number;
-         Virtual_Base : IN number := Kernel_Virtual_Base)
+         Virtual_Base : IN address := Kernel_Virtual_Base)
          RETURN number
       IS
-         (Shift_Right(Value - Virtual_Base, 12) AND 16#FFFFFFFFFF#)
+        (Shift_Right(Value - number(Virtual_Base), 12) AND 2**40 - 1)
       WITH
          Inline => true,
-         Post   => Encode_Table'result <= 16#FFFFFFFFFF#;
+         Post   => Encode_Table'result <= 2**40 - 1;
 
       FUNCTION Decode_Table
         (Value        : IN number;
-         Virtual_Base : IN number := Kernel_Virtual_Base)
+         Virtual_Base : IN address := Kernel_Virtual_Base)
          RETURN number
       IS
-         (Shift_Left(Value, 12) + Virtual_Base)
+        (Shift_Left(Value, 12) + number(Virtual_Base))
       WITH
          Inline => true;
 
       -- The aligned (virtual) address to be mapped.
-      Address   : CONSTANT number    := Align(Virtual_Address, Page_Size);
+      Mapping   : CONSTANT number := Align(number(Virtual_Address), Page_Size);
 
       -- Bits 47 to 39. Directory map index.
-      L4_Offset : CONSTANT page_mask := Shift_Right(Address, 39)
+      L4_Offset : CONSTANT page_mask := Shift_Right(Mapping, 39)
          AND page_mask'last;
 
       -- Bits 38 to 30. Directory pointer table index.
-      L3_Offset : CONSTANT page_mask := Shift_Right(Address, 30)
+      L3_Offset : CONSTANT page_mask := Shift_Right(Mapping, 30)
          AND page_mask'last;
 
       -- Bits 29 to 21. Directory table index.
-      L2_Offset : CONSTANT page_mask := Shift_Right(Address, 21)
+      L2_Offset : CONSTANT page_mask := Shift_Right(Mapping, 21)
          AND page_mask'last;
 
       -- Bits 20 to 12. Page table index.
-      L1_Offset : CONSTANT page_mask := Shift_Right(Address, 12)
+      L1_Offset : CONSTANT page_mask := Shift_Right(Mapping, 12)
          AND page_mask'last;
 
       -- Points to a page directory pointer table on the heap. The directory
@@ -128,7 +128,8 @@ IS
 
       -- Points to a physical frame, regardless of page frame size.
       L0 : CONSTANT number RANGE 0 .. 16#FFFFFFFFFF# :=
-         Encode_Table(Align(Physical_Address, Page_Size), Virtual_Base => 0);
+         Encode_Table(Align(number(Physical_Address), Page_Size),
+                         Virtual_Base => address(0));
    BEGIN
       -- TODO: Find a way to model the CPU doing a page-walk (if that is even
       -- possible without library level static page structures).
@@ -270,8 +271,8 @@ IS
 
    PROCEDURE Map_Address_Range(
       Object           : IN OUT page_layout;
-      Virtual_Address  : IN number;
-      Physical_Address : IN number;
+      Virtual_Address  : IN address;
+      Physical_Address : IN address;
       Size             : IN number;
       Page_Size        : IN page_frame_variant :=  Page;
       Present          : IN boolean            :=  true;
@@ -286,8 +287,8 @@ IS
          P IN 0 .. Pages
       LOOP
          Object.Map_Address(
-            Virtual_Address   + Page_Size * P,
-            Physical_Address  + Page_Size * P,
+            Virtual_Address   + address(Page_Size * P),
+            Physical_Address  + address(Page_Size * P),
             Page_Size        =>     Page_Size,
             Present          =>       Present,
             Write_Access     =>  Write_Access,
@@ -329,12 +330,11 @@ IS
       PROCEDURE Write_CR3
         (L4_Address : IN address)
       WITH
-         Inline        => true,
          Import        => true,
          Convention    => Assembler,
          External_Name => "assembly__load_page_structure";
    BEGIN
-      Write_CR3(Object.L4'address - Address_Value(Kernel_Virtual_Base));
+      Write_CR3(Object.L4'address - Kernel_Virtual_Base);
    END Load;
 
    PROCEDURE Page_Fault_Handler

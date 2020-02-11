@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
 -- Program         -- The HAVK Operating System                              --
--- Filename        -- havk_kernel-interrupts-apic.ads                        --
+-- Filename        -- havk_kernel-apic.ads                                   --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -17,10 +17,12 @@ USE TYPE
 
 -- This package handles everything to do with the modern APIC architecture.
 -- That includes the I/O APIC and the LAPIC (only plan x2APIC support for now).
-PACKAGE HAVK_Kernel.Interrupts.APIC
+PACKAGE HAVK_Kernel.APIC
 WITH
    Abstract_State => Interrupt_Controller_State
 IS
+   PRAGMA Preelaborate;
+
    -- Each LAPIC (not I/O APIC) belongs to a logical core. Initialised to
    -- zero so counting it is easier during enumeration without subtraction.
    CPU_Cores : number := 0;
@@ -474,4 +476,4 @@ PRIVATE
               Mapped_IO_APIC.GSI_Base'old = Mapped_IO_APIC.GSI_Base AND THEN
               Mapped_IO_APIC.GSI_Last'old = Mapped_IO_APIC.GSI_Last;
 
-END HAVK_Kernel.Interrupts.APIC;
+END HAVK_Kernel.APIC;

@@ -1,5 +1,5 @@
 # Tasklist for the HAVK operating system
-### Last Updated: 2020-01-27
+### Last Updated: 2020-02-11
 #### High priority
 - Get rid of the awful pre-emptive round robin scheduler and replace it
 with anything less laggy which can properly terminate tasks.
@@ -17,8 +17,4 @@ be incorrect.
 - Very specific resolutions like 1366x768 are bugged and unusable.
 - Reorganise the bootloader arguments structure and provide
 a consistent format that does away with some of UEFI's oddities.
-- Figure out why GDB acts erratic when debugging with HAVK that is
-compiled with GCC's `-mcmodel=kernel` but not `-mcmodel=large`. For now,
-the "Final" build is compiled with the former, as debug functionality is
-irrelevant to that build's purpose.
 - Properly calibrate the LAPIC timer so it's more accurate than the PIT.

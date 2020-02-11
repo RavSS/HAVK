@@ -13,6 +13,8 @@
 -- READ: https://wiki.osdev.org/PS/2_Mouse
 PACKAGE HAVK_Kernel.PS2
 IS
+   PRAGMA Preelaborate;
+
    -- A type that indicates the condition of the PS/2 controller.
    TYPE controller_condition IS
      (unknown,
@@ -171,60 +173,17 @@ IS
       Zeroed                 AT 0 RANGE 7 .. 7;
    END RECORD;
 
-   -- Represents the 8042 PS/2 controller as a single object.
-   TYPE controller IS TAGGED RECORD
-      -- Max `Input_Byte()` and `Output_Byte()` attempts. Doesn't truly matter.
-      Retry_Rate            : number RANGE 10 .. 1000 := 100;
-      -- The default set is set 2, as it is the only one implemented as of now
-      -- and it is the most common scancode set.
-      Current_Scancode_Set  : scancode_set            := 002;
-      -- The current condition of the controller is unknown at the start.
-      Current_Condition     : controller_condition    := unknown;
-      -- The default configuration is safe and does not assume there
-      -- is a mouse or a port 2 available.
-      Current_Configuration : configuration :=
-      (
-         Port_1_Enabled     =>   true,
-         Port_2_Enabled     =>  false,  -- Disable port 2 for now.
-         System_POST_Pass   =>   true,  -- We've obviously passed POST.
-         Zeroed_1           => 000000,
-         Port_1_Clock       =>   true,
-         Port_2_Clock       =>  false,  -- Again, disable port 2 for now.
-         Port_1_Translation =>  false,  -- Do not translate all sets to set 1.
-         Zeroed_2           => 000000
-      );
-      -- The default typematic settings are slow as possible.
-      Current_Typematics    : typematics :=
-      (
-         Repeat_Rate        => 16#1F#, -- Slowest repeat rate.
-         Delay_Rate         => 000003, -- Largest delay between repeats.
-         Zeroed             => 000000
-      );
-      -- Indicates whether or not the PS/2 controller is dual-channel capable.
-      -- This does not mean there is a mouse available or if the second device
-      -- is a mouse at all.
-      Port_2_Support        : boolean := false;
-      -- Indicates whether or not there is a PS/2 mouse connected to the system
-      -- that is completely usable.
-      Mouse_Support         : boolean := false;
-      -- A keyboard is presumed to be at port 1. Port 2 takes no guesses.
-      Port_1_Device         : device  := Standard_Keyboard;
-      Port_2_Device         : device  := Unrecognised;
-   END RECORD;
-
    -- Does an initial PS/2 controller setup that uses values from the
    -- tagged record itself to configure the controller.
    PROCEDURE Setup;
 
    -- Receives a response from either one of the two ports.
    FUNCTION Receive
-     (Object    : IN controller;
-      Port_Type : IN port)
+     (Port_Type : IN port)
       RETURN response;
 
    -- If the output buffer is full on the controller, then empty it properly.
-   PROCEDURE Flush
-     (Object    : IN controller);
+   PROCEDURE Flush;
 
    -- Returns the controller's current condition.
    FUNCTION Check_Condition
@@ -241,34 +200,30 @@ IS
    -- The main function for interacting with the controller and its devices.
    -- Don't call this directly. Call the wrappers instead.
    FUNCTION Send
-     (Object    : IN controller;
-      Port_Type : IN port;
+     (Port_Type : IN port;
       Byte      : IN number;
       Port_2    : IN boolean;
       Verify    : IN boolean)
       RETURN boolean
    WITH
-      Pre'class => Byte <= 16#FF#;
+      Pre => Byte <= 16#FF#;
 
    -- Issues a controller specific command to the PS/2 controller I/O port.
    FUNCTION Send_Controller_Command
-     (Object    : IN controller;
-      Operation : IN controller_command)
+     (Operation : IN controller_command)
       RETURN boolean;
 
    -- Issues a keyboard specific command to the PS/2 controller's first data
    -- I/O port by default, as the keyboard is often on the first port.
    FUNCTION Send_Keyboard_Command
-     (Object    : IN controller;
-      Operation : IN keyboard_command;
+     (Operation : IN keyboard_command;
       Port_2    : IN boolean := false)
       RETURN boolean;
 
    -- Issues a mouse specific command to the PS/2 controller's second data
    -- I/O port by default, as the mouse is often on the second port.
    FUNCTION Send_Mouse_Command
-     (Object    : IN controller;
-      Operation : IN mouse_command;
+     (Operation : IN mouse_command;
       Port_2    : IN boolean := true)
       RETURN boolean;
 
@@ -278,52 +233,86 @@ IS
    -- instead returns an arbitrary byte describing the configuration, so that
    -- would cause an error with this function. Disable "Verify" to avoid it.
    FUNCTION Send_Data
-     (Object    : IN controller;
-      Byte_Data : IN number;
+     (Byte_Data : IN number;
       Port_2    : IN boolean := false;
       Verify    : IN boolean := true)
       RETURN boolean
    WITH
-      Pre'class => Byte_Data <= 16#FF#;
+      Pre => Byte_Data <= 16#FF#;
 
    -- Sets the port device fields in the class object. Returns false on
    -- any errors. Handles port 2 support.
-   PROCEDURE Identify_Device(
-      Object    : IN OUT controller;
-      Port_2    : IN boolean);
+   PROCEDURE Identify_Device
+     (Port_2    : IN boolean);
 
    -- Sends the PS/2 configuration in the record to the controller.
    FUNCTION Send_Configuration
-     (Object    : IN controller)
       RETURN boolean;
 
    -- Sends typematic settings to a PS/2 keyboard on either port.
    FUNCTION Send_Typematics
-     (Object    : IN controller;
-      Port_2    : IN boolean := false)
+     (Port_2    : IN boolean := false)
       RETURN boolean;
 
    -- Sends a preference for a scancode set to a PS/2 keyboard on either port.
    FUNCTION Send_Scancode_Set
-     (Object    : IN controller;
-      Port_2    : IN boolean := false)
+     (Port_2    : IN boolean := false)
       RETURN boolean;
 
    -- Checks the status register's output buffer indicator and returns true
    -- if it is full and receiving won't cause an error.
    FUNCTION Ready_To_Receive
-     (Object    : IN controller)
       RETURN boolean;
 
    -- Checks the status register's input buffer indicator and returns true
    -- if it is empty.
    FUNCTION Ready_To_Send
-     (Object    : IN controller)
       RETURN boolean;
 
-   -- The main 8042 PS/2 controller. The IBM PC system by design only has one.
-   -- Declaring new controllers can be used for switching PS/2 controller
-   -- configurations, but that is not tested as of now.
-   Input_Controller : controller;
+   -- Max `Input_Byte()` and `Output_Byte()` attempts. Doesn't truly matter.
+   Retry_Rate            : number RANGE 10 .. 1000 := 100;
+
+   -- The default set is set 2, as it is the only one implemented as of now
+   -- and it is the most common scancode set.
+   Current_Scancode_Set  : scancode_set := 002;
+
+   -- The current condition of the controller is unknown at the start.
+   Current_Condition     : controller_condition := unknown;
+
+   -- The default configuration is safe and does not assume there
+   -- is a mouse or a port 2 available.
+   Current_Configuration : configuration :=
+   (
+      Port_1_Enabled     =>   true,
+      Port_2_Enabled     =>  false,  -- Disable port 2 for now.
+      System_POST_Pass   =>   true,  -- We've obviously passed POST.
+      Zeroed_1           => 000000,
+      Port_1_Clock       =>   true,
+      Port_2_Clock       =>  false,  -- Again, disable port 2 for now.
+      Port_1_Translation =>  false,  -- Do not translate all sets to set 1.
+      Zeroed_2           => 000000
+   );
+
+   -- The default typematic settings are slow as possible.
+   Current_Typematics    : typematics :=
+   (
+      Repeat_Rate        => 16#1F#, -- Slowest repeat rate.
+      Delay_Rate         => 000003, -- Largest delay between repeats.
+      Zeroed             => 000000
+   );
+
+   -- Indicates whether or not the PS/2 controller is dual-channel capable.
+   -- This does not mean there is a mouse available or if the second device
+   -- is a mouse at all.
+   Port_2_Support        : boolean := false;
+
+   -- Indicates whether or not there is a PS/2 mouse connected to the system
+   -- that is completely usable.
+
+   Mouse_Support         : boolean := false;
+
+   -- A keyboard is presumed to be at port 1. Port 2 takes no guesses.
+   Port_1_Device         : device  := Standard_Keyboard;
+   Port_2_Device         : device  := Unrecognised;
 
 END HAVK_Kernel.PS2;

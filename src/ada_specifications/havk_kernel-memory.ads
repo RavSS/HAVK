@@ -8,6 +8,8 @@
 -- This package contains logic for memory operations.
 PACKAGE HAVK_Kernel.Memory
 IS
+   PRAGMA Preelaborate;
+
    -- Returns the total usable memory limit that is not reserved for hardware
    -- or any other firmware purposes.
    FUNCTION System_Limit
@@ -38,115 +40,113 @@ IS
      RETURN address
    WITH
       Pre  => Size >= 16 AND THEN Size MOD 16 = 0,
-      Post => Allocate_System_Stack'result >= Address_Value(Kernel_Heap_Base)
-              AND THEN
-              Allocate_System_Stack'result <= Address_Value(Kernel_Heap_End);
+      Post => Allocate_System_Stack'result >= Kernel_Heap_Base AND THEN
+              Allocate_System_Stack'result <= Kernel_Heap_End;
 
    -- What follows below are useful symbol pointer values. Note that some of
    -- them have ranges on them to make `gnatprove` have some notion of what
    -- values it can realistically expect without needing assumptions.
 
-   Kernel_Base           : CONSTANT number
+   -- TODO: Ada (the standard, not GNAT) seems to not understand how to define
+   -- true compile-time constants that are imported. For some reason, it won't
+   -- let you mark a package as pre-elaboration if you have an imported (but
+   -- constant) variable and another package relies upon it. It calls them
+   -- "non-static constants". It's something I would expect of a volatile
+   -- constant which can externally change, but not of these below variables.
+   -- A basic workaround is to just make a function return it instead of having
+   -- it as a variable in here. It would be nice if a new aspect or something
+   -- along it was introduced to alleviate this behaviour.
+
+   Kernel_Base           : CONSTANT address
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_base_address";
 
-   Kernel_End            : CONSTANT number
+   Kernel_End            : CONSTANT address
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_end_address";
 
-   Kernel_Virtual_Base   : CONSTANT number
+   Kernel_Virtual_Base   : CONSTANT address
       RANGE 16#FFFFFFFF80000000# .. 16#FFFFFFFF80000000#
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_virtual_base_address";
 
-   Kernel_Physical_Base  : CONSTANT number
+   Kernel_Physical_Base  : CONSTANT address
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_physical_base_address";
 
-   Kernel_Text_Base      : CONSTANT number
-      RANGE Kernel_Virtual_Base .. number'last
+   Kernel_Text_Base      : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_text_base_address";
 
-   Kernel_Text_End       : CONSTANT number
-      RANGE Kernel_Virtual_Base .. number'last
+   Kernel_Text_End       : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_text_end_address";
 
-   Kernel_RO_Data_Base   : CONSTANT number
-      RANGE Kernel_Virtual_Base .. number'last
+   Kernel_RO_Data_Base   : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_rodata_base_address";
 
-   Kernel_RO_Data_End    : CONSTANT number
-      RANGE Kernel_Virtual_Base .. number'last
+   Kernel_RO_Data_End    : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_rodata_end_address";
 
-   Kernel_Data_Base      : CONSTANT number
-      RANGE Kernel_Virtual_Base .. number'last
+   Kernel_Data_Base      : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_data_base_address";
 
-   Kernel_Data_End       : CONSTANT number
-      RANGE Kernel_Virtual_Base .. number'last
+   Kernel_Data_End       : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_data_end_address";
 
-   Kernel_BSS_Base       : CONSTANT number
-      RANGE Kernel_Virtual_Base .. number'last
+   Kernel_BSS_Base       : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_bss_base_address";
 
-   Kernel_BSS_End        : CONSTANT number
-      RANGE Kernel_Virtual_Base .. number'last
+   Kernel_BSS_End        : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_bss_end_address";
 
-   Kernel_Heap_Base      : CONSTANT number
-      RANGE Kernel_Virtual_Base .. number'last
+   FUNCTION Kernel_Heap_Base
+      RETURN address
    WITH
-      Import        => true,
-      Convention    => Assembler,
-      External_Name => "__kernel_heap_base_address";
+      Inline => true;
 
-   Kernel_Heap_End       : CONSTANT number
-      RANGE Kernel_Heap_Base + address'size / 8 .. number'last
+   FUNCTION Kernel_Heap_End
+      RETURN address
    WITH
-      Import        => true,
-      Convention    => Assembler,
-      External_Name => "__kernel_heap_end_address";
-
-   Kernel_Heap_Top       : CONSTANT number
-      RANGE Kernel_Heap_Base .. Kernel_Heap_End
-   WITH
-      Import        => true,
-      Convention    => Ada,
-      External_Name => "__kernel_heap_top";
+      Inline => true;
 
    Kernel_Size           : CONSTANT number
    WITH

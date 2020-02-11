@@ -73,7 +73,16 @@ IS
 
    PROCEDURE Invalidate_Key_State
    IS
-      Null_Key_State : key_state;
+      Null_Key_State : CONSTANT key_state :=
+      (
+         Name          => (OTHERS => character'val(0)),
+         Name_Shifted  => (OTHERS => character'val(0)),
+         ASCII         => character'val(0),
+         ASCII_Shifted => character'val(0),
+         Printable     => false,
+         Break         => false,
+         Shifted       => false
+      );
    BEGIN
       Last_Key_State := Null_Key_State;
    END Invalidate_Key_State;

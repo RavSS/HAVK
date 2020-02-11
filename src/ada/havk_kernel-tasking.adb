@@ -21,9 +21,7 @@ IS
       Stack_Size    : IN number  := 8 * KiB;
       User_Task     : IN boolean := false)
    WITH
-      Refined_Global => (In_Out => (Tasks, Interrupts.TSS),
-                         Input  => (Memory.Kernel_Heap_Base,
-                                    Memory.Kernel_Heap_End))
+      Refined_Global => (In_Out => (Tasks, Descriptors.TSS))
    IS
       -- This effectively makes the stack go through an interrupt handler
       -- simulation so it can be jumped to and switched properly.
@@ -95,9 +93,9 @@ IS
 
             -- TODO: Move this elsewhere when performance can matter.
             IF -- If this is the first task, then set the TSS's ring 0 RSP.
-               Interrupts.TSS.RSP_Ring_0  = 0
+               Descriptors.TSS.RSP_Ring_0  = 0
             THEN
-               Interrupts.TSS.RSP_Ring_0 := Tasked.Kernel_Stack;
+               Descriptors.TSS.RSP_Ring_0 := Tasked.Kernel_Stack;
             END IF;
 
             EXIT WHEN true;
@@ -171,9 +169,9 @@ IS
       IF
          Tasks(Active_Task).User_Mode
       THEN
-         Interrupts.TSS.RSP_Ring_0 := Tasks(Active_Task).Kernel_Stack;
+         Descriptors.TSS.RSP_Ring_0 := Tasks(Active_Task).Kernel_Stack;
       ELSE
-         Interrupts.TSS.RSP_Ring_0 := 0; -- Not really necessary.
+         Descriptors.TSS.RSP_Ring_0 := 0; -- Not really necessary.
       END IF;
    END Store_Task;
 

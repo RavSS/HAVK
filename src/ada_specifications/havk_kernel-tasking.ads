@@ -6,13 +6,11 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Interrupts,
-   HAVK_Kernel.Interrupts.APIC,
-   HAVK_Kernel.Interrupts.APIC.Timer,
+   HAVK_Kernel.Descriptors,
+   HAVK_Kernel.APIC,
+   HAVK_Kernel.APIC.Timer,
    HAVK_Kernel.Memory,
    HAVK_Kernel.Paging;
-USE
-   HAVK_Kernel.Interrupts;
 
 -- TODO: I've had a look at the native RTS for GNAT CE 2019 on x86-64 Linux and
 -- I think I could shift some code to a new version of that RTS for proper Ada
@@ -33,6 +31,8 @@ PACKAGE HAVK_Kernel.Tasking
 WITH
    Abstract_State => Tasking_State
 IS
+   PRAGMA Preelaborate;
+
    -- Creates a new task. Interrupts are disabled during its call until return.
    PROCEDURE Create
      (Initial_Name  : IN string;
@@ -40,8 +40,7 @@ IS
       Stack_Size    : IN number  := 8 * KiB;
       User_Task     : IN boolean := false)
    WITH
-      Global => (In_Out => (Tasking_State, Interrupts.TSS),
-                 Input  => (Memory.Kernel_Heap_Base, Memory.Kernel_Heap_End)),
+      Global => (In_Out => (Tasking_State, Descriptors.TSS)),
       Pre    => Initial_Name'first >= 01     AND THEN
                 Initial_Name'last  <= 64     AND THEN
                 Stack_Size IN 16 .. 64 * KiB AND THEN -- A stack size limit.
@@ -155,7 +154,7 @@ PRIVATE
    PROCEDURE Store_Task
      (Task_Stack : IN address)
    WITH
-      Global        => (In_Out => (Tasks, Active_Task, Interrupts.TSS)),
+      Global        => (In_Out => (Tasks, Active_Task, Descriptors.TSS)),
       Export        => true,
       Convention    => Assembler,
       External_Name => "ada__store_task",
@@ -180,12 +179,11 @@ PRIVATE
       RETURN address
    WITH
       Global        => (Input => (Tasks, Active_Task,
-                        Memory.Kernel_Virtual_Base)),
+                                  Memory.Kernel_Virtual_Base)),
       Export        => true,
       Convention    => Assembler,
       External_Name => "ada__get_task_state",
       Pre           => Tasks(Active_Task) /= NULL,
-      Post          => Get_Task_State'result >=
-                       Address_Value(Memory.Kernel_Virtual_Base);
+      Post          => Get_Task_State'result >= Memory.Kernel_Virtual_Base;
 
 END HAVK_Kernel.Tasking;

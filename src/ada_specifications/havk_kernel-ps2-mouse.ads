@@ -9,6 +9,8 @@
 -- the mouse IRQ is fired.
 PACKAGE HAVK_Kernel.PS2.Mouse
 IS
+   PRAGMA Preelaborate;
+
    PROCEDURE Interrupt_Manager
    WITH
       Inline => true;

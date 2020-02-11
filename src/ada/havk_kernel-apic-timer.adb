@@ -1,14 +1,15 @@
 -------------------------------------------------------------------------------
 -- Program         -- The HAVK Operating System                              --
--- Filename        -- havk_kernel-interrupts-apic-timer.adb                  --
+-- Filename        -- havk_kernel-apic-timer.adb                             --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 WITH
+  Ada.Unchecked_Conversion,
   HAVK_Kernel.PIT;
 
-PACKAGE BODY HAVK_Kernel.Interrupts.APIC.Timer
+PACKAGE BODY HAVK_Kernel.APIC.Timer
 IS
    PROCEDURE Setup
    IS
@@ -78,4 +79,4 @@ IS
       Log("A LAPIC timer has been calibrated.", nominal);
    END Setup;
 
-END HAVK_Kernel.Interrupts.APIC.Timer;
+END HAVK_Kernel.APIC.Timer;

@@ -9,16 +9,19 @@
 -- TODO: Make input buffered by using a stack. Unbuffered input is not as good.
 PACKAGE HAVK_Kernel.User_Input
 IS
+   PRAGMA Preelaborate;
+
    -- The name (string) of the keys can only be 32 characters long. This is
    -- a poor man's unbounded string replacement, but it works.
    SUBTYPE key_string IS string(1 .. 32);
 
-   -- A simple key-press packet.
+   -- A simple key-press packet. The default values for the key name are all
+   -- spaces, as using the "OTHER" keyword (loop) requires elaboration code.
    TYPE key_state IS RECORD
       -- The name of a key like "SPACEBAR".
-      Name          : key_string := (OTHERS => character'val(0));
+      Name          : key_string := "                                ";
       -- Same as the above, but for the shifted version, like "BREAK".
-      Name_Shifted  : key_string := (OTHERS => character'val(0));
+      Name_Shifted  : key_string := "                                ";
       -- The ASCII format of a key.
       ASCII         : character  := character'val(0);
       -- The shifted version of the key.

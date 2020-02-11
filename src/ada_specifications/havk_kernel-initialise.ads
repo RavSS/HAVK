@@ -6,6 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
+   HAVK_Kernel.Descriptors,
    HAVK_Kernel.Paging,
    HAVK_Kernel.System_Call,
    HAVK_Kernel.Graphics,
@@ -20,7 +21,8 @@ PACKAGE HAVK_Kernel.Initialise
 IS
    -- Prepares the descriptor tables, which is necessary for interrupts
    -- and switching DPLs etc.
-   PROCEDURE Descriptor_Tables;
+   PROCEDURE Descriptor_Tables
+   RENAMES Descriptors.Load;
 
    -- Set up the Advanced Programmable Interrupt Controllers (APICs) depending
    -- on which ones are available. This also verifies the ACPI tables.
@@ -63,7 +65,8 @@ IS
    PROCEDURE PS2_Input;
 
    -- Initialises the system call instruction's handler by preparing the MSRs.
-   PROCEDURE System_Call_Instruction RENAMES System_Call.Set_MSRs;
+   PROCEDURE System_Call_Instruction
+   RENAMES System_Call.Set_MSRs;
 
    -- Retrieves the date and time in ISO 8601 format of when the current
    -- running version of the kernel was compiled and built.

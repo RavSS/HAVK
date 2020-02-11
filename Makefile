@@ -34,7 +34,7 @@ endif
 # Add the GNAT GPL bin folder to the beginning of the path for `gprbuild`.
 # This "overrides" any current GNAT tools you may have for `gprbuild`.
 # Eliminate this line if you want to use your own GNAT installation.
-export PATH:=$(PATH):$(shell pwd)/$(GNAT_DIR)
+export PATH:=$(shell pwd)/$(GNAT_DIR):$(PATH)
 
 # Disable the useless built-in implicit rules here. Speeds up `make` by a lot.
 # Try making the kernel without this below line via `make -dB`, and then

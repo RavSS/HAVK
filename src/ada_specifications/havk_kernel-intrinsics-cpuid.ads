@@ -5,6 +5,9 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   Ada.Unchecked_Conversion;
+
 -- This package details CPU support for features using the `CPUID` instruction.
 -- There's a package called "intel_cpu.ads" that is detailed in an old version
 -- of GCC's documentation, but it seems very out-of-date and limited. This

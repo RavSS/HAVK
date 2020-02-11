@@ -8,9 +8,8 @@
 WITH
    HAVK_Phase_II,
    HAVK_Kernel.User_Input,
-   HAVK_Kernel.Interrupts,
-   HAVK_Kernel.Interrupts.APIC,
-   HAVK_Kernel.Interrupts.APIC.Timer,
+   HAVK_Kernel.APIC,
+   HAVK_Kernel.APIC.Timer,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Intrinsics.CPUID,
    HAVK_Kernel.Exceptions,
@@ -27,17 +26,6 @@ USE
 
 PACKAGE BODY HAVK_Kernel.Initialise
 IS
-   PROCEDURE Descriptor_Tables
-   IS
-   BEGIN
-      Disable_Interrupts;
-      Interrupts.Prepare_GDT;
-      Interrupts.Prepare_IDT;
-      Log("Descriptor tables prepared.", nominal);
-      Enable_Interrupts;
-      Log("Interrupts enabled.");
-   END Descriptor_Tables;
-
    PROCEDURE Interrupt_Controllers
    IS
    BEGIN
@@ -45,28 +33,26 @@ IS
          NOT ACPI.Valid_Implementation
       THEN
          Log("Skipping ACPI tables due to corruption.", warning);
-         Interrupts.APIC.Remap_PICs(Disable_Emulation => false);
+         APIC.Remap_PICs(Disable_Emulation => false);
          RETURN;
       ELSE
          Log("ACPI tables RSDP and XSDT are valid.");
       END IF;
 
       -- Disable the LAPIC's PIC-compatible mode.
-      Interrupts.APIC.Remap_PICs(Disable_Emulation => true);
+      APIC.Remap_PICs(Disable_Emulation => true);
 
       -- See what's in the ACPI MADT's APIC structure area.
-      Interrupts.APIC.Enumerate_MADT(Kernel_Paging_Layout);
+      APIC.Enumerate_MADT(Kernel_Paging_Layout);
 
       -- TODO: Check for the x2APIC bit in CPUID's output before enabling it.
-      Interrupts.APIC.x2APIC_Mode;
+      APIC.x2APIC_Mode;
 
       -- We need the PS/2 controller's interrupts.
-      Interrupts.APIC.Set_IO_APIC_Redirects;
+      APIC.Set_IO_APIC_Redirects;
 
       Log("Interrupt controllers have been set up.", nominal);
-
-      Log("Detected" & number'image(Interrupts.APIC.CPU_Cores) & " CPU cores.",
-         nominal);
+      Log("Detected" & number'image(APIC.CPU_Cores) & " CPU cores.", nominal);
    END Interrupt_Controllers;
 
    PROCEDURE Timers
@@ -80,7 +66,7 @@ IS
          ACPI.Valid_Implementation
       THEN
          -- Start the LAPIC timer. It will be calibrated using the PIT.
-         Interrupts.APIC.Timer.Setup;
+         APIC.Timer.Setup;
       END IF;
    END Timers;
 
@@ -95,7 +81,9 @@ IS
       Map        : CONSTANT memory_map := Get_Memory_Map;
    BEGIN
       -- Map the virtual null address to the physical null address.
-      Kernel_Paging_Layout.Map_Address(0, 0);
+      Kernel_Paging_Layout.Map_Address
+        (address(0),
+         address(0));
 
       -- Mark the text section as read-only, but executable.
       Kernel_Paging_Layout.Map_Address_Range
@@ -131,8 +119,8 @@ IS
 
       -- Identity-map the framebuffer address space.
       Kernel_Paging_Layout.Map_Address_Range
-        (Address_Value(Bootloader.Framebuffer_Address),
-         Address_Value(Bootloader.Framebuffer_Address),
+        (Bootloader.Framebuffer_Address,
+         Bootloader.Framebuffer_Address,
          Bootloader.Framebuffer_Size,
          Page_Size    => Huge_Page,
          Write_Access =>      true,
@@ -148,9 +136,10 @@ IS
          No_Execution =>      true);
 
       -- Identity-map the loader and ACPI regions sent to us by the UEFI
-      -- bootloader. One of the MMIO regions is basically guaranteed to be
-      -- just below 4 GiB, as it is the APIC. I will be accessing it through
-      -- the modern x2APIC way (MSR and not MMIO), so I will not map it here.
+      -- bootloader. One of the MMIO regions is basically guaranteed to be just
+      -- below 4 GiB, as it is the APICs. For the local APIC, I access it
+      -- through the modern x2APIC way (MSR and not MMIO), whereas I map the
+      -- I/O APIC separately in the APIC package.
       FOR
          Region OF Map
       LOOP
@@ -159,8 +148,10 @@ IS
             Region.Memory_Region_Type = ACPI_table_data
          THEN
             Kernel_Paging_Layout.Map_Address_Range
-              (Align(Region.Start_Address_Physical, Huge_Page),
-               Align(Region.Start_Address_Physical, Huge_Page),
+              (address(Align(number(Region.Start_Address_Physical),
+                  Huge_Page)),
+               address(Align(number(Region.Start_Address_Physical),
+                  Huge_Page)),
                Region.Number_Of_Pages * Page,
                Page_Size => Huge_Page);
          END IF;
@@ -352,7 +343,7 @@ IS
          Terminal.Current_X_Index := Terminal.Data'first(2);
 
          Terminal.Print("LAPIC timer:" & -- TODO: Presume the tick rate.
-            number'image(Interrupts.APIC.Timer.Ticks / 100));
+            number'image(APIC.Timer.Ticks / 100));
 
          Terminal.Print("PIT        :" &
             number'image(PIT.Ticks / PIT.Tick_Rate),

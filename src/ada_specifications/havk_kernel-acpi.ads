@@ -13,6 +13,8 @@
 -- firmware features as hard as possible unless they're vital.
 PACKAGE HAVK_Kernel.ACPI
 IS
+   PRAGMA Preelaborate;
+
    -- This type (the SDT) is effectively a header that is included in other
    -- tables e.g. the XSDT. It is then "extended" after its inclusion.
    -- READ: ACPI Specification Version 6.3, Page 119 - 5.2.6.

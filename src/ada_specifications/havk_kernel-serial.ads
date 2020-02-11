@@ -13,9 +13,12 @@
 -- READ: https://en.wikibooks.org/wiki/Serial_Programming/8250_UART_Programming
 PACKAGE HAVK_Kernel.Serial
 IS
-   -- An arrayu that contains a few of the COM ports that may be present.
+   PRAGMA Preelaborate;
+
+   -- An array that contains a few of the COM ports that may be present.
    -- I believe only COM1 and COM2 are actually guaranteed on the hardware.
-   COM : CONSTANT numbers(1 .. 4) := (16#3F8#, 16#2F8#, 16#3E8#, 16#2E8#);
+   COM : CONSTANT ARRAY(number RANGE 1 .. 4) OF number :=
+     (16#3F8#, 16#2F8#, 16#3E8#, 16#2E8#);
 
    -- 2 bit values that control the length of the inputted words (data).
    -- Reminder that ASCII only needs 7 bits.

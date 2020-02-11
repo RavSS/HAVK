@@ -6,8 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
-   System,
-   Ada.Unchecked_Conversion;
+   System;
 USE
    System;
 
@@ -15,17 +14,14 @@ USE
 -- some types for usage everywhere else, along with some shortcuts.
 PACKAGE HAVK_Kernel
 IS
-   -- Because HAVK is a 64-bit kernel, I'll make the "default" types 64-bit.
+   PRAGMA Preelaborate;
 
-   -- Natural number, assuming you include zero. This is to be used everywhere,
-   -- including for memory addresses that you do not expect to overlay or
-   -- import into variables/objects.
-   TYPE number  IS MOD 2**64
+   -- Because HAVK is a 64-bit kernel, I'll make the "default" types 64-bit.
+   -- Natural number, assuming you include zero. This is to be used everywhere
+   -- except for memory addresses.
+   TYPE number IS MOD 2**64
    WITH
-      Size           => 64;
-   TYPE numbers IS ARRAY(number RANGE <>) OF number
-   WITH
-      Component_Size => 64;
+      Size => 64;
 
    -- GNAT provides its own intrinsics, which can be optimised slightly so
    -- better than the ones defined by me via inline assembly.
@@ -50,10 +46,10 @@ IS
       Convention => Intrinsic;
 
    -- This is for converting "address" to "number" and vice versa.
-   FUNCTION Address_Value IS NEW Ada.Unchecked_Conversion
-     (Source => address, Target =>  number);
-   FUNCTION Address_Value IS NEW Ada.Unchecked_Conversion
-     (Source =>  number, Target => address);
+   -- FUNCTION Address_Value IS NEW Ada.Unchecked_Conversion
+   --   (Source => address, Target =>  number);
+   -- FUNCTION Address_Value IS NEW Ada.Unchecked_Conversion
+   --   (Source =>  number, Target => address);
 
    -- Helper variables for memory units (non-SI).
    KiB : CONSTANT number := 1024;

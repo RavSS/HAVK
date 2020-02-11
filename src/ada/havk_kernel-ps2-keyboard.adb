@@ -21,14 +21,14 @@ IS
       Scancode : CONSTANT number RANGE 0 .. 16#FF# := Input_Byte(Data);
    BEGIN
       IF -- TODO: This only supports a PS/2 keyboard on port 1.
-         PS2.Input_Controller.Port_1_Device /= Standard_Keyboard OR ELSE
+         PS2.Port_1_Device /= Standard_Keyboard OR ELSE
          Scancode = 16#FA# -- Data is not for the keyboard.
       THEN
          RETURN;
       END IF;
 
       IF
-         PS2.Input_Controller.Current_Scancode_Set = 2
+         PS2.Current_Scancode_Set = 2
       THEN
          IF
             Scancode = 16#F0# -- Break logic.
@@ -55,7 +55,7 @@ IS
       ELSE -- TODO Set 1 and 3 are unimplemented.
          Log
             ("PS/2 keyboard scancode set" &
-            number'image(PS2.Input_Controller.Current_Scancode_Set) &
+            number'image(PS2.Current_Scancode_Set) &
             " is selected, but the table is not implemented.", warning);
       END IF;
    END Interrupt_Manager;

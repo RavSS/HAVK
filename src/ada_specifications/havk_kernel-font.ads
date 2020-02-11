@@ -8,6 +8,8 @@
 -- Contains a 8x8 bitmap font used for drawing text onto a framebuffer.
 PACKAGE HAVK_Kernel.Font
 IS
+   PRAGMA Preelaborate;
+
    -- Fonts encompass both ASCII and EASCII.
    TYPE font IS ARRAY(number RANGE 0 .. 255, number RANGE 0 .. 7) OF number;
 

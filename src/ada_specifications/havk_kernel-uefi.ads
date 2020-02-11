@@ -14,6 +14,8 @@ WITH
 -- the bootloader itself.
 PACKAGE HAVK_Kernel.UEFI
 IS
+   PRAGMA Preelaborate;
+
    -- See the UEFI specifications for more about the types of pixel
    -- formats and bitmasks.
    TYPE pixel_formats IS
@@ -93,10 +95,10 @@ IS
       -- See the representation clause for information about this component.
       Padding_1                     : number RANGE 0 .. 16#FFFFFFFF#;
       -- The physical address of where the region starts.
-      Start_Address_Physical        : number;
+      Start_Address_Physical        : address;
       -- The virtual address of where the region starts. This is essentially
       -- useless for the operating system and is truly for UEFI applications.
-      Start_Address_Virtual         : number;
+      Start_Address_Virtual         : address;
       -- Each descriptor has at least one page. Each one is 4 KiB.
       -- The maximum number of pages cannot represent memory over the limit
       -- of 0xFFFFFFFFFFFFF000. If this is zero, then there's a massive error.

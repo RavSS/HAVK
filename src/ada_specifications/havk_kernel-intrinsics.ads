@@ -18,6 +18,8 @@
 -- Using GCC intrinsics is fine and have little chance of going wrong.
 PACKAGE HAVK_Kernel.Intrinsics
 IS
+   PRAGMA Preelaborate;
+
    -- For usage with the special registers. MSRs (indices) are only 32-bits.
    SUBTYPE model_specific_register IS number RANGE 0 .. 16#FFFFFFFF#;
 

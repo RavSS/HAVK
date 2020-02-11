@@ -9,6 +9,8 @@
 -- can be used for any case where textual information needs to be displayed.
 PACKAGE HAVK_Kernel.Graphics.Text
 IS
+   PRAGMA Preelaborate;
+
    -- Stores textbox data in two dimensions. First index is for the line,
    -- second index is for the column.
    TYPE textbox_data IS ARRAY(number RANGE <>, number RANGE <>) OF character;

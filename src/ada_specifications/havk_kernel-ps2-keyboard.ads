@@ -14,6 +14,8 @@ USE
 -- instead of generic PS/2 logic should be here.
 PACKAGE HAVK_Kernel.PS2.Keyboard
 IS
+   PRAGMA Preelaborate;
+
    -- Becomes true when either shift key is held down.
    Shift_State     : boolean := false;
 

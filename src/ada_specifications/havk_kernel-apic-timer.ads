@@ -1,13 +1,15 @@
 -------------------------------------------------------------------------------
 -- Program         -- The HAVK Operating System                              --
--- Filename        -- havk_kernel-interrupts-apic-timer.ads                  --
+-- Filename        -- havk_kernel-apic-timer.ads                             --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 -- This package is for controlling the local APIC timer.
-PACKAGE HAVK_Kernel.Interrupts.APIC.Timer
+PACKAGE HAVK_Kernel.APIC.Timer
 IS
+   PRAGMA Preelaborate;
+
    -- Simply sets up the LAPIC timer with a given divisor.
    PROCEDURE Setup;
 
@@ -87,4 +89,4 @@ PRIVATE
       Reserved_3             AT 0 RANGE 19 .. 63;
    END RECORD;
 
-END HAVK_Kernel.Interrupts.APIC.Timer;
+END HAVK_Kernel.APIC.Timer;

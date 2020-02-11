@@ -14,6 +14,8 @@ USE
 -- the only package which should do anything with video.
 PACKAGE HAVK_Kernel.Graphics
 IS
+   PRAGMA Preelaborate;
+
    -- UEFI GOP defines pixels as 32-bits, so we will as well.
    TYPE pixel IS MOD 2**32
    WITH

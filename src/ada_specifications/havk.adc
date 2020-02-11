@@ -40,6 +40,7 @@ PRAGMA Restrictions(No_Nested_Finalization);
 PRAGMA Restrictions(No_Obsolescent_Features);
 PRAGMA Restrictions(No_Protected_Type_Allocators);
 PRAGMA Restrictions(No_Protected_Types);
+PRAGMA Restrictions(No_Recursion);
 PRAGMA Restrictions(No_Reentrancy);
 PRAGMA Restrictions(No_Relative_Delay);
 PRAGMA Restrictions(No_Select_Statements);
