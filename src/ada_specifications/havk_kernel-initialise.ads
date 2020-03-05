@@ -9,6 +9,8 @@ WITH
    HAVK_Kernel.Descriptors,
    HAVK_Kernel.Paging,
    HAVK_Kernel.System_Call,
+   HAVK_Kernel.Memory,
+   HAVK_Kernel.Memory.Manager,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text;
 USE
@@ -77,7 +79,11 @@ IS
               HAVK_Build_Datetime'result'last  = 19; -- "YYYY-MM-DDTHH:MM:SS"
 
    -- Initialises any debug utilities.
-   PROCEDURE Debugger;
+   PROCEDURE Debugger
+     (Terminal : IN OUT textbox;
+      Printing : IN boolean)
+   WITH
+      Inline => true;
 
    -- Does the PS/2 input and IRQ 0 count tests for now, but it can be expanded
    -- to anything else as well.
@@ -89,6 +95,11 @@ IS
    -- interesting information.
    PROCEDURE CPU_Feature_Check
      (Terminal : IN OUT textbox);
+
+   -- Prepare the heap, as certain functionality like manipulating virtual
+   -- addresses requires dynamic memory.
+   PROCEDURE Dynamic_Memory
+   RENAMES Memory.Manager.Prepare_Kernel_Heap;
 
    -- Sets up the mechanisms for multi-tasking and enters Phase II as a task.
    -- Everything that doesn't have support for concurrency needs to be called

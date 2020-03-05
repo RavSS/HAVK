@@ -10,9 +10,9 @@ WITH
    HAVK_Kernel.Paging;
 
 PACKAGE BODY HAVK_Kernel.Memory
+WITH
+   Refined_State => (Memory_State => NULL)
 IS
-   -- The formula was taken from here.
-   -- https://en.wikipedia.org/wiki/Data_structure_alignment#Computing_padding
    FUNCTION Align
      (Value     : IN number;
       Alignment : IN number;
@@ -20,12 +20,14 @@ IS
       RETURN number
    IS
    (
+      -- Formula was taken from here under "Computing padding" (2020-02-23).
+      -- READ: https://en.wikipedia.org/wiki/Data_structure_alignment
       IF
          NOT Round_Up
       THEN
-         Value - ((Alignment + (Value MOD Alignment)) MOD Alignment)
+         Value - (Alignment + (Value AND Alignment - 1) AND Alignment - 1)
       ELSE
-         Value + ((Alignment - (Value MOD Alignment)) MOD Alignment)
+         Value + (Alignment - (Value AND Alignment - 1) AND Alignment - 1)
    );
 
    FUNCTION Allocate_System_Stack
@@ -45,9 +47,7 @@ IS
          RETURN address
       WITH
          Import     => true,
-         Convention => Intrinsic,
-         Post       => To_Pointer'result IN
-                          Kernel_Heap_Base .. Kernel_Heap_End;
+         Convention => Intrinsic;
 
       -- Creates the new stack for handling interrupts in ring 0.
       New_Stack_End  : CONSTANT access_kernel_stack :=
@@ -57,17 +57,9 @@ IS
       New_Stack_Base : CONSTANT address :=
          To_Pointer(New_Stack_End) + address(kernel_stack'last);
    BEGIN
-      IF
-         New_Stack_Base IN Kernel_Heap_Base .. Kernel_Heap_End
-      THEN
-         RETURN New_Stack_Base;
-      ELSE
-         RAISE Panic
-         WITH
-            "Ran out of heap memory for system stack allocation.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "HAVK should keep sane limits to prevent this from occuring.");
-      END IF;
+      -- While the alignment is guaranteed and can be assumed, it's probably
+      -- safer to just check for alignment anyway instead of using the pragma.
+      RETURN address(Align(number(New_Stack_Base), 16));
    END Allocate_System_Stack;
 
    FUNCTION System_Limit
@@ -100,30 +92,15 @@ IS
       END RETURN;
    END System_Limit;
 
-   FUNCTION Kernel_Heap_Base
+   FUNCTION Kernel_Virtual_To_Physical
+     (Kernel_Virtual_Address : IN address)
       RETURN address
    IS
-      Kernel_Heap_Base_Address : CONSTANT address
-         RANGE Kernel_Virtual_Base .. address'last
-      WITH
-         Import        => true,
-         Convention    => Assembler,
-         External_Name => "__kernel_heap_base_address";
+      Bootloader : CONSTANT UEFI.arguments := UEFI.Get_Arguments;
+      Offset     : CONSTANT address        :=
+         Kernel_Virtual_Base - Bootloader.Physical_Base_Address;
    BEGIN
-      RETURN Kernel_Heap_Base_Address;
-   END Kernel_Heap_Base;
-
-   FUNCTION Kernel_Heap_End
-      RETURN address
-   IS
-      Kernel_Heap_End_Address : CONSTANT address
-         RANGE Kernel_Heap_Base + address'size / 8 .. address'last
-      WITH
-         Import        => true,
-         Convention    => Assembler,
-         External_Name => "__kernel_heap_end_address";
-   BEGIN
-      RETURN Kernel_Heap_End_Address;
-   END Kernel_Heap_End;
+      RETURN Kernel_Virtual_Address - Offset;
+   END Kernel_Virtual_To_Physical;
 
 END HAVK_Kernel.Memory;

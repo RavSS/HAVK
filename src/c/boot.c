@@ -11,7 +11,7 @@
 // that loads an ELF file to memory, then create a random freestanding
 // program via e.g. C and change the "HAVK_LOCATION" to point towards your
 // program. There is no guarantee it will work, as I may have parsed it wrong.
-// You will also need to provide some additional symbols for e.g. heap memory.
+// You will also need to provide some additional symbols for virtual addresses.
 #include <efi.h>
 #include <efilib.h>
 
@@ -35,6 +35,7 @@ CHAR16 buffer[BUFFER_SIZE + sizeof(CHAR16)] = {0}; // Temporary input buffer.
 EFI_STATUS status = EFI_SUCCESS; // Return status from UEFI functions.
 EFI_STATUS attempt = EFI_SUCCESS; // Secondary return status variable.
 EFI_LOADED_IMAGE *image = NULL; // Also must be retrieved before utilisation.
+EFI_PHYSICAL_ADDRESS havk_physical_base = 0; // A to-be-determined address.
 UINT64 havk_memory_size = 0; // Used for mapping the entire kernel.
 BOOLEAN have_uefi_boot_services = TRUE; // False after the boot services end.
 
@@ -243,6 +244,7 @@ struct uefi_arguments
 	UINT64 memory_map_descriptor_size;
 	UINT32 memory_map_descriptor_version;
 	EFI_PHYSICAL_ADDRESS root_system_description_pointer;
+	EFI_PHYSICAL_ADDRESS physical_base;
 } __attribute__((packed));
 
 // Can't modify the default page structure, so I need to make my own.
@@ -311,7 +313,7 @@ VOID welcome(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	UEFI(ST->ConOut->ClearScreen, 1,
 		ST->ConOut);
 
-	// Disable the watchdog timer just in-case.
+	// Disable the watchdog timer just in case.
 	UEFI(BS->SetWatchdogTimer, 4,
 		0,
 		0,
@@ -325,10 +327,13 @@ VOID welcome(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		&image);
 
 	// Print the version notification in the centre of the screen.
+	// TODO: Do the minor revision values as well, they're encoded in BCD
+	// and are in the lower 16-bits of "FirmwareRevision".
 	PrintAt(40 - 8, 1, u"NOW BOOTING HAVK\r\n");
 	PrintAt(40 - 8, 2, u"VERSION %s\r\n\n", HAVK_VERSION);
-	Print(u"UEFI FIRMWARE VENDOR: %s (VERSION %lu)\r\n",
-		system_table->FirmwareVendor, system_table->FirmwareRevision);
+	Print(u"UEFI FIRMWARE VENDOR: %s (REVISION %u)\r\n",
+		system_table->FirmwareVendor,
+		system_table->FirmwareRevision >> 16);
 
 	#ifdef HAVK_GDB_DEBUG
 		Print(u"! COMPILED WITH GDB SPECIFIC DEBUGGING FUNCTIONS\r\n");
@@ -585,49 +590,103 @@ EFI_VIRTUAL_ADDRESS symbol_address(struct elf64_file *havk_elf,
 
 VOID load_havk(struct elf64_file *havk_elf)
 {
+	// Since the physical base can be everywhere as long as the data is
+	// loaded in a consecutive manner, we will have to check if the
+	// segments can all be loaded from a specific base address onwards.
+	// If they can only be loaded partially before an allocation failure,
+	// then we will need to backtrack and deallocate the previous segments.
+	// The below variable counts that. When true, a segment was allocated
+	// successfully. When false, there was no allocation.
+	BOOLEAN allocated[UINT8_MAX]; // Avoid VLAs. 255 is more than enough.
+
+	// Begin from 16-MiB. May need the lower space for old ISA devices or
+	// whatever other random requirement. A reminder that the physical
+	// base must match up from the start at the virtual base, which as of
+	// now, means both must be aligned to 2-MiB (an x86-64 huge page).
+	havk_physical_base = 8 * HUGE_PAGE_SIZE;
+
+	if (havk_elf->file_header.program_header_entries > UINT8_MAX)
+	{
+		CRITICAL_FAILURE(u"TOO MANY ELF PROGRAM HEADER ENTRIES (%hu)"
+			"\r\n", havk_elf->file_header.program_header_entries);
+	}
+
+	// Set a default value without using designated initialisers.
+	for (UINT8 i = 0; i < UINT8_MAX; ++i)
+	{
+		allocated[i] = FALSE;
+	}
+
 	// Time to load the segments into physical memory.
-	for (UINT64 i = 0;
+	for (INT32 i = 0; // Sign of the integer matters. See the inner loop.
 		i < havk_elf->file_header.program_header_entries; ++i)
 	{
 		// If the type is not "LOAD", then skip it.
 		if (havk_elf->program_headers[i].type != 0x1)
 		{
+			allocated[i] = FALSE;
 			continue;
 		}
 
-		EFI_PHYSICAL_ADDRESS segment_physical_address
-			= havk_elf->program_headers[i].physical_address;
+		#define SEGMENT_PHYSICAL_ADDRESS \
+			(havk_elf->program_headers[i].physical_address\
+				+ havk_physical_base)
+		#define SEGMENT_MEMORY_SIZE \
+			(havk_elf->program_headers[i].memory_size)
+
+		// For referencing purposes. Only use the macro variant in the
+		// deallocation loop.
+		CONST EFI_PHYSICAL_ADDRESS segment_physical_address
+			= SEGMENT_PHYSICAL_ADDRESS;
 
 		// Try to allocate a page in order to store the segment.
 		// Need custom error handling, so my wrapper is not used here.
 		status = uefi_call_wrapper(BS->AllocatePages, 4,
 			AllocateAddress,
 			EfiLoaderData,
-			EFI_SIZE_TO_PAGES(
-				havk_elf->program_headers[i].memory_size),
+			EFI_SIZE_TO_PAGES(SEGMENT_MEMORY_SIZE),
 			&segment_physical_address);
 
-		// TODO: This bootloader's ELF loader cannot relocate anything.
-		// This is a huge issue and needs to be addressed before the
-		// kernel starts getting really big. If you're here because
-		// the bootloader failed to allocate an address, then make sure
-		// that address isn't in the higher-half, or else something
-		// went wrong during linkage of HAVK's kernel file.
+		// As previously explained, if allocation failed, then we have
+		// to deallocate previous allocations. It must be consecutive.
 		if (status == EFI_NOT_FOUND)
 		{
-			CRITICAL_FAILURE(u"COULD NOT ALLOCATE ENOUGH MEMORY "
-				"AT 0x%llX (%llu KIBIBYTES)\r\n",
-				segment_physical_address,
-				havk_elf->program_headers[i].memory_size
-					/ 1024);
+			for (--i; i >= 0; --i) // Reverse the loop.
+			{
+				if (allocated[i])
+				{
+					UEFI(BS->FreePages, 2,
+						SEGMENT_PHYSICAL_ADDRESS,
+						EFI_SIZE_TO_PAGES(
+							SEGMENT_MEMORY_SIZE));
+					allocated[i] = FALSE;
+				}
+			}
+
+			// Move the base up by a huge page and try again.
+			// Right now, my temporary UEFI paging functionality
+			// only supports 2-MiB alignments (huge pages), so the
+			// physical base absolutely must begin on a 2-MiB
+			// alignment or else the bootloader will jump to trash.
+			havk_physical_base += HUGE_PAGE_SIZE;
+			havk_memory_size = 0;
+
+			// Negative one so the loop is back at zero after
+			// continuing. Set it explicitly just in case.
+			i = -1;
+			continue;
 		}
 
-		ERROR_CHECK(status); // Check if anything else went wrong.
+		// Check if anything else went wrong. If anything did, then it
+		// is completely unexpected. The "EFI_NOT_FOUND" error is the
+		// only one that could appear in a normal run.
+		ERROR_CHECK(status);
+
+		allocated[i] = TRUE;
 
 		// Zero out the segment's memory space just in case.
 		// Really only required for the BSS segment, but do it anyway.
-		ZeroMem((VOID *)segment_physical_address,
-			havk_elf->program_headers[i].memory_size);
+		ZeroMem((VOID *)segment_physical_address, SEGMENT_MEMORY_SIZE);
 
 		// Go to the offset of the segment in the file.
 		UEFI(havk->SetPosition, 2,
@@ -640,16 +699,20 @@ VOID load_havk(struct elf64_file *havk_elf)
 			&havk_elf->program_headers[i].size,
 			segment_physical_address);
 
-		Print(u"HAVK PHYSICAL SEGMENT ADDRESS: 0x%llX "
-			"(%llu KIBIBYTES)\r\n",
-			segment_physical_address,
-			havk_elf->program_headers[i].memory_size / 1024);
+		havk_memory_size += SEGMENT_MEMORY_SIZE;
 
-		havk_memory_size += havk_elf->program_headers[i].memory_size;
+		#undef SEGMENT_PHYSICAL_ADDRESS
+		#undef SEGMENT_MEMORY_SIZE
 	}
 
-	Print(u"HAVK VIRTUAL END ADDRESS: 0x%llX\r\n",
-		havk_elf->file_header.entry_address + havk_memory_size);
+	Print(u"HAVK VIRTUAL END ADDRESS: 0x%llX\r\n"
+		"HAVK PHYSICAL BASE ADDRESS: 0x%llX\r\n"
+		"HAVK PHYSICAL END ADDRESS: 0x%llX\r\n"
+		"HAVK KERNEL MEMORY SIZE: %llu MEBIBYTES\r\n",
+		havk_elf->file_header.entry_address + havk_memory_size,
+		havk_physical_base,
+		havk_physical_base + havk_memory_size,
+		havk_memory_size / 1024 / 1024);
 }
 
 EFI_VIRTUAL_ADDRESS prepare_entry(struct elf64_file *havk_elf)
@@ -1071,90 +1134,27 @@ VOID map_address_range(VOLATILE struct uefi_page_structure *structure,
 VOID default_mappings(struct elf64_file *havk_elf,
 	VOLATILE struct uefi_page_structure *structure)
 {
-	CONST EFI_VIRTUAL_ADDRESS havk_base
-		= symbol_address(havk_elf, (CHAR8 *)"__kernel_base");
-
 	CONST EFI_VIRTUAL_ADDRESS havk_virtual_base
 		= symbol_address(havk_elf, (CHAR8 *)"__kernel_virtual_base");
 
-	CONST EFI_VIRTUAL_ADDRESS havk_physical_base
-		= symbol_address(havk_elf, (CHAR8 *)"__kernel_physical_base");
-
-	CONST EFI_VIRTUAL_ADDRESS havk_heap_base
-		= symbol_address(havk_elf, (CHAR8 *)"__kernel_heap_base");
-
-	CONST EFI_PHYSICAL_ADDRESS havk_physical_heap_base
-		= havk_heap_base ? havk_heap_base - havk_virtual_base : 0;
-
-	CONST UINT64 havk_size
-		= symbol_address(havk_elf, (CHAR8 *)"__kernel_size");
-
-	CONST UINT64 havk_heap_size
-		= symbol_address(havk_elf, (CHAR8 *)"__kernel_heap_size");
+	CONST UINT64 havk_size // Will almost never be aligned to 2-MiB.
+		= HUGE_PAGE_ALIGN(symbol_address(havk_elf,
+		(CHAR8 *)"__kernel_size")) + HUGE_PAGE_SIZE;
 
 	// I've given up trying to map every important thing one by one, so
-	// I've just mapped 0-GiB to 4-GiB entirely. UEFI does this anyway, but
+	// I've just mapped 0-GiB to 4-GiB entirely. OVMF does this anyway, but
 	// adds special pages (essentially restrictions) for certain ranges.
 	map_address_range(structure, 0, 0, 0x100000000);
 
 	// Map the kernel itself. This includes the BSS. Note that the
 	// memory size sum of all the segments can be smaller than the
 	// "__kernel_size" symbol address/value due to alignment, so it's
-	// wiser to use the latter rather than the former. To be safe,
-	// I will just use the biggest value at runtime.
+	// wiser to use the latter (and align it up) rather than the former.
+	// To be safe, I will just use the biggest value at runtime.
 	map_address_range(structure,
-		havk_base,
+		havk_virtual_base,
 		havk_physical_base,
 		havk_size > havk_memory_size ? havk_size : havk_memory_size);
-
-	// TODO: What you're about to see is the laziest way to check if the
-	// heap's default address range isn't already reserved by the system.
-	// We allocate it, check if it worked, and then free it if it did,
-	// which indicates that the range is indeed free/conventional memory.
-	// A memory map retrieving function that returns one for usage by the
-	// bootloader instead of HAVK post-boot is really needed.
-	if (uefi_call_wrapper(BS->AllocatePages, 4,
-		AllocateAddress,
-		EfiLoaderData,
-		EFI_SIZE_TO_PAGES(havk_heap_size),
-		&havk_physical_heap_base) != EFI_SUCCESS)
-	{
-		// TODO: This is a temporary error, the heap can be (and will
-		// be) relocatable to wherever and/or resized.
-		CRITICAL_FAILURE(u"HAVK'S HEAP CANNOT BE ALLOCATED.\r\n");
-	}
-	else
-	{
-		// Zero out the entire heap. This can take several seconds on
-		// something like Bochs, but it's instantaneous on QEMU.
-
-		for (UINT64 i = havk_physical_heap_base;
-			i < havk_physical_heap_base + havk_heap_size;
-			i += HUGE_PAGE_SIZE)
-		{
-			Print(u"ZEROING RANGE: 0x%llX to 0x%llX...\r",
-				i, i + HUGE_PAGE_SIZE);
-			ZeroMem((VOID *)i, HUGE_PAGE_SIZE);
-		}
-
-		// If it allocated, then it can be freed as well without issue.
-		UEFI(BS->FreePages, 2,
-			havk_physical_heap_base,
-			EFI_SIZE_TO_PAGES(havk_heap_size));
-
-		Print(u"\rZEROED HEAP RANGE: 0x%llX to 0x%llX\r\n",
-			havk_heap_base,
-			havk_heap_base + havk_heap_size);
-	}
-
-	if (havk_heap_base > havk_physical_heap_base)
-	{
-		// Lastly, map the heap.
-		map_address_range(structure,
-			havk_heap_base,
-			havk_physical_heap_base,
-			havk_heap_size);
-	}
 
 	Print(u"TEMPORARY PAGE STRUCTURE ADDRESS: 0x%llX\r\n", structure);
 }
@@ -1216,6 +1216,12 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 
 	// Get the RSDP, as HAVK will need ACPI info for PCIe enumeration etc.
 	arguments->root_system_description_pointer = get_rsdp(system_table);
+
+	// Since the physical base of the kernel can be placed anywhere as long
+	// as it can line up with -2-GiB of the 64-bit address space, this can
+	// vary wildly on different systems. The kernel needs it for remapping
+	// any parts of itself.
+	arguments->physical_base = havk_physical_base;
 
 	// Now prepare the temporary page mappings so we can have
 	// a higher-half kernel, but don't switch it yet.

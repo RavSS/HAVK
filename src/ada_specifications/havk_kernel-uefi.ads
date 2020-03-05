@@ -29,10 +29,10 @@ IS
       Convention =>  C;
 
    TYPE pixel_bitmasks IS RECORD
-      Red      : number RANGE 0 .. 16#FFFFFFFF#;
-      Green    : number RANGE 0 .. 16#FFFFFFFF#;
-      Blue     : number RANGE 0 .. 16#FFFFFFFF#;
-      Reserved : number RANGE 0 .. 16#FFFFFFFF#;
+      Red      : number RANGE 0 .. 2**32 - 1;
+      Green    : number RANGE 0 .. 2**32 - 1;
+      Blue     : number RANGE 0 .. 2**32 - 1;
+      Reserved : number RANGE 0 .. 2**32 - 1;
    END RECORD
    WITH
       Convention => C;
@@ -93,7 +93,7 @@ IS
    TYPE memory_descriptor IS RECORD
       Memory_Region_Type            : memory_type;
       -- See the representation clause for information about this component.
-      Padding_1                     : number RANGE 0 .. 16#FFFFFFFF#;
+      Padding_1                     : number RANGE 0 .. 2**32 - 1;
       -- The physical address of where the region starts.
       Start_Address_Physical        : address;
       -- The virtual address of where the region starts. This is essentially
@@ -131,41 +131,43 @@ IS
    END RECORD;
 
    TYPE arguments IS RECORD
-      Graphics_Mode_Current         : number  RANGE 0 .. 16#FFFFFFFF#;
-      Graphics_Mode_Max             : number  RANGE 0 .. 16#FFFFFFFF#;
+      Graphics_Mode_Current         : number  RANGE 0 .. 2**32 - 1;
+      Graphics_Mode_Max             : number  RANGE 0 .. 2**32 - 1;
       Framebuffer_Address           : address RANGE 1 .. address'last;
       Framebuffer_Size              : number  RANGE 4 .. number'last;
-      Horizontal_Resolution         : number  RANGE 1 .. 16#FFFFFFFF#;
-      Vertical_Resolution           : number  RANGE 1 .. 16#FFFFFFFF#;
-      Pixels_Per_Scanline           : number  RANGE 1 .. 16#FFFFFFFF#;
+      Horizontal_Resolution         : number  RANGE 1 .. 2**32 - 1;
+      Vertical_Resolution           : number  RANGE 1 .. 2**32 - 1;
+      Pixels_Per_Scanline           : number  RANGE 1 .. 2**32 - 1;
       Pixel_Format                  : pixel_formats;
       Pixel_Bitmask                 : pixel_bitmasks;
       Memory_Map_Address            : address RANGE 1 .. address'last;
       Memory_Map_Key                : number  RANGE 1 .. number'last;
       Memory_Map_Size               : number  RANGE 1 .. number'last;
       Memory_Map_Descriptor_Size    : number  RANGE 1 .. number'last;
-      Memory_Map_Descriptor_Version : number  RANGE 0 .. 16#FFFFFFFF#;
+      Memory_Map_Descriptor_Version : number  RANGE 0 .. 2**32 - 1;
       RSDP : NOT NULL ACCESS ACPI.root_system_description_pointer;
+      Physical_Base_Address         : address RANGE 1 .. address'last;
    END RECORD
    WITH
       Dynamic_Predicate => Pixel_Format IN RGB .. bitmask,
-      Convention => C;
+      Convention        => C;
    FOR arguments USE RECORD
-      Graphics_Mode_Current             AT 00 RANGE 0 .. 031;
-      Graphics_Mode_Max                 AT 04 RANGE 0 .. 031;
-      Framebuffer_Address               AT 08 RANGE 0 .. 063;
-      Framebuffer_Size                  AT 16 RANGE 0 .. 063;
-      Horizontal_Resolution             AT 24 RANGE 0 .. 031;
-      Vertical_Resolution               AT 28 RANGE 0 .. 031;
-      Pixels_Per_Scanline               AT 32 RANGE 0 .. 031;
-      Pixel_Format                      AT 36 RANGE 0 .. 031;
-      Pixel_Bitmask                     AT 40 RANGE 0 .. 127;
-      Memory_Map_Address                AT 56 RANGE 0 .. 063;
-      Memory_Map_Key                    AT 64 RANGE 0 .. 063;
-      Memory_Map_Size                   AT 72 RANGE 0 .. 063;
-      Memory_Map_Descriptor_Size        AT 80 RANGE 0 .. 063;
-      Memory_Map_Descriptor_Version     AT 88 RANGE 0 .. 031;
-      RSDP                              AT 92 RANGE 0 .. 063;
+      Graphics_Mode_Current            AT 000 RANGE 0 .. 031;
+      Graphics_Mode_Max                AT 004 RANGE 0 .. 031;
+      Framebuffer_Address              AT 008 RANGE 0 .. 063;
+      Framebuffer_Size                 AT 016 RANGE 0 .. 063;
+      Horizontal_Resolution            AT 024 RANGE 0 .. 031;
+      Vertical_Resolution              AT 028 RANGE 0 .. 031;
+      Pixels_Per_Scanline              AT 032 RANGE 0 .. 031;
+      Pixel_Format                     AT 036 RANGE 0 .. 031;
+      Pixel_Bitmask                    AT 040 RANGE 0 .. 127;
+      Memory_Map_Address               AT 056 RANGE 0 .. 063;
+      Memory_Map_Key                   AT 064 RANGE 0 .. 063;
+      Memory_Map_Size                  AT 072 RANGE 0 .. 063;
+      Memory_Map_Descriptor_Size       AT 080 RANGE 0 .. 063;
+      Memory_Map_Descriptor_Version    AT 088 RANGE 0 .. 031;
+      RSDP                             AT 092 RANGE 0 .. 063;
+      Physical_Base_Address            AT 100 RANGE 0 .. 063;
    END RECORD;
 
    -- An array of memory descriptors - a memory map.

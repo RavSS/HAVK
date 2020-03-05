@@ -24,8 +24,7 @@ IS
    -- The low-level framebuffer type, which is an array of pixels.
    TYPE framebuffer IS ARRAY(number RANGE <>) OF ALIASED pixel
    WITH
-      Component_Size => 32,
-      Alignment      =>  4;
+      Component_Size => 32;
 
    -- This class type composes a few abstractions for the framebuffer itself.
    -- It has a few line drawing functionalities and allows text to be drawn.
@@ -33,13 +32,13 @@ IS
       -- The framebuffer MMIO address passed by the bootloader.
       Framebuffer_Address  : address RANGE 1 .. address'last;
       -- The number of 32-bit pixels in the framebuffer's address space.
-      Framebuffer_Elements :  number RANGE 1 ..  number'last;
+      Framebuffer_Elements : number;
       -- Details the width or height of the monitor or screen.
-      Screen_Width         :  number RANGE 1 ..  number'last;
-      Screen_Height        :  number RANGE 1 ..  number'last;
+      Screen_Width         : number  RANGE 1 ..  number'last;
+      Screen_Height        : number  RANGE 1 ..  number'last;
       -- The size of each pixel on the screen. Sometimes, a pixel may be more
       -- than a single pixel unit, which is common on very dense screens.
-      Pixel_Size           :  number RANGE 1 ..  number'last;
+      Pixel_Size           : number  RANGE 1 ..  number'last;
       -- The pixel format does not have to always be in a static format like
       -- RGB, it can be BGR or a form of masks that show a pixel's layout.
       Pixel_Format         : pixel_formats;

@@ -14,7 +14,6 @@ WITH
    HAVK_Kernel.Intrinsics.CPUID,
    HAVK_Kernel.Exceptions,
    HAVK_Kernel.Tasking,
-   HAVK_Kernel.Memory,
    HAVK_Kernel.Debug,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.ACPI,
@@ -88,7 +87,7 @@ IS
       -- Mark the text section as read-only, but executable.
       Kernel_Paging_Layout.Map_Address_Range
         (Kernel_Text_Base,
-         Kernel_Text_Base - Kernel_Virtual_Base,
+         Kernel_Virtual_To_Physical(Kernel_Text_Base),
          Kernel_Text_Size,
          Write_Access => false,
          No_Execution => false);
@@ -96,7 +95,7 @@ IS
       -- Mark the read-only data section as read-only... obviously.
       Kernel_Paging_Layout.Map_Address_Range
         (Kernel_RO_Data_Base,
-         Kernel_RO_Data_Base - Kernel_Virtual_Base,
+         Kernel_Virtual_To_Physical(Kernel_RO_Data_Base),
          Kernel_RO_Data_Size,
          Write_Access => false,
          No_Execution =>  true);
@@ -104,7 +103,7 @@ IS
       -- Mark the data section as modifiable, but also not executable.
       Kernel_Paging_Layout.Map_Address_Range
         (Kernel_Data_Base,
-         Kernel_Data_Base - Kernel_Virtual_Base,
+         Kernel_Virtual_To_Physical(Kernel_Data_Base),
          Kernel_Data_Size,
          Write_Access => true,
          No_Execution => true);
@@ -112,7 +111,7 @@ IS
       -- Mark the BSS section as modifiable, but also not executable.
       Kernel_Paging_Layout.Map_Address_Range
         (Kernel_BSS_Base,
-         Kernel_BSS_Base - Kernel_Virtual_Base,
+         Kernel_Virtual_To_Physical(Kernel_BSS_Base),
          Kernel_BSS_Size,
          Write_Access => true,
          No_Execution => true);
@@ -122,18 +121,16 @@ IS
         (Bootloader.Framebuffer_Address,
          Bootloader.Framebuffer_Address,
          Bootloader.Framebuffer_Size,
-         Page_Size    => Huge_Page,
-         Write_Access =>      true,
-         No_Execution =>      true);
+         Write_Access => true,
+         No_Execution => true);
 
-      -- Map the heap.
+      -- Identity-map the system heap. Don't put it in the higher-half space.
       Kernel_Paging_Layout.Map_Address_Range
         (Kernel_Heap_Base,
-         Kernel_Heap_Base - Kernel_Virtual_Base,
+         Kernel_Heap_Base,
          Kernel_Heap_Size,
-         Page_Size    => Huge_Page,
-         Write_Access =>      true,
-         No_Execution =>      true);
+         Write_Access => true,
+         No_Execution => true);
 
       -- Identity-map the loader and ACPI regions sent to us by the UEFI
       -- bootloader. One of the MMIO regions is basically guaranteed to be just
@@ -148,12 +145,11 @@ IS
             Region.Memory_Region_Type = ACPI_table_data
          THEN
             Kernel_Paging_Layout.Map_Address_Range
-              (address(Align(number(Region.Start_Address_Physical),
-                  Huge_Page)),
-               address(Align(number(Region.Start_Address_Physical),
-                  Huge_Page)),
+              (Region.Start_Address_Physical,
+               Region.Start_Address_Physical,
                Region.Number_Of_Pages * Page,
-               Page_Size => Huge_Page);
+               Write_Access => false,
+               No_Execution =>  true);
          END IF;
       END LOOP;
 
@@ -366,10 +362,12 @@ IS
    END Memory_Map_Info;
 
    PROCEDURE Debugger
+     (Terminal : IN OUT textbox;
+      Printing : IN boolean)
    IS
    BEGIN
       Exceptions.Elaborated := true; -- Should silence an "unused" warning.
-      PRAGMA Debug(Debug.Initialise);
+      Debug.Initialise(Terminal, Printing);
    END Debugger;
 
    PROCEDURE Tests

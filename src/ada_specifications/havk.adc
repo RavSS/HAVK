@@ -16,6 +16,10 @@ PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);
 PRAGMA Warnings(GNATprove, off, "subprogram * has no effect",
    Reason => "Most of these warnings don't know of hardware interactions.");
 
+PRAGMA Warnings(GNATprove, off,
+   "attribute ""Position"" has an implementation-defined value",
+   Reason => "This attribute just returns the byte offset for x86-64.");
+
 PRAGMA Restrictions(No_Access_Parameter_Allocators);
 PRAGMA Restrictions(No_Anonymous_Allocators);
 PRAGMA Restrictions(No_Calendar);

@@ -5,8 +5,16 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
--- This package contains logic for memory operations.
+-- This package contains logic for memory operations and everything else to do
+-- with memory, like the kernel's memory layout.
 PACKAGE HAVK_Kernel.Memory
+WITH
+   Abstract_State =>
+   (
+      Memory_State
+      WITH
+         External => (Async_Readers, Async_Writers, Effective_Writes)
+   )
 IS
    PRAGMA Preelaborate;
 
@@ -17,11 +25,6 @@ IS
 
    -- Takes in a value and aligns it to the power-of-2 alignment specified.
    -- Note that it rounds down, not up, if no third argument is provided.
-   -- TODO: Might want to add a post-condition contract that checks for
-   -- alignment, but I can't seem to prove `Align'result MOD Alignment = 0`.
-   -- The examples brought up by `gnatprove` aren't valid (?), as it for some
-   -- reason gives an example where "Alignment" is zero in the post-condition.
-   -- Regardless of that, does it have to do with wrap-around arithmetic?
    FUNCTION Align
      (Value     : IN number;
       Alignment : IN number;
@@ -29,19 +32,43 @@ IS
       RETURN number
    WITH
       Inline => true,
-      Pre    => Alignment /= 0 AND THEN (Alignment AND -Alignment) = Alignment;
+      Pre    => Alignment /= 0 AND THEN (Alignment AND -Alignment) = Alignment,
+      Post   => Align'result MOD Alignment = 0;
+
+   -- The alignment of the returned value by the memory manager (`malloc()`).
+   -- This is often just 16 for x86-64 and it can also be retrieved via
+   -- `Standard'Maximum_Alignment`, but that is apparently an implementation
+   -- defined attribute whereas `Standard'System_Allocator_Alignment` is not,
+   -- even though it is listed as one in the GNAT documentation under 4.58.
+   -- Utilising the latter is a SPARK violation, so we'll manually define it.
+   Allocation_Alignment : CONSTANT number := 16;
 
    -- Allocates a valid stack on the heap that can go inside the RSP register
-   -- and then returns a pointer to the top of it. The size starts from one.
-   -- TODO: The issue with the `Align()` post-condition occurs with this
-   -- as well. Could be a bug with `gnatprove`?
+   -- and then returns a pointer to the top of it. The size is one-based and
+   -- the returned address is 16-byte aligned.
    FUNCTION Allocate_System_Stack
      (Size : IN number)
-     RETURN address
+      RETURN address
    WITH
-      Pre  => Size >= 16 AND THEN Size MOD 16 = 0,
-      Post => Allocate_System_Stack'result >= Kernel_Heap_Base AND THEN
-              Allocate_System_Stack'result <= Kernel_Heap_End;
+      Pre  => Size  >= 16 AND THEN
+              Size MOD 16 = 0,
+      Post => Allocate_System_Stack'result MOD 16 = 0;
+
+   -- Converts a virtual address inside kernel space (higher-half virtual
+   -- memory) to a physical one. This is needed as the physical base address of
+   -- the kernel is calculated during my bootloader's ELF loading sequence.
+   FUNCTION Kernel_Virtual_To_Physical
+     (Kernel_Virtual_Address : IN address)
+      RETURN address
+   WITH
+      Inline => true;
+
+   -- This controls the heap size for the kernel. It's only static for now.
+   Kernel_Heap_Size : CONSTANT number := 100 * MiB;
+
+   -- The dynamic value for the consecutive kernel heap memory.
+   -- Must be initialised by the memory manager.
+   Kernel_Heap_Base : address := 0;
 
    -- What follows below are useful symbol pointer values. Note that some of
    -- them have ranges on them to make `gnatprove` have some notion of what
@@ -57,30 +84,18 @@ IS
    -- it as a variable in here. It would be nice if a new aspect or something
    -- along it was introduced to alleviate this behaviour.
 
-   Kernel_Base           : CONSTANT address
-   WITH
-      Import        => true,
-      Convention    => Assembler,
-      External_Name => "__kernel_base_address";
-
-   Kernel_End            : CONSTANT address
-   WITH
-      Import        => true,
-      Convention    => Assembler,
-      External_Name => "__kernel_end_address";
-
    Kernel_Virtual_Base   : CONSTANT address
-      RANGE 16#FFFFFFFF80000000# .. 16#FFFFFFFF80000000#
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_virtual_base_address";
 
-   Kernel_Physical_Base  : CONSTANT address
+   Kernel_Virtual_End    : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "__kernel_physical_base_address";
+      External_Name => "__kernel_virtual_end_address";
 
    Kernel_Text_Base      : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
@@ -138,16 +153,6 @@ IS
       Convention    => Assembler,
       External_Name => "__kernel_bss_end_address";
 
-   FUNCTION Kernel_Heap_Base
-      RETURN address
-   WITH
-      Inline => true;
-
-   FUNCTION Kernel_Heap_End
-      RETURN address
-   WITH
-      Inline => true;
-
    Kernel_Size           : CONSTANT number
    WITH
       Import        => true,
@@ -177,11 +182,5 @@ IS
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_bss_size_address";
-
-   Kernel_Heap_Size      : CONSTANT number
-   WITH
-      Import        => true,
-      Convention    => Assembler,
-      External_Name => "__kernel_heap_size_address";
 
 END HAVK_Kernel.Memory;

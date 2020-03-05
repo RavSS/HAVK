@@ -26,23 +26,24 @@ IS
    Display        : CONSTANT view := Get_Display(UEFI.Get_Arguments);
 
    -- The main terminal or virtual console used to display text to the user.
-   Terminal       : textbox( -- Both the font's width and height are 8 pixels.
-      Display.Screen_Width  / 14 + 2,  -- (Font width  - 1) * 2 + 2. Wider.
+   Terminal       : textbox -- Both the font's width and height are 8 pixels.
+     (Display.Screen_Width  / 14 + 2,  -- (Font width  - 1) * 2 + 2. Wider.
       Display.Screen_Height / 14 - 2); -- (Font height - 1) * 2 - 2. Shorter.
 
    -- The index on the framebuffer as to where the terminal begins.
-   Terminal_Start : CONSTANT number := Display.Calculate_Pixel(
-      Display.Screen_Width  / 8,
+   Terminal_Start : CONSTANT number := Display.Calculate_Pixel
+     (Display.Screen_Width  / 8,
       Display.Screen_Height / 8);
 
-   Welcome        : CONSTANT string := "Welcome to HAVK";
    Date_Of_Build  : CONSTANT string := Initialise.HAVK_Build_Datetime;
 BEGIN
-   -- Initialise the debugging message mechanism if debugging is enabled.
-   -- As of now, this only sends information over a serial connection.
-   PRAGMA Debug(Initialise.Debugger);
+   -- Send log information to the terminal (if specified) and to a serial port.
+   Initialise.Debugger(Terminal, Printing => false);
 
    Log("Entered Phase I successfully.", nominal);
+
+   -- Allow kernel heap allocations and deallocations after this returns.
+   Initialise.Dynamic_Memory;
 
    -- Set up the terminal.
    Terminal.Start_Position    := Terminal_Start;
@@ -50,7 +51,7 @@ BEGIN
    Terminal.Foreground_Colour := Display.Create_Pixel(200, 55, 0);
 
    -- Print the welcome message and date of the current build's compilation.
-   Terminal.Print(Welcome, Centre => true);
+   Terminal.Print("Welcome to HAVK", Centre => true);
    Terminal.Print("Compiled at " & Date_Of_Build, Centre => true);
    Terminal.Print("Compiler was " & Standard'compiler_version, Centre => true);
    Terminal.Newline;

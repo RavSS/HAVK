@@ -22,12 +22,13 @@ IS
    -- 4 kibibytes. Huge pages are 2 mebibytes and "giant" (as I call them)
    -- pages are 1 gibibyte, where only the latter may not be supported by the
    -- processor. It can be checked in CPUID's output (bit 26 of EAX).
-   SUBTYPE page_frame_variant IS   number RANGE 4 * KiB .. 1 * GiB
+   -- TODO: Replace the subtype with an enumeration when using Ada 202X.
+   SUBTYPE page_frame_variant IS number   RANGE 4 * KiB .. 1 * GiB
    WITH
       Static_Predicate => page_frame_variant IN 4 * KiB | 2 * MiB | 1 * GiB;
-   Page       : CONSTANT page_frame_variant  := 4 * KiB;
-   Huge_Page  : CONSTANT page_frame_variant  := 2 * MiB;
-   Giant_Page : CONSTANT page_frame_variant  := 1 * GiB; -- Needs CPU support.
+   Page        : CONSTANT page_frame_variant := 4 * KiB;
+   Huge_Page   : CONSTANT page_frame_variant := 2 * MiB;
+   Giant_Page  : CONSTANT page_frame_variant := 1 * GiB; -- Needs CPU support.
 
    -- This record contains the structure for a map entry.
    TYPE map_entry IS RECORD

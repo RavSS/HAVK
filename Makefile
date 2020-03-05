@@ -109,8 +109,9 @@ EFI_LD_LIB=-l efi -l gnuefi
 EFI_LD_FLAGS=$(EFI_LD_OPT) $(EFI_LD_INC) $(EFI_CRT0)
 
 GDB_REMOTE_DEBUG_PORT?=40404
-QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) -m 1024 \
-	-net none -no-reboot -no-shutdown -nic user,model=e1000e -smp 2
+QEMU_MEMORY?=1024
+QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) -net none \
+	-m $(QEMU_MEMORY) -no-reboot -no-shutdown -nic user,model=e1000e -smp 2
 
 ifeq ("$(QEMU_DEBUG)", "1")
 	# The interesting settings e.g. "int" doesn't work when the host CPU

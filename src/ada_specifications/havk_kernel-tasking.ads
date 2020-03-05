@@ -9,7 +9,6 @@ WITH
    HAVK_Kernel.Descriptors,
    HAVK_Kernel.APIC,
    HAVK_Kernel.APIC.Timer,
-   HAVK_Kernel.Memory,
    HAVK_Kernel.Paging;
 
 -- TODO: I've had a look at the native RTS for GNAT CE 2019 on x86-64 Linux and
@@ -71,7 +70,7 @@ PRIVATE
       R13 : number;
       R14 : number;
       R15 : number;
-      SS  : number RANGE 0 .. 16#FFFF#; -- All the other segments are the same.
+      SS  : number RANGE 0 .. 2**16 - 1; -- All other segments are the same.
    END RECORD
    WITH
       Convention => Assembler;
@@ -178,12 +177,10 @@ PRIVATE
    FUNCTION Get_Task_State
       RETURN address
    WITH
-      Global        => (Input => (Tasks, Active_Task,
-                                  Memory.Kernel_Virtual_Base)),
+      Global        => (Input => (Tasks, Active_Task)),
       Export        => true,
       Convention    => Assembler,
       External_Name => "ada__get_task_state",
-      Pre           => Tasks(Active_Task) /= NULL,
-      Post          => Get_Task_State'result >= Memory.Kernel_Virtual_Base;
+      Pre           => Tasks(Active_Task) /= NULL;
 
 END HAVK_Kernel.Tasking;

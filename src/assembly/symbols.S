@@ -19,13 +19,11 @@
 
 .SECTION .rodata # Kept in read-only data because HAVK shouldn't change them.
 
-# For mapping the entire kernel.
-DEFINE_SYMBOL_POINTER __kernel_base
-DEFINE_SYMBOL_POINTER __kernel_end
+# For mapping the entire kernel in virtual space.
 DEFINE_SYMBOL_POINTER __kernel_virtual_base
-DEFINE_SYMBOL_POINTER __kernel_physical_base
+DEFINE_SYMBOL_POINTER __kernel_virtual_end
 
-# Now the sections. These are virtual addresses.
+# Now the sections. These are also virtual addresses.
 DEFINE_SYMBOL_POINTER __kernel_text_base
 DEFINE_SYMBOL_POINTER __kernel_text_end
 DEFINE_SYMBOL_POINTER __kernel_rodata_base
@@ -34,8 +32,6 @@ DEFINE_SYMBOL_POINTER __kernel_data_base
 DEFINE_SYMBOL_POINTER __kernel_data_end
 DEFINE_SYMBOL_POINTER __kernel_bss_base
 DEFINE_SYMBOL_POINTER __kernel_bss_end
-DEFINE_SYMBOL_POINTER __kernel_heap_base
-DEFINE_SYMBOL_POINTER __kernel_heap_end
 
 # The sizes. These don't have to be calculated during execution.
 DEFINE_SYMBOL_POINTER __kernel_size
@@ -43,4 +39,3 @@ DEFINE_SYMBOL_POINTER __kernel_text_size
 DEFINE_SYMBOL_POINTER __kernel_rodata_size
 DEFINE_SYMBOL_POINTER __kernel_data_size
 DEFINE_SYMBOL_POINTER __kernel_bss_size
-DEFINE_SYMBOL_POINTER __kernel_heap_size

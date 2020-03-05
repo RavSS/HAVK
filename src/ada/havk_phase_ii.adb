@@ -31,8 +31,8 @@ BEGIN
    -- Development is on-going from here.
 
    Goodbye.Start_Position := Display.Calculate_Pixel
-      (Display.Screen_Width / 8, Display.Screen_Height / 2);
-   Goodbye.Print("GOODBYE!", Centre => true);
+     (Display.Screen_Width / 8, Display.Screen_Height / 2);
+   Goodbye.Print("WORK-IN-PROGRESS FROM HERE!", Centre => true);
    Display.Draw_Fill(0, Display.Framebuffer_Elements, 0);
    Goodbye.Draw_On(Display);
 

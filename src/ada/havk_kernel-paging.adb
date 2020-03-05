@@ -77,24 +77,37 @@ IS
                (generic_table =>        page_table,
          access_generic_table => access_page_table);
 
+      -- TODO: As of now, the paging functionality relies upon dynamic memory
+      -- that is managed by the kernel's heap, which is tied to the "NEW"
+      -- keyword. It returns identity-mapped addresses. Because of that, there
+      -- is no need to correct for the virtual-physical difference, but if the
+      -- linked `_gnat_malloc()` starts returning addresses in the higher-half
+      -- area, then this will have to be changed immediately.
+      Kernel_Virtual_Base_Offset : CONSTANT address := 0;
+         -- Kernel_Virtual_To_Physical(Kernel_Virtual_Base);
+
       FUNCTION Encode_Table
         (Value        : IN number;
-         Virtual_Base : IN address := Kernel_Virtual_Base)
+         Virtual_Base : IN address := Kernel_Virtual_Base_Offset)
          RETURN number
       IS
         (Shift_Right(Value - number(Virtual_Base), 12) AND 2**40 - 1)
       WITH
          Inline => true,
+         Pre    => Virtual_Base MOD address(Page) = 0,
          Post   => Encode_Table'result <= 2**40 - 1;
 
       FUNCTION Decode_Table
         (Value        : IN number;
-         Virtual_Base : IN address := Kernel_Virtual_Base)
+         Virtual_Base : IN address := Kernel_Virtual_Base_Offset)
          RETURN number
       IS
         (Shift_Left(Value, 12) + number(Virtual_Base))
       WITH
-         Inline => true;
+         Inline => true,
+         Pre    => Value <= 2**40 - 1 AND THEN
+                   Virtual_Base MOD address(Page) = 0,
+         Post   => Decode_Table'result MOD Page = 0;
 
       -- The aligned (virtual) address to be mapped.
       Mapping   : CONSTANT number := Align(number(Virtual_Address), Page_Size);
@@ -127,9 +140,9 @@ IS
       L1 : access_page_table;
 
       -- Points to a physical frame, regardless of page frame size.
-      L0 : CONSTANT number RANGE 0 .. 16#FFFFFFFFFF# :=
+      L0 : CONSTANT number RANGE 0 .. 2**40 - 1 :=
          Encode_Table(Align(number(Physical_Address), Page_Size),
-                         Virtual_Base => address(0));
+            Virtual_Base => address(0));
    BEGIN
       -- TODO: Find a way to model the CPU doing a page-walk (if that is even
       -- possible without library level static page structures).
@@ -269,8 +282,8 @@ IS
       L1(L1_Offset).NX                  := No_Execution;
    END Map_Address;
 
-   PROCEDURE Map_Address_Range(
-      Object           : IN OUT page_layout;
+   PROCEDURE Map_Address_Range
+     (Object           : IN OUT page_layout;
       Virtual_Address  : IN address;
       Physical_Address : IN address;
       Size             : IN number;
@@ -286,8 +299,8 @@ IS
       FOR
          P IN 0 .. Pages
       LOOP
-         Object.Map_Address(
-            Virtual_Address   + address(Page_Size * P),
+         Object.Map_Address
+           (Virtual_Address   + address(Page_Size * P),
             Physical_Address  + address(Page_Size * P),
             Page_Size        =>     Page_Size,
             Present          =>       Present,
@@ -297,29 +310,22 @@ IS
       END LOOP;
    END Map_Address_Range;
 
-   -- Took this function's equation from the UEFI macro `EFI_SIZE_TO_PAGES()`.
    FUNCTION Size_To_Pages
      (Size         : IN number;
       Alignment    : IN page_frame_variant := Page)
       RETURN number
    IS
-      Aligned_Size : CONSTANT number       :=
-        Memory.Align(Size, Alignment, Round_Up => true);
+      Aligned_Size : CONSTANT number :=
+         Memory.Align(Size, Alignment, Round_Up => true);
    BEGIN
-      CASE -- Read the manuals to see which lower bits need to be zeroed.
-         Alignment
-      IS
-         WHEN       Page =>
-            RETURN Shift_Right(Aligned_Size, 12);
-         WHEN  Huge_Page =>
-            RETURN Shift_Right(Aligned_Size, 21);
-         WHEN Giant_Page =>
-            RETURN Shift_Right(Aligned_Size, 30);
-         WHEN OTHERS     =>
-            RAISE Panic
-            WITH
-               Source_Location & " - Unsupported page frame size.";
-      END CASE;
+      -- Read the manuals to see which lower bits need to be zeroed.
+      -- It should be rather obvious from the alignment itself.
+      RETURN Shift_Right(Aligned_Size,
+        (CASE  Alignment    IS
+         WHEN       Page => 12,
+         WHEN  Huge_Page => 21,
+         WHEN Giant_Page => 30,
+         WHEN     OTHERS => 64));
    END Size_To_Pages;
 
    PROCEDURE Load
@@ -334,7 +340,7 @@ IS
          Convention    => Assembler,
          External_Name => "assembly__load_page_structure";
    BEGIN
-      Write_CR3(Object.L4'address - Kernel_Virtual_Base);
+      Write_CR3(Kernel_Virtual_To_Physical(Object.L4'address));
    END Load;
 
    PROCEDURE Page_Fault_Handler

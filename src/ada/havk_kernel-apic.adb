@@ -177,8 +177,7 @@ IS
    PROCEDURE Enumerate_MADT
      (Paging_Structure : IN OUT Paging.page_layout)
    WITH
-      Refined_Global => (In_Out => (IO_APICs, IRQ_Remaps, CPU_Cores),
-                         Input  => Memory.Kernel_Virtual_Base)
+      Refined_Global => (In_Out => (IO_APICs, IRQ_Remaps, CPU_Cores))
    IS
       FUNCTION Get_IO_APIC_Version IS NEW Read_IO_APIC
         (generic_register => IO_APIC_version_register);

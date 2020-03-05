@@ -202,7 +202,7 @@ IS
       New_View : CONSTANT view :=
       (
          Framebuffer_Address  => Configuration.Framebuffer_Address,
-         Framebuffer_Elements => Configuration.Framebuffer_Size / 4,
+         Framebuffer_Elements => Configuration.Framebuffer_Size / 4 - 1,
          Screen_Width         => Configuration.Horizontal_Resolution,
          Screen_Height        => Configuration.Vertical_Resolution,
          Pixel_Size           => Configuration.Pixels_Per_Scanline /

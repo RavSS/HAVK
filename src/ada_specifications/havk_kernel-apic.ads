@@ -8,7 +8,6 @@
 WITH
    HAVK_Kernel.ACPI,
    HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.Memory,
    HAVK_Kernel.Paging;
 USE
    HAVK_Kernel.ACPI;
@@ -32,8 +31,7 @@ IS
    PROCEDURE Enumerate_MADT
      (Paging_Structure : IN OUT Paging.page_layout)
    WITH
-      Global => (In_Out => (Interrupt_Controller_State, CPU_Cores),
-                 Input  => Memory.Kernel_Virtual_Base),
+      Global => (In_Out => (Interrupt_Controller_State, CPU_Cores)),
       Pre    => ACPI.Valid_Implementation,
       Post   => CPU_Cores /= 0;
 

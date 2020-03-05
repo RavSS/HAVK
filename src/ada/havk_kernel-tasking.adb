@@ -6,7 +6,8 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Intrinsics;
+   HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Memory;
 
 PACKAGE BODY HAVK_Kernel.Tasking
 WITH
