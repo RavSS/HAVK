@@ -8,7 +8,7 @@
 NAME:=HAVK
 
 # Currently, there are two build levels: "Final" and "Debug". Case sensitive.
-BUILD?=Debug
+BUILD?=Final
 
 ifeq ("$(BUILD)", "Debug")
 	VERSION=UPCOMING
