@@ -1015,6 +1015,10 @@ VOID get_memory_map(VOLATILE struct uefi_arguments *arguments,
 	// From here on out, do not call anything if it is not compulsory.
 	// Otherwise it can mess with the memory map and whatnot.
 
+	// Disable interrupts from here as well so the UEFI-provided IDT
+	// entries don't mess with any memory (in case they do).
+	__asm__ VOLATILE ("CLI");
+
 	// Begin to get the memory map, which is needed before we exit UEFI
 	// and its boot services. Initialize to non-garbage defaults.
 	arguments->memory_map = NULL;
@@ -1054,6 +1058,33 @@ VOID get_memory_map(VOLATILE struct uefi_arguments *arguments,
 		&arguments->memory_map_descriptor_version);
 	while (attempt == EFI_BUFFER_TOO_SMALL);
 	ERROR_CHECK(attempt);
+
+	// Any UEFI function calls here should be limited to critical failures
+	// or else the memory map will most likely become outdated.
+
+	// HAVK depends on the memory map (obviously) so it has to be perfect
+	// and without any errors, unknown changes, or corruption.
+	#if EFI_MEMORY_DESCRIPTOR_VERSION != 1
+		#error "The GNU-EFI descriptor version has statically changed."
+	#endif
+	if (arguments->memory_map_descriptor_version != 1)
+	{
+		CRITICAL_FAILURE(u"UNSUPPORTED MEMORY MAP DESCRIPTOR VERSION "
+			"(%d).\r\n", arguments->memory_map_descriptor_version);
+	}
+
+	// Iterate over the memory map and check the types just to be sure.
+	for (VOID *i = arguments->memory_map;
+		i < (VOID *)arguments->memory_map + arguments->memory_map_size;
+		i += arguments->memory_map_descriptor_size)
+	{
+		CONST EFI_MEMORY_DESCRIPTOR *region = i;
+
+		if (region->Type > 14) // Maximum region type as of version 1.
+		{
+			CRITICAL_FAILURE(u"MEMORY MAP IS CORRUPT.\r\n");
+		}
+	}
 
 	// Finally exit UEFI and its boot services. A valid fresh memory map
 	// is mandatory or else this will completely fail to succeed.
@@ -1142,8 +1173,11 @@ VOID default_mappings(struct elf64_file *havk_elf,
 		(CHAR8 *)"__kernel_size")) + HUGE_PAGE_SIZE;
 
 	// I've given up trying to map every important thing one by one, so
-	// I've just mapped 0-GiB to 4-GiB entirely. OVMF does this anyway, but
+	// I've just mapped 0 GiB to 4 GiB entirely. OVMF does this anyway, but
 	// adds special pages (essentially restrictions) for certain ranges.
+	// TODO: I believe it is possible that UEFI loader data may be above
+	// 4 GiB, as I've seen some UEFI BIOS settings that allow MMIO above
+	// 4 GiB too, but I'm not sure.
 	map_address_range(structure, 0, 0, 0x100000000);
 
 	// Map the kernel itself. This includes the BSS. Note that the
@@ -1178,6 +1212,32 @@ VOID *low_malloc(UINT64 size)
 	while (allocation != EFI_SUCCESS);
 
 	return (VOID *)lowest_address;
+}
+
+// Enables some necessary CPU features and switches to the new page structure.
+VOID switch_page_layout(VOLATILE struct uefi_page_structure *page_structure)
+{
+	// For some reason, on some (even recent) machines, the ability for NX
+	// page mappings is not enabled by default, even when it has been
+	// supported on many various x86-64 CPUs since 2003. QEMU, Bochs, and
+	// VirtualBox all have it enabled as a part of the initial CPU state,
+	// but for example, my 2012 laptop (ThinkPad T430 i5-3320M) doesn't.
+	// I think it's guaranteed to be included in the AMD64 instruction set.
+	// I'll quickly enable it here instead of in the kernel, since we
+	// manage virtual memory in the bootloader too.
+	__asm__ VOLATILE
+	(
+		".INTEL_SYNTAX noprefix;"
+		"MOV ECX, 0xC0000080;" // Move the EFER's MSR index to ECX.
+		"RDMSR;" // The MSR's value is now in EDX:EAX (high:low).
+		"OR EAX, 0x800;" // Set bit 11 (2048) to enable NXE.
+		"WRMSR;" // Write EDX:EAX to the EFER.
+		"MOV CR3, %0;" //Load the temporary page structure.
+		".ATT_SYNTAX noprefix"
+		:
+		: "r" (page_structure)
+		: "eax", "ecx", "edx", "cc", "memory"
+	);
 }
 
 EFIAPI
@@ -1241,8 +1301,7 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	get_memory_map(arguments, image_handle);
 	// UEFI boot services have ended. Can't e.g. `Print()` anymore.
 
-	// Load the temporary page structure. Intel syntax breaks compilation.
-	__asm__ VOLATILE ("MOVQ %0, %%CR3" :: "r" (page_structure) : "memory");
+	switch_page_layout(page_structure);
 
 	// TODO: Set this up for the runtime services inside the OS if they
 	// are desired. You can only do it once, apparently.

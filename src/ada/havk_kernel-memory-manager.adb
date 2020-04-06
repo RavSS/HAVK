@@ -18,7 +18,36 @@ IS
       RETURN boolean
    IS
       USE TYPE
-         HAVK_Kernel.UEFI.memory_type;
+         UEFI.memory_type,
+         UEFI.access_memory_descriptor;
+
+      -- Returns true if there's a number of attributes that are not suitable
+      -- for the memory manager.
+      -- TODO: Expand this and the encompassing function for requesting
+      -- specific attributes on a frame.
+      FUNCTION Undesirable_Attributes
+        (Region : IN UEFI.access_memory_descriptor)
+         RETURN boolean
+      WITH
+         Inline => true,
+         Pre    => Region /= NULL;
+
+      FUNCTION Undesirable_Attributes
+        (Region : IN UEFI.access_memory_descriptor)
+         RETURN boolean
+      IS
+         Attributes : CONSTANT UEFI.memory_attributes :=
+            UEFI.Get_Memory_Attributes(Region);
+      BEGIN
+         RETURN
+         (
+            Attributes.Read_Only        OR ELSE
+            Attributes.Read_Protected   OR ELSE
+            Attributes.Write_Protected  OR ELSE
+            Attributes.Specific_Purpose OR ELSE
+            Attributes.Persistent
+         );
+      END Undesirable_Attributes;
 
       Frame_Base_Address : CONSTANT frame_address :=
          frame_address(Frame_Index * Paging.Page);
@@ -28,7 +57,8 @@ IS
          Region OF Map
       LOOP
          IF -- Check if the page address is in a reserved system memory region.
-            Region.Memory_Region_Type /= UEFI.conventional_data AND THEN
+           (Region.Memory_Region_Type /= UEFI.conventional_data OR ELSE
+            Undesirable_Attributes(Region))                    AND THEN
             Frame_Base_Address IN Region.Start_Address_Physical ..
                Region.Start_Address_Physical +
                address(Region.Number_Of_Pages * Paging.Page)

@@ -157,6 +157,9 @@ IS
       -- This shouldn't be necessary for code in ring 0 unless something has
       -- gone truly wrong, but still.
 
+      -- Make sure nothing interrupts us while we modify the page layout.
+      Disable_Interrupts;
+
       IF
          Object.L4(L4_Offset).Pointer = 0
       THEN
@@ -243,6 +246,9 @@ IS
          L3(L3_Offset).Write_Access     := Write_Access;
          L3(L3_Offset).User_Access      := User_Access;
          L3(L3_Offset).NX               := No_Execution;
+
+         Memory_Fence;
+         Enable_Interrupts;
          RETURN;
       END IF;
 
@@ -264,6 +270,9 @@ IS
          L2(L2_Offset).Write_Access     := Write_Access;
          L2(L2_Offset).User_Access      := User_Access;
          L2(L2_Offset).NX               := No_Execution;
+
+         Memory_Fence;
+         Enable_Interrupts;
          RETURN;
       END IF;
 
@@ -280,6 +289,9 @@ IS
       L1(L1_Offset).Write_Access        := Write_Access;
       L1(L1_Offset).User_Access         := User_Access;
       L1(L1_Offset).NX                  := No_Execution;
+
+      Memory_Fence;
+      Enable_Interrupts;
    END Map_Address;
 
    PROCEDURE Map_Address_Range

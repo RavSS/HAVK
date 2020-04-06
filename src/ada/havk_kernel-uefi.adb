@@ -8,7 +8,7 @@
 PACKAGE BODY HAVK_Kernel.UEFI
 IS
    FUNCTION Get_Memory_Attributes
-     (Region : IN memory_descriptor)
+     (Region : NOT NULL ACCESS CONSTANT memory_descriptor)
       RETURN memory_attributes
    IS
    (
@@ -80,19 +80,45 @@ IS
    FUNCTION Get_Memory_Map
       RETURN memory_map
    IS
-      Bootloader : CONSTANT arguments := Get_Arguments;
-      Map        : CONSTANT memory_map(0 .. Bootloader.Memory_Map_Size /
-         Bootloader.Memory_Map_Descriptor_Size)
+      FUNCTION To_Pointer
+        (Memory_Map_Descriptor_Address : IN address)
+         RETURN access_memory_descriptor
       WITH
          Import     => true,
-         Convention => C,
-         Address    => Bootloader.Memory_Map_Address;
+         Convention => Intrinsic,
+         Pre        => Memory_Map_Descriptor_Address /= 0,
+         Post       => To_Pointer'result /= NULL;
+
+      Bootloader : CONSTANT arguments := Get_Arguments;
+      Limit      : CONSTANT address := Bootloader.Memory_Map_Address +
+         address(Bootloader.Memory_Map_Size);
+      Offset     : address RANGE Bootloader.Memory_Map_Address .. Limit :=
+         Bootloader.Memory_Map_Address;
+      Map        : memory_map(1 .. Bootloader.Memory_Map_Size /
+         Bootloader.Memory_Map_Descriptor_Size);
    BEGIN
-      -- I doubt UEFI will give back a memory map with more than a few hundred
-      -- memory map descriptors. To make it easier on `gnatprove`, I've assumed
-      -- the memory map to just be 100000 descriptors long. There does not seem
-      -- to be an actual limit on it in the UEFI specification as of 2.8.
-      PRAGMA Assume(Map'first = 0 AND THEN Map'last < 100000);
+
+      -- PRAGMA Assume(Bootloader.Memory_Map_Address < 8 * TiB);
+      -- PRAGMA Assume(Bootloader.Memory_Map_Size < 1 * GiB);
+      -- PRAGMA Assume(Bootloader.Memory_Map_Descriptor_Size * Map'last =
+      --    Bootloader.Memory_Map_Size);
+      -- PRAGMA Assume(Bootloader.Memory_Map_Descriptor_Size < 1 * KiB);
+      -- PRAGMA Assume(Map'length < 100000);
+
+      FOR
+         Region OF Map
+      LOOP
+         Region := To_Pointer(Offset);
+
+         IF
+            Offset + address(Bootloader.Memory_Map_Descriptor_Size) < Limit
+         THEN
+            Offset := Offset + address(Bootloader.Memory_Map_Descriptor_Size);
+         END IF;
+      END LOOP;
+
+      -- Can't figure out how to prove this properly (if that's even possible).
+      PRAGMA Assume(FOR ALL Region IN Map'range => Map(Region) /= NULL);
 
       RETURN Map;
    END Get_Memory_Map;

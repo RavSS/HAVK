@@ -114,7 +114,7 @@ PRIVATE
    -- we would inflate the size of the kernel by around 250~ MiB. Not too bad.
    TYPE frames IS ARRAY
      (number RANGE (16 * MiB) / Paging.Page .. (128 * GiB) / Paging.Page - 1)
-      OF frame
+      OF ALIASED frame
    WITH
       Component_Size => 1; -- Explicitly pack it.
 

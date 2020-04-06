@@ -33,25 +33,38 @@ IS
       THEN
          Log("Skipping ACPI tables due to corruption.", warning);
          APIC.Remap_PICs(Disable_Emulation => false);
+         Enable_Interrupts;
+         Log("Interrupts enabled (PIC).");
          RETURN;
       ELSE
          Log("ACPI tables RSDP and XSDT are valid.");
       END IF;
 
       -- Disable the LAPIC's PIC-compatible mode.
+      Log("Disabling PICs.");
       APIC.Remap_PICs(Disable_Emulation => true);
+      Log("PICs have been disabled.");
 
       -- See what's in the ACPI MADT's APIC structure area.
+      Log("Enumerating the ACPI MADT.");
       APIC.Enumerate_MADT(Kernel_Paging_Layout);
+      Log("ACPI MADT enumerated.");
 
       -- TODO: Check for the x2APIC bit in CPUID's output before enabling it.
+      Log("Enabling x2APIC mode.");
       APIC.x2APIC_Mode;
+      Log("Enabled x2APIC mode.", nominal);
 
       -- We need the PS/2 controller's interrupts.
+      Log("Redirecting ISA IRQs to IO/APIC.");
       APIC.Set_IO_APIC_Redirects;
+      Log("IO/APIC configured.", nominal);
 
       Log("Interrupt controllers have been set up.", nominal);
       Log("Detected" & number'image(APIC.CPU_Cores) & " CPU cores.", nominal);
+
+      Enable_Interrupts;
+      Log("Interrupts enabled (APIC).");
    END Interrupt_Controllers;
 
    PROCEDURE Timers
@@ -154,6 +167,7 @@ IS
       END LOOP;
 
       -- Finally, load the CR3 register with the highest level directory.
+      Log("Switching to default page layout.");
       Kernel_Paging_Layout.Load;
       Log("Self-described page directories loaded.", nominal);
    END Default_Page_Layout;

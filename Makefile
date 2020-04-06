@@ -66,6 +66,7 @@ HAVK_KERNEL:=$(BUILD_DIR)$(NAME).elf
 
 HAVK_PARTITION:=$(BUILD_DIR)$(NAME).part
 HAVK_IMAGE:=$(BUILD_DIR)$(NAME).img
+HAVK_VMDK:=$(BUILD_DIR)$(NAME).vmdk
 
 OVMF_DIR=./ext/ovmf-x64/
 LIB_DIR=/usr/lib/
@@ -282,6 +283,10 @@ qemu: $(HAVK_IMAGE)
 	$(QEMU_FLAGS)
 
 	@tput sgr0 # Corrected terminal after serial console usage.
+
+$(HAVK_VMDK): $(HAVK_IMAGE)
+	$(call echo, "CREATING VMDK FILE AT $@")
+	@qemu-img convert -f raw -O vmdk $< $@
 
 .PHONY: gdb
 gdb:

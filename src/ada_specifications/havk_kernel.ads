@@ -45,17 +45,11 @@ IS
       Import     => true,
       Convention => Intrinsic;
 
-   -- This is for converting "address" to "number" and vice versa.
-   -- FUNCTION Address_Value IS NEW Ada.Unchecked_Conversion
-   --   (Source => address, Target =>  number);
-   -- FUNCTION Address_Value IS NEW Ada.Unchecked_Conversion
-   --   (Source =>  number, Target => address);
-
    -- Helper variables for memory units (non-SI).
-   KiB : CONSTANT number := 1024;
-   MiB : CONSTANT number := KiB**2;
-   GiB : CONSTANT number := KiB**3;
-   TiB : CONSTANT number := KiB**4;
+   KiB : CONSTANT := 1024;
+   MiB : CONSTANT := KiB**2;
+   GiB : CONSTANT := KiB**3;
+   TiB : CONSTANT := KiB**4;
 
    -- Avoids a "WITH" for "System.Address_Image" everywhere and adds some
    -- contracts to it so it's easier for proving its return string.

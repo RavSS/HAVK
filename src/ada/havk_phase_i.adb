@@ -69,6 +69,12 @@ BEGIN
    -- See what the processor can do and then output some text about it.
    Initialise.CPU_Feature_Check(Terminal);
 
+   -- Create new descriptor tables and make interrupts possible.
+   Initialise.Descriptor_Tables;
+
+   -- Use a new page structure and map the kernel, UEFI/ACPI data, etc.
+   Initialise.Default_Page_Layout;
+
    -- Check the memory map.
    Initialise.Memory_Map_Info(Terminal);
 
@@ -78,14 +84,8 @@ BEGIN
    -- Verify the ACPI implementation and set up the APICs if we can.
    Initialise.Interrupt_Controllers;
 
-   -- Create new descriptor tables and make interrupts possible.
-   Initialise.Descriptor_Tables;
-
    -- Now we can receive interrupts, prepare the timers properly.
    Initialise.Timers;
-
-   -- Use a new page structure and map the kernel, UEFI/ACPI data, etc.
-   Initialise.Default_Page_Layout;
 
    -- Set up the system call instruction's functionality and options.
    Initialise.System_Call_Instruction;

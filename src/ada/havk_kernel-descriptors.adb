@@ -119,9 +119,6 @@ IS
       Load_Global_Descriptor_Table;
       Load_Interrupt_Descriptor_Table;
       Log("Descriptor tables prepared.", nominal);
-
-      Intrinsics.Enable_Interrupts;
-      Log("Interrupts enabled.");
    END Load;
 
    FUNCTION Interrupt_Entry

@@ -5,6 +5,9 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   HAVK_Kernel.UEFI;
+
 PACKAGE BODY HAVK_Kernel.Debug
 WITH
    SPARK_Mode    => off, -- See the private specification of this package.
@@ -34,9 +37,9 @@ IS
    IS
       -- Strings for indicating to the receiver what they're getting and
       -- where it ends. Useful for regular expressions on the receiver's side.
-      Subject     : CONSTANT string := "LOG: ";
-      Prefix      : CONSTANT string := "<< ";
-      Suffix      : CONSTANT string := " >>";
+      Subject : CONSTANT string := "LOG: ";
+      Prefix  : CONSTANT string := "<< ";
+      Suffix  : CONSTANT string := " >>";
    BEGIN
       Debugger.Print(Subject & Prefix & Information & Suffix &
          Debugger.Line_Ender);
@@ -45,6 +48,7 @@ IS
          Terminal_Printing AND THEN Terminal_Hook /= NULL
       THEN
          Terminal_Hook.Print(Prefix & Information & Suffix);
+         Terminal_Hook.Draw_On(Graphics.Get_Display(UEFI.Get_Arguments));
       END IF;
    END Message;
 END HAVK_Kernel.Debug;

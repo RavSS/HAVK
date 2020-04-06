@@ -62,12 +62,6 @@ IS
       RETURN boolean
    IS
    BEGIN
-      IF
-         Port_2
-      THEN
-         Output_Byte(Command, Port_2_Data); -- Avoid recursion.
-      END IF;
-
       FOR
          R IN 1 .. Retry_Rate
       LOOP
@@ -77,16 +71,23 @@ IS
             FOR
                I IN 1 .. Retry_Rate
             LOOP
+               IF
+                  Port_2
+               THEN
+                  Output_Byte(Command, Port_2_Data);
+               END IF;
+
                Output_Byte(Port_Type, Byte);
+
                IF
                   NOT Verify OR ELSE
                   Receive(Data) = Data_Acknowledged
                THEN
                   RETURN true;
-               ELSE
-                  RETURN false;
                END IF;
             END LOOP;
+
+            RETURN false;
          END IF;
       END LOOP;
 
