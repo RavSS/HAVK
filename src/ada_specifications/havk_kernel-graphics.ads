@@ -13,10 +13,17 @@ USE
 -- This package is where graphics are rendered onto the display and it is
 -- the only package which should do anything with video.
 PACKAGE HAVK_Kernel.Graphics
+WITH
+   Preelaborate   => true,
+   Abstract_State =>
+   (  -- Writing a pixel to the framebuffer will cause the GPU to read it.
+      Graphics_Output_Protocol_State
+      WITH
+         External => (Async_Readers, Effective_Writes)
+   )
 IS
-   PRAGMA Preelaborate;
-
-   -- UEFI GOP defines pixels as 32-bits, so we will as well.
+   -- UEFI GOP defines pixels as 32 bits, so we will as well. The upper 8 bits
+   -- are usually empty/reserved, but they are too included just in case.
    TYPE pixel IS MOD 2**32
    WITH
       Size => 32;
@@ -65,6 +72,7 @@ IS
       Index         : IN number;
       Data          : IN pixel)
    WITH
+      Global    => (Output => Graphics_Output_Protocol_State),
       Inline    => true,
       Pre'class => Index <= Object.Framebuffer_Elements;
 
@@ -101,8 +109,9 @@ IS
       Pixel_End     : IN number;
       Pixel_Colour  : IN pixel)
    WITH
-      Pre'class  => Pixel_Start <= Object.Framebuffer_Elements AND THEN
-                    Pixel_End   <= Object.Framebuffer_Elements;
+      Global    => (Output => Graphics_Output_Protocol_State),
+      Pre'class => Pixel_Start <= Object.Framebuffer_Elements AND THEN
+                   Pixel_End   <= Object.Framebuffer_Elements;
 
    -- Draws a horizontal line with a specific line size.
    PROCEDURE Draw_Horizontal_Line
@@ -111,7 +120,8 @@ IS
       Pixel_Colour  : IN pixel;
       Line_Size     : IN number)
    WITH
-      Pre'class  => Pixel_Start + Line_Size <= Object.Framebuffer_Elements;
+      Global    => (Output => Graphics_Output_Protocol_State),
+      Pre'class => Pixel_Start + Line_Size <= Object.Framebuffer_Elements;
 
    -- Draws a vertical line with a specific line size.
    PROCEDURE Draw_Vertical_Line
@@ -120,8 +130,9 @@ IS
       Pixel_Colour  : IN pixel;
       Line_Size     : IN number)
    WITH
-      Pre'class  => Pixel_Start + Line_Size * Object.Screen_Width <=
-                    Object.Framebuffer_Elements;
+      Global    => (Output => Graphics_Output_Protocol_State),
+      Pre'class => Pixel_Start + Line_Size * Object.Screen_Width <=
+                   Object.Framebuffer_Elements;
 
    -- Draws a box with a box width and box height in pixel size.
    PROCEDURE Draw_Box
@@ -131,10 +142,11 @@ IS
       Box_Width     : IN number;
       Box_Height    : IN number)
    WITH
-      Pre'class  => Box_Width <= Object.Framebuffer_Elements  AND THEN
-                    Box_Height <= Object.Framebuffer_Elements AND THEN
-                    Pixel_Start + Box_Width <= Object.Framebuffer_Elements AND
-                    THEN Pixel_Start + Object.Screen_Width * Box_Height <=
-                    Object.Framebuffer_Elements;
+      Global    => (Output => Graphics_Output_Protocol_State),
+      Pre'class => Box_Width <= Object.Framebuffer_Elements  AND THEN
+                   Box_Height <= Object.Framebuffer_Elements AND THEN
+                   Pixel_Start + Box_Width <= Object.Framebuffer_Elements AND
+                   THEN Pixel_Start + Object.Screen_Width * Box_Height <=
+                   Object.Framebuffer_Elements;
 
 END HAVK_Kernel.Graphics;

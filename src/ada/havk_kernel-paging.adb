@@ -305,20 +305,28 @@ IS
       User_Access      : IN boolean            := false;
       No_Execution     : IN boolean            :=  true)
    IS
-      -- Start from zero first so we can efficiently map the base addresses.
-      Pages            : CONSTANT number := Size_To_Pages(Size, Page_Size) - 1;
+      Pages            : number;
    BEGIN
+      IF -- There will be a wrap-around problem if the size passed is zero.
+         Size = 0
+      THEN
+         RETURN;
+      END IF;
+
+      -- Start from zero first so we can efficiently map the base addresses.
+      Pages := Size_To_Pages(Size, Page_Size) - 1;
+
       FOR
          P IN 0 .. Pages
       LOOP
          Object.Map_Address
-           (Virtual_Address   + address(Page_Size * P),
-            Physical_Address  + address(Page_Size * P),
-            Page_Size        =>     Page_Size,
-            Present          =>       Present,
-            Write_Access     =>  Write_Access,
-            User_Access      =>   User_Access,
-            No_Execution     =>  No_Execution);
+           (Virtual_Address  + address(Page_Size * P),
+            Physical_Address + address(Page_Size * P),
+            Page_Size       =>     Page_Size,
+            Present         =>       Present,
+            Write_Access    =>  Write_Access,
+            User_Access     =>   User_Access,
+            No_Execution    =>  No_Execution);
       END LOOP;
    END Map_Address_Range;
 
@@ -398,7 +406,7 @@ IS
    BEGIN
       Log("ISR 14: Page fault triggered - Error code:"     &
          number'image(Error_Code) & " - Fault address: 0x" &
-         Hex_Image(Fault_Address) & " - " & Present_Field  &
+         Image(Fault_Address) & " - " & Present_Field  &
          Write_Field, warning);
 
       RAISE Panic

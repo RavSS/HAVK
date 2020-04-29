@@ -26,7 +26,7 @@ IS
    Display        : CONSTANT view := Get_Display(UEFI.Get_Arguments);
 
    -- The main terminal or virtual console used to display text to the user.
-   Terminal       : textbox -- Both the font's width and height are 8 pixels.
+   Terminal       : ALIASED textbox -- Font width and font height are 8 pixels.
      (Display.Screen_Width  / 14 + 2,  -- (Font width  - 1) * 2 + 2. Wider.
       Display.Screen_Height / 14 - 2); -- (Font height - 1) * 2 - 2. Shorter.
 
@@ -89,6 +89,9 @@ BEGIN
 
    -- Set up the system call instruction's functionality and options.
    Initialise.System_Call_Instruction;
+
+   -- Read the FAT16 partition HAVK was booted from.
+   Initialise.Boot_Partition_Check;
 
    -- Prepare primitive forms of input via PS/2.
    Initialise.PS2_Input;

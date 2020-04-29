@@ -97,14 +97,6 @@ IS
       Map        : memory_map(1 .. Bootloader.Memory_Map_Size /
          Bootloader.Memory_Map_Descriptor_Size);
    BEGIN
-
-      -- PRAGMA Assume(Bootloader.Memory_Map_Address < 8 * TiB);
-      -- PRAGMA Assume(Bootloader.Memory_Map_Size < 1 * GiB);
-      -- PRAGMA Assume(Bootloader.Memory_Map_Descriptor_Size * Map'last =
-      --    Bootloader.Memory_Map_Size);
-      -- PRAGMA Assume(Bootloader.Memory_Map_Descriptor_Size < 1 * KiB);
-      -- PRAGMA Assume(Map'length < 100000);
-
       FOR
          Region OF Map
       LOOP

@@ -5,18 +5,15 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   Ada.Unchecked_Conversion;
-
 -- A package that controls the Programmable Interval Timer (PIT) for when you
 -- need a timer that isn't accurate or precise.
 -- READ: https://wiki.osdev.org/PIT
 -- TODO: This lacks detailed documentation and features. For now, I'm only
 -- using the PIT to calibrate the LAPIC timer and for sleeping.
 PACKAGE HAVK_Kernel.PIT
+WITH
+   Preelaborate => true
 IS
-   PRAGMA Preelaborate;
-
    -- Does the most basic set up for the PIT.
    PROCEDURE Setup;
 
@@ -48,16 +45,12 @@ PRIVATE
    -- We'll run the PIT at a phase of the tick rate by default. Also is a
    -- constant until we have reason to change it during runtime. The divisor
    -- can only ever be a 16-bit unsigned value. Zero is actually valid.
-   Divisor   : CONSTANT number RANGE 0 .. 16#FFFF# := Frequency / Tick_Rate;
+   Divisor   : CONSTANT number RANGE 0 .. 2**16 - 1 := Frequency / Tick_Rate;
 
    -- A semi-temporary variable for counting down. Note that the PIT has
    -- actual countdown hardware functionality, but constantly reconfiguring it
    -- is most certainly slower due to I/O port usage.
    Countdown : number := 0;
-
-   -- Communication with the PIT occurs via the `OUT` and `IN` instructions
-   -- with the byte variants.
-   SUBTYPE byte IS number RANGE 0 .. 16#FF#;
 
    -- The PIT is interacted with via the x86 I/O ports.
    TYPE port IS
@@ -72,11 +65,6 @@ PRIVATE
       channel_1_port        => 16#41#,
       channel_2_port        => 16#42#,
       command_register_port => 16#43#);
-
-   PRAGMA Warnings(off, "types for unchecked conversion have different sizes",
-      Reason => "A 16-bit value fits into a 64-bit range without any issues.");
-   FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
-     (Source => port, Target => number);
 
    -- An enumeration type for indicating which channel to send the command to.
    TYPE channel IS
@@ -186,9 +174,11 @@ PRIVATE
    END RECORD;
 
    -- Conveniently converts whatever type into a byte and outputs it to a port.
+   PRAGMA Warnings(GNATprove, off, "unused variable ""Data""*",
+      Reason => "The format is only converted/imported into a byte.");
    GENERIC
       TYPE generic_data IS PRIVATE;
-      Channel_Port : port;
+      Channel_Port : IN port;
    PROCEDURE Send
      (Data         : IN generic_data)
    WITH

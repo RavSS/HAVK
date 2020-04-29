@@ -6,7 +6,6 @@
 -------------------------------------------------------------------------------
 
 WITH
-   System.Address_Image,
    HAVK_Kernel.Debug;
 
 PACKAGE BODY HAVK_Kernel
@@ -79,18 +78,150 @@ IS
       END IF;
    END Log;
 
-   FUNCTION Hex_Image
-     (Value : IN address)
+   PROCEDURE External_Log
+     (Pointer    : IN address;
+      Priority   : IN urgency)
+   IS
+      FUNCTION Length
+        (Pointer : IN address)
+         RETURN integer
+      WITH
+         Global        => NULL,
+         Import        => true,
+         Inline        => true,
+         Convention    => Assembler,
+         External_Name => "assembly__string_length";
+
+      C_String   : CONSTANT string(1 .. Length(Pointer) + 1)
+      WITH
+         Import     => true,
+         Convention => C,
+         Address    => Pointer;
+   BEGIN
+      PRAGMA Warnings(GNATprove, off,
+         "attribute Valid is assumed to return True",
+         Reason => "If not true, then an internal warning log is created.");
+      IF
+         Pointer = 0
+      THEN
+         Log("An null external log was passed.", warning);
+      ELSIF
+         C_String'length NOT IN log_string_limit'range OR ELSE
+         NOT Priority'valid
+      THEN
+         Log("An incorrect external log was passed of length" &
+            number'image(C_String'length) & '.', warning);
+      ELSE
+         Log(C_String, Priority);
+      END IF;
+   END External_Log;
+
+   FUNCTION Image
+     (Value   : IN number;
+      Base    : IN number := 10;
+      Padding : IN number := 0)
       RETURN string
    IS
-      Imaged : CONSTANT string := System.Address_Image(Value);
+      FUNCTION Get_Digits
+         RETURN number
+      WITH
+         Inline => true,
+         Pre    => Base IN 10 | 16 AND THEN Padding < 64,
+         Post   => (IF Padding = 0 THEN Get_Digits'result IN 1 .. 64
+                       ELSE Get_Digits'result IN Padding .. 64);
+
+      FUNCTION Get_Digits
+         RETURN number
+      IS
+         Digit_Count : number RANGE 0 .. 64 := 0;
+         Temporary   : number := Value;
+      BEGIN
+         CASE
+            Base
+         IS -- TODO: Unsure why the digit counts aren't automatically provable.
+            WHEN 10 =>
+               WHILE
+                  Temporary /= 0
+               LOOP
+                  PRAGMA Loop_Invariant(Digit_Count <= Base * 2);
+
+                  IF
+                     Digit_Count < Base * 2
+                  THEN
+                     Digit_Count := Digit_Count + 1;
+                  END IF;
+
+                  Temporary := Temporary / Base;
+               END LOOP;
+            WHEN 16 =>
+               WHILE
+                  Temporary /= 0
+               LOOP
+                  PRAGMA Loop_Invariant(Digit_Count <= Base);
+
+                  IF
+                     Digit_Count < Base
+                  THEN
+                     Digit_Count := Digit_Count + 1;
+                  END IF;
+
+                  Temporary := Shift_Right(Temporary, 4);
+               END LOOP;
+            WHEN OTHERS =>
+               RETURN 1;
+         END CASE;
+
+         IF
+            Digit_Count < Padding
+         THEN
+            RETURN Padding;
+         ELSIF
+            Value /= 0
+         THEN
+            RETURN Digit_Count;
+         ELSE -- Even a value of zero has a single digit.
+            RETURN 1;
+         END IF;
+      END Get_Digits;
+
+      Base_16   : CONSTANT ARRAY(number RANGE 16#0# .. 16#0F#) OF character :=
+        ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+         'A', 'B', 'C', 'D', 'E', 'F');
+      Imaged    : string(1 .. positive(Get_Digits)) := (OTHERS => '0');
+      Temporary : number := Value;
    BEGIN
-      IF
-         Imaged'first = 1 AND THEN Imaged'last = 16
-      THEN
-         RETURN Imaged;
-      ELSE
-         RETURN "????????????????";
-      END IF;
-   END Hex_Image;
+      CASE
+         Base
+      IS
+         WHEN 10 =>
+            FOR
+               Index IN REVERSE Imaged'range
+            LOOP
+               EXIT WHEN Temporary = 0;
+               Imaged(Index) :=
+                  character'val((Temporary MOD Base) + character'pos('0'));
+               Temporary     := Temporary / Base;
+            END LOOP;
+         WHEN 16 =>
+            FOR
+               Index IN REVERSE Imaged'range
+            LOOP
+               EXIT WHEN Temporary = 0;
+               Imaged(Index) := Base_16(Temporary AND Base - 1);
+               Temporary     := Shift_Right(Temporary, 4);
+            END LOOP;
+         WHEN OTHERS =>
+            NULL;
+      END CASE;
+
+      RETURN Imaged;
+   END Image;
+
+   FUNCTION Image
+     (Value   : IN address;
+      Base    : IN number := 16;
+      Padding : IN number := 0)
+      RETURN string
+   IS
+     (Image(number(Value), Base => Base, Padding => Padding));
 END HAVK_Kernel;

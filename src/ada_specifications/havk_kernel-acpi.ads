@@ -864,14 +864,6 @@ IS
    TYPE interrupt_controller_descriptors IS ARRAY(number RANGE 1 .. 255) OF
       interrupt_controller_descriptor;
 
-   -- This type is useful for validating tables, as when overlaid to an
-   -- address with a valid byte length, you can go over each byte individually.
-   -- Do not use an anonymous array for that purpose, as the components are
-   -- not guaranteed to be the size of a byte. That issue led to this type.
-   TYPE bytes IS ARRAY(number RANGE <>) OF number RANGE 0 .. 16#FF#
-   WITH
-      Component_Size => 8;
-
    -- The HPET table that details the high-precision event timer.
    -- The specification for the ACPI 2.0 table can be found within the HPET
    -- specification from Intel themselves.

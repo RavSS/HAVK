@@ -11,14 +11,13 @@ PRAGMA Normalize_Scalars;
 PRAGMA Assertion_Policy(CHECK);
 PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);
 
--- TODO: What's the proper way to tell `gnatprove` of hardware effects without
--- setting variables as volatile with async_* or effective_* aspects?
-PRAGMA Warnings(GNATprove, off, "subprogram * has no effect",
-   Reason => "Most of these warnings don't know of hardware interactions.");
-
 PRAGMA Warnings(GNATprove, off,
    "attribute ""Position"" has an implementation-defined value",
    Reason => "This attribute just returns the byte offset for x86-64.");
+
+PRAGMA Warnings(GNATprove, off,
+   "attribute ""Image"" has an implementation-defined length",
+   Reason => "Imaged enumeration name lengths should be checked manually.");
 
 PRAGMA Restrictions(No_Access_Parameter_Allocators);
 PRAGMA Restrictions(No_Anonymous_Allocators);

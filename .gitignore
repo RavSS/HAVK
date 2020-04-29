@@ -13,6 +13,8 @@ src/*
 !src/ada_runtime/*.ad?
 !src/assembly
 !src/assembly/*
+!src/bootloader
+!src/bootloader/*
 !src/c
 !src/c/*
 !src/*.gpr

@@ -6,20 +6,26 @@
 -------------------------------------------------------------------------------
 
 -- This package contains x86(-64) procedures and functions that are imported
--- from external sources. See the "intrinsics.S" file in the assembly folder.
--- The reason for not including inline assembly via the machine code package
--- is due to the limitations of it in SPARK, the constraints requiring careful
--- usage, and it being easier to write assembly in GAS as opposed to in Ada.
--- It's also implementation defined, whereas importation is in the standard.
--- With contracts which are proven to be fulfilled, this should be quite safe.
--- The only drawback is inlining, which no longer seems to work. I've still
--- specified the inline aspect if I want to use link-time optimisations later
--- (although I don't think that will make a difference at linkage).
--- Using GCC intrinsics is fine and have little chance of going wrong.
+-- from external sources or are small and universal enough to do a variety of
+-- goals. See the "intrinsics.S" file in the assembly folder. The reason for
+-- not including inline assembly via the machine code package is due to SPARK
+-- disallowing it, constraints being hard to manage than GAS, and importation
+-- being in the standard. Compile-time inlining is however not functional.
 PACKAGE HAVK_Kernel.Intrinsics
+WITH
+   Preelaborate   => true,
+   Abstract_State =>
+   (
+     (CPU_Port_State
+      WITH
+         External => (Async_Readers, Async_Writers,
+                         Effective_Reads, Effective_Writes)),
+     (CPU_MSR_State
+      WITH
+         External => (Async_Readers, Async_Writers,
+                         Effective_Reads, Effective_Writes))
+   )
 IS
-   PRAGMA Preelaborate;
-
    -- For usage with the special registers. MSRs (indices) are only 32-bits.
    SUBTYPE model_specific_register IS number RANGE 0 .. 16#FFFFFFFF#;
 
@@ -30,35 +36,39 @@ IS
       Bit   : IN number)
       RETURN boolean
    WITH
-      Global        => NULL,
-      Inline        => true,
-      Import        => true,
-      Convention    => Assembler,
-      External_Name => "assembly__bit_test",
-      Pre           => Bit <= 63;
-
-   -- Regarding x86 CPU ports and SPARK, I've decided not to try model them, as
-   -- I don't see it being important to stability or even possible due to them
-   -- not being memory mapped.
+      Inline => true,
+      Pre    => Bit <= 63;
 
    -- Outputs/writes a byte to an I/O port.
    PROCEDURE Output_Byte
      (Port  : IN number;
       Value : IN number)
    WITH
-      Global        => NULL,
+      Global        => (Output => CPU_Port_State),
       Inline        => true,
       Import        => true,
       Convention    => Assembler,
       External_Name => "assembly__output_byte",
       Pre           => Port <= 16#FFFF# AND THEN Value <= 16#FF#;
 
+   -- Outputs/writes a word to an I/O port.
+   PROCEDURE Output_Word
+     (Port  : IN number;
+      Value : IN number)
+   WITH
+      Global        => (Output => CPU_Port_State),
+      Inline        => true,
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "assembly__output_word",
+      Pre           => Port <= 16#FFFF# AND THEN Value <= 16#FFFF#;
+
    -- Writes a 64-bit value to a model-specific register.
    PROCEDURE Write_MSR
      (MSR   : IN model_specific_register;
       Value : IN number)
    WITH
-      Global        => NULL,
+      Global        => (Output => CPU_MSR_State),
       Inline        => true,
       Import        => true,
       Convention    => Assembler,
@@ -70,7 +80,7 @@ IS
       RETURN number
    WITH
       Volatile_Function => true,
-      Global            => NULL,
+      Global            => (Input => CPU_Port_State),
       Inline            => true,
       Import            => true,
       Convention        => Assembler,
@@ -78,17 +88,47 @@ IS
       Pre               => Port              <= 16#FFFF#,
       Post              => Input_Byte'result <= 16#00FF#;
 
+   -- Inputs/reads a word from an I/O port.
+   FUNCTION Input_Word
+     (Port  : IN number)
+      RETURN number
+   WITH
+      Volatile_Function => true,
+      Global            => (Input => CPU_Port_State),
+      Inline            => true,
+      Import            => true,
+      Convention        => Assembler,
+      External_Name     => "assembly__input_word",
+      Pre               => Port              <= 16#FFFF#,
+      Post              => Input_Word'result <= 16#FFFF#;
+
    -- Reads a 64-bit value from a model-specific register.
    FUNCTION Read_MSR
      (MSR   : IN model_specific_register)
      RETURN number
    WITH
       Volatile_Function => true,
-      Global            => NULL,
+      Global            => (Input => CPU_MSR_State),
       Inline            => true,
       Import            => true,
       Convention        => Assembler,
       External_Name     => "assembly__read_model_specific_register";
+
+   -- Swaps the byte order (endianness) of a 64-bit value around. This uses a
+   -- GCC internal intrinsic function, but it can be replaced with just three
+   -- instructions. There's other sizes for `__builtin_bswap*()` as well, but
+   -- I would need to create new types to match the built-in's prototype.
+   -- Instead, just do right shifts e.g. `Shift_Right(Swapped, 32)` for an
+   -- equivalent of `__builtin_bswap32()` and so on.
+   FUNCTION Byte_Swap
+     (Value : IN number)
+      RETURN number
+   WITH
+      Global        => NULL,
+      Inline        => true,
+      Import        => true,
+      Convention    => Intrinsic,
+      External_Name => "__builtin_bswap64";
 
    -- Halts the CPU.
    PROCEDURE Halt
@@ -134,4 +174,5 @@ IS
       Import        => true,
       Convention    => Intrinsic,
       External_Name => "__sync_synchronize";
+
 END HAVK_Kernel.Intrinsics;

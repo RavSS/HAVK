@@ -75,9 +75,8 @@ IS
       END IF;
    END Remap_PICs;
 
-   FUNCTION Read_LAPIC
-     (MSR : IN LAPIC_MSR)
-      RETURN generic_format
+   PROCEDURE Read_LAPIC
+     (Value : OUT generic_format)
    IS
       FUNCTION MSR_Format IS NEW Ada.Unchecked_Conversion
         (Source => number, Target => generic_format);
@@ -90,19 +89,14 @@ IS
 
       Register_Value : number;
    BEGIN
-      RETURN
-         Register_Data : generic_format
-      DO
-         Intrinsics.Memory_Fence; -- See `Write_LAPIC()` for more.
-         Register_Value := Intrinsics.Read_MSR(MSR_Value(MSR));
-         Register_Data  := MSR_Format(Register_Value);
-         Intrinsics.Memory_Fence;
-      END RETURN;
+      Intrinsics.Memory_Fence; -- See `Write_LAPIC()` for more.
+      Register_Value := Intrinsics.Read_MSR(MSR_Value(MSR));
+      Intrinsics.Memory_Fence;
+      Value := MSR_Format(Register_Value);
    END Read_LAPIC;
 
    PROCEDURE Write_LAPIC
-     (MSR   : IN LAPIC_MSR;
-      Value : IN generic_format)
+     (Value : IN generic_format)
    IS
       FUNCTION MSR_Value_Number IS NEW Ada.Unchecked_Conversion
         (Source => generic_format, Target => number);
@@ -113,6 +107,8 @@ IS
       -- Intel recommends `MFENCE` then `LFENCE` for the below barrier, but I
       -- don't see how the second instruction does anything the first doesn't.
       -- I'll just slap memory fences everywhere.
+      -- TODO: An update on the above, it controls how memory is serialised.
+      -- It might be worth making an entirely new intrinsic for LAPIC MSRs.
       Intrinsics.Memory_Fence; -- `WRMSR` etc. to APIC MSRs is not serialising.
       Intrinsics.Write_MSR(LAPIC_MSR_Value(MSR), MSR_Value_Number(Value));
       Intrinsics.Memory_Fence;
@@ -308,70 +304,74 @@ IS
    PROCEDURE Reset
    IS
       PROCEDURE Set_End_Of_Interrupt_Register IS NEW Write_LAPIC
-        (generic_format => number);
+        (MSR => end_of_interrupt_register, generic_format => number);
    BEGIN
-      Set_End_Of_Interrupt_Register(end_of_interrupt_register, 0);
+      Set_End_Of_Interrupt_Register(0);
    END Reset;
 
    PROCEDURE x2APIC_Mode
    IS
-      FUNCTION  Get_IA32_APIC_BASE IS NEW  Read_LAPIC
-        (generic_format => IA32_APIC_BASE_format);
+      PROCEDURE Get_IA32_APIC_BASE IS NEW  Read_LAPIC
+        (generic_format => IA32_APIC_BASE_format,
+         MSR            => IA32_APIC_BASE);
       PROCEDURE Set_IA32_APIC_BASE IS NEW Write_LAPIC
-        (generic_format => IA32_APIC_BASE_format);
+        (generic_format => IA32_APIC_BASE_format,
+         MSR            => IA32_APIC_BASE);
 
-      FUNCTION  Get_Spurious_Interrupt_Vector_Register IS NEW  Read_LAPIC
-        (generic_format => spurious_interrupt_vector_register_format);
+      PROCEDURE Get_Spurious_Interrupt_Vector_Register IS NEW  Read_LAPIC
+        (generic_format => spurious_interrupt_vector_register_format,
+         MSR            => spurious_interrupt_vector_register);
       PROCEDURE Set_Spurious_Interrupt_Vector_Register IS NEW Write_LAPIC
-        (generic_format => spurious_interrupt_vector_register_format);
+        (generic_format => spurious_interrupt_vector_register_format,
+         MSR            => spurious_interrupt_vector_register);
 
       PROCEDURE Set_Task_Priority_Register IS NEW Write_LAPIC
-        (generic_format => number);
+        (generic_format => number,
+         MSR            => task_priority_register);
 
-      APIC_Base    : IA32_APIC_BASE_format :=
-         Get_IA32_APIC_BASE(IA32_APIC_BASE);
+      APIC_Base    : IA32_APIC_BASE_format;
       SIV_Register : spurious_interrupt_vector_register_format;
    BEGIN
       -- I am unsure of how much UEFI has messed with the LAPIC, so I will
       -- be moderately safe and redundant in the setup of it.
+      Get_IA32_APIC_BASE(APIC_Base);
 
       APIC_Base.x2APIC_Mode := true;
       APIC_Base.Global_APIC := true;
-      Set_IA32_APIC_BASE(IA32_APIC_BASE, APIC_Base);
+      Set_IA32_APIC_BASE(APIC_Base);
 
-      SIV_Register := Get_Spurious_Interrupt_Vector_Register
-        (spurious_interrupt_vector_register);
+      Get_Spurious_Interrupt_Vector_Register(SIV_Register);
 
       -- Send all spurious interrupts to the last possible IRQ. I could use
       -- IRQ 7 for this, but this seems better.
       SIV_Register.Interrupt_Vector :=  255;
       SIV_Register.Enabled_APIC     := true;
 
-      Set_Spurious_Interrupt_Vector_Register
-        (spurious_interrupt_vector_register, SIV_Register);
+      Set_Spurious_Interrupt_Vector_Register(SIV_Register);
 
       -- Zero out the task priority register so all priority interrupts are
       -- accepted from the I/O APIC, just in case.
-      Set_Task_Priority_Register(task_priority_register, 0);
+      Set_Task_Priority_Register(0);
 
       Log("BSP local APIC enabled in x2APIC mode.", nominal);
    END x2APIC_Mode;
 
    PROCEDURE Set_IO_APIC_Redirects
    WITH
-      Refined_Global => (In_Out => IO_APICs, Input => IRQ_Remaps)
+      Refined_Global => (In_Out => (Intrinsics.CPU_MSR_State,IO_APICs),
+                         Input  => IRQ_Remaps)
    IS
       PROCEDURE Set_Redirect    IS NEW Write_IO_APIC
         (generic_register => IO_APIC_redirection_table_register_low);
       PROCEDURE Set_Destination IS NEW Write_IO_APIC
         (generic_register => IO_APIC_redirection_table_register_high);
 
-      FUNCTION Get_APIC_Identity IS NEW Read_LAPIC
-        (generic_format => number);
+      PROCEDURE Get_APIC_Identity IS NEW Read_LAPIC
+        (generic_format => number,
+         MSR            => identity_register);
 
       Redirection           : IO_APIC_redirection_table_register_low;
-      Current_APIC_Identity : CONSTANT number :=
-         Get_APIC_Identity(identity_register);
+      Current_APIC_Identity : number;
 
       -- TODO: The I/O APIC datasheet I'm using seems to be very old and I
       -- cannot find a newer version, but the supposed physical LAPIC ID the
@@ -379,10 +379,13 @@ IS
       -- physical mode. One problem is that it's 8 bits in xAPIC mode and 32
       -- bits in x2APIC mode. The I/O APIC register can fit in 8 bits, even
       -- when it's only told to be possible for logical mode. No idea.
-      Destination : CONSTANT IO_APIC_redirection_table_register_high :=
+      Destination : IO_APIC_redirection_table_register_high;
+   BEGIN
+      Get_APIC_Identity(Current_APIC_Identity);
+      Destination :=
         (Destination => Current_APIC_Identity AND 2#1111#,
          Reserved    => 0);
-   BEGIN
+
       FOR -- First, we identity-map the non-remapped IRQs as an assumption.
          IRQ IN IRQ_Remaps'range
       LOOP

@@ -18,46 +18,48 @@ IS
       -- does not indicate that HAVK must read a sequence of bytes, but instead
       -- only a single byte. For example, multiple IRQs will be raised to
       -- handle key breaks, but only a single one will be raised for a press.
-      Scancode : CONSTANT number RANGE 0 .. 16#FF# := Input_Byte(Data);
+      Scancode : CONSTANT number RANGE 0 .. 2**8 - 1 :=
+         Input_Byte(Unchecked_Conversion(data_port));
    BEGIN
       IF -- TODO: This only supports a PS/2 keyboard on port 1.
-         PS2.Port_1_Device /= Standard_Keyboard OR ELSE
+         PS2.Port_1_Device /= standard_keyboard OR ELSE
          Scancode = 16#FA# -- Data is not for the keyboard.
       THEN
          RETURN;
       END IF;
 
-      IF
-         PS2.Current_Scancode_Set = 2
-      THEN
-         IF
-            Scancode = 16#F0# -- Break logic.
-         THEN
-            Break_State := true;
-            RETURN; -- Don't change the key state, return immediately.
-         ELSIF
-            Scancode = 16#12# OR ELSE Scancode = 16#59# -- Shift logic.
-         THEN
-            Shift_State := NOT Break_State;
-         ELSIF
-            Scancode = 16#58# -- Caps lock logic.
-         THEN
+      CASE
+         PS2.Current_Scancode_Set -- TODO Set 1 and 3 are unimplemented.
+      IS
+         WHEN set_1 =>
+            Log("PS/2 scancode set 1 is not supported.", warning);
+         WHEN set_2 =>
             IF
-               NOT Break_State
+               Scancode = 16#F0# -- Break logic.
             THEN
-               Caps_Lock_State := NOT Caps_Lock_State;
+               Break_State := true;
+               RETURN; -- Don't change the key state, return immediately.
+            ELSIF
+               Scancode = 16#12# OR ELSE Scancode = 16#59# -- Shift logic.
+            THEN
+               Shift_State := NOT Break_State;
+            ELSIF
+               Scancode = 16#58# -- Caps lock logic.
+            THEN
+               IF
+                  NOT Break_State
+               THEN
+                  Caps_Lock_State := NOT Caps_Lock_State;
+               END IF;
+            ELSE -- Standard key press logic. Resets break state.
+               Break_State := false; -- Don't waste time evaluating it.
             END IF;
-         ELSE -- Standard key press logic. Resets break state.
-            Break_State := false; -- Don't waste time evaluating it.
-         END IF;
 
-         Last_Key_State := Scancode_Set_2(Scancode); -- Change the key state.
-      ELSE -- TODO Set 1 and 3 are unimplemented.
-         Log
-            ("PS/2 keyboard scancode set" &
-            number'image(PS2.Current_Scancode_Set) &
-            " is selected, but the table is not implemented.", warning);
-      END IF;
+            -- Change the key state.
+            Last_Key_State := Scancode_Set_2(Scancode);
+         WHEN set_3 =>
+            Log("PS/2 scancode set 3 is not supported.", warning);
+      END CASE;
    END Interrupt_Manager;
 
    FUNCTION Scancode_Set_2 -- TODO: This is not fully complete, I believe.

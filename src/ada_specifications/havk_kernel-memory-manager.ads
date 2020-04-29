@@ -163,8 +163,8 @@ PRIVATE
    -- You must make sure that the addresses make sense in regards to paging.
    TYPE space IS RECORD
       Base_Block : access_block  := NULL;
-      Base_Limit : frame_address := 0;
-      End_Limit  : frame_address := 0;
+      Base_Limit : frame_address := address(0);
+      End_Limit  : frame_address := address(0);
       Frames_Set : boolean       := false;
    END RECORD
    WITH

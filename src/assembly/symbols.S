@@ -32,6 +32,12 @@ DEFINE_SYMBOL_POINTER __kernel_data_base
 DEFINE_SYMBOL_POINTER __kernel_data_end
 DEFINE_SYMBOL_POINTER __kernel_bss_base
 DEFINE_SYMBOL_POINTER __kernel_bss_end
+DEFINE_SYMBOL_POINTER __kernel_isolated_text_base
+DEFINE_SYMBOL_POINTER __kernel_isolated_text_end
+DEFINE_SYMBOL_POINTER __kernel_isolated_data_base
+DEFINE_SYMBOL_POINTER __kernel_isolated_data_end
+DEFINE_SYMBOL_POINTER __kernel_isolated_bss_base
+DEFINE_SYMBOL_POINTER __kernel_isolated_bss_end
 
 # The sizes. These don't have to be calculated during execution.
 DEFINE_SYMBOL_POINTER __kernel_size
@@ -39,3 +45,6 @@ DEFINE_SYMBOL_POINTER __kernel_text_size
 DEFINE_SYMBOL_POINTER __kernel_rodata_size
 DEFINE_SYMBOL_POINTER __kernel_data_size
 DEFINE_SYMBOL_POINTER __kernel_bss_size
+DEFINE_SYMBOL_POINTER __kernel_isolated_text_size
+DEFINE_SYMBOL_POINTER __kernel_isolated_data_size
+DEFINE_SYMBOL_POINTER __kernel_isolated_bss_size

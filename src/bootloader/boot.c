@@ -45,9 +45,14 @@ EFI_FILE_PROTOCOL *root_directory;
 EFI_FILE_PROTOCOL *havk;
 EFI_GRAPHICS_OUTPUT_PROTOCOL *graphics_output_protocol;
 
-// Syntactic sugar for declaring macros.
+// Syntactic sugar for declaring macros and the packed attribute.
 #define MACRO_BEGIN do{
 #define MACRO_END }while(0)
+#define PACKED __attribute__((packed))
+
+// Redefine inline so it's not just a hint. I've defined this now so it won't
+// cause a problem later on when it's doing something opposite to what we want.
+#define inline __inline__ __attribute__((always_inline))
 
 // Resets the system due to an unrecoverable error. If the boot services
 // are available, then it will explain the reason for the reboot. Otherwise,
@@ -176,7 +181,7 @@ struct elf64_file_header
 	UINT16 section_header_size;
 	UINT16 section_header_entries;
 	UINT16 section_header_name_index;
-} __attribute__((packed));
+} PACKED;
 
 struct elf64_program_header
 {
@@ -188,7 +193,7 @@ struct elf64_program_header
 	UINT64 size;
 	UINT64 memory_size;
 	UINT64 alignment;
-} __attribute__((packed));
+} PACKED;
 
 struct elf64_section_header
 {
@@ -202,7 +207,7 @@ struct elf64_section_header
 	UINT32 information;
 	UINT64 alignment;
 	UINT64 entry_size;
-} __attribute__((packed));
+} PACKED;
 
 struct elf64_symbol
 {
@@ -212,7 +217,7 @@ struct elf64_symbol
 	UINT16 section_index;
 	UINT64 virtual_address;
 	UINT64 size;
-} __attribute__((packed));
+} PACKED;
 
 struct elf64_file
 {
@@ -222,7 +227,7 @@ struct elf64_file
 	struct elf64_symbol *symbols;
 	UINT64 symbol_entries;
 	CHAR8 *symbol_string_table;
-};
+} PACKED;
 
 // This gets passed to HAVK's entry function later on. I've just made it
 // into a structure for the sake of less parameters needing to be passed.
@@ -245,7 +250,7 @@ struct uefi_arguments
 	UINT32 memory_map_descriptor_version;
 	EFI_PHYSICAL_ADDRESS root_system_description_pointer;
 	EFI_PHYSICAL_ADDRESS physical_base;
-} __attribute__((packed));
+} PACKED;
 
 // Can't modify the default page structure, so I need to make my own.
 // See the "HAVK_Kernel.Paging" Ada package for the idea of this. Only suitable

@@ -576,7 +576,7 @@ IS
             I IN Tests'range
          LOOP
             Test_Allocator(Allocation_Space, Tests(I), block_tester'size / 8);
-            Log("Allocation at 0x" & Hex_Image(Tests(I).ALL'address) & '.',
+            Log("Allocation at 0x" & Image(Tests(I).ALL'address) & '.',
                warning);
 
             FOR
@@ -593,7 +593,7 @@ IS
          FOR
             I IN Tests'range
          LOOP
-            Log("Deallocating 0x" & Hex_Image(Tests(I).ALL'address) & '.',
+            Log("Deallocating 0x" & Image(Tests(I).ALL'address) & '.',
                warning);
             Test_Deallocator(Allocation_Space, Tests(I));
 
@@ -631,13 +631,13 @@ IS
                Log("Pattern" & number'image(I) & " has been corrupted.",
                   fatal);
 
-               Log("Failure at 0x" & Hex_Image(Byte'address) & '.', fatal);
+               Log("Failure at 0x" & Image(Byte'address, Base => 16) &
+                  '.', fatal);
 
                Log("Pattern range is 0x" &
-                  Hex_Image(Tests(I).Bytes(Tests(I).Bytes'first)'address) &
-                  " to 0x" &
-                  Hex_Image(Tests(I).Bytes(Tests(I).Bytes'last)'address) &
-                  " (Size:" & number'image(block_tester'size / 8) & ").",
+                  Image(Tests(I).Bytes(Tests(I).Bytes'first)'address) &
+                  " to 0x" & Image(Tests(I).Bytes(Tests(I).Bytes'last)'address)
+                  & " (Size:" & number'image(block_tester'size / 8) & ").",
                   fatal);
 
                RAISE Panic

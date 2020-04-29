@@ -7,14 +7,6 @@
 
 .SECTION .text
 
-.GLOBAL assembly__bit_test
-# (RDI => value, RSI => bit location) >> (RAX => the bit itself as a boolean)
-assembly__bit_test:
-	XOR RAX, RAX
-	BT RDI, RSI # Implicit REX prefix for operation on 64-bit operands.
-	SETB AL
-	RET
-
 .GLOBAL assembly__output_byte
 # (RDI => port, RSI => value)
 assembly__output_byte:
@@ -23,12 +15,28 @@ assembly__output_byte:
 	OUT DX, AL
 	RET
 
+.GLOBAL assembly__output_word
+# (RDI => port, RSI => value)
+assembly__output_word:
+	MOV DX, DI
+	MOV AX, SI
+	OUT DX, AX
+	RET
+
 .GLOBAL assembly__input_byte
 # (RDI => port) >> (RAX => inputted byte)
 assembly__input_byte:
 	XOR RAX, RAX
 	MOV DX, DI
 	IN AL, DX
+	RET
+
+.GLOBAL assembly__input_word
+# (RDI => port) >> (RAX => inputted word)
+assembly__input_word:
+	XOR RAX, RAX
+	MOV DX, DI
+	IN AX, DX
 	RET
 
 .GLOBAL assembly__write_model_specific_register
@@ -69,7 +77,6 @@ assembly__enable_interrupts:
 assembly__disable_interrupts:
 	CLI
 	RET
-
 
 .PUSHSECTION .text
 

@@ -12,61 +12,49 @@ USE
 
 PACKAGE BODY HAVK_Kernel.PS2
 IS
-   FUNCTION Ready_To_Receive
-      RETURN boolean
+   PROCEDURE Ready
+     (Is_Ready : OUT boolean;
+      Sending  : IN boolean := false)
    IS
-      Current_Status_Byte : CONSTANT number := Input_Byte(Command);
+      Current_Status_Byte : ALIASED CONSTANT number :=
+         Input_Byte(Unchecked_Conversion(command_port));
       Current_Status      : CONSTANT status
       WITH
-         Import     => true,
-         Convention => Ada,
-         Size       => 8,
-         Address    => Current_Status_Byte'address;
+         Import  => true,
+         Size    => 8,
+         Address => Current_Status_Byte'address;
    BEGIN
       IF
-         Port_1_Device /= Unrecognised OR ELSE
-         Port_2_Device /= Unrecognised
+         Port_1_Device /= unrecognised OR ELSE
+         Port_2_Device /= unrecognised
       THEN
-         RETURN Current_Status.Output_Ready;
+         Is_Ready := (IF Sending THEN -- Invert "Input_Full" so it makes sense.
+            NOT Current_Status.Input_Full ELSE Current_Status.Output_Ready);
       ELSE
-         RETURN false;
+         Is_Ready := false;
       END IF;
-   END Ready_To_Receive;
+   END Ready;
 
-   FUNCTION Ready_To_Send
-      RETURN boolean
+   PROCEDURE Send
+     (Success : OUT boolean;
+      Data    : IN generic_data;
+      Port_2  : IN boolean := false)
    IS
-      Current_Status_Byte : CONSTANT number := Input_Byte(Command);
-      Current_Status      : CONSTANT status
+      Is_Ready      : boolean;
+      Send_Response : response;
+      Data_Byte     : CONSTANT number RANGE 0 .. 2**8 - 1
       WITH
-         Import     => true,
-         Convention => Ada,
-         Size       => 8,
-         Address    => Current_Status_Byte'address;
-   BEGIN
-      IF
-         Port_1_Device /= Unrecognised OR ELSE
-         Port_2_Device /= Unrecognised
-      THEN
-         RETURN NOT Current_Status.Input_Full; -- Invert it so it makes sense.
-      ELSE
-         RETURN false;
-      END IF;
-   END Ready_To_Send;
-
-   FUNCTION Send
-     (Port_Type : IN port;
-      Byte      : IN number;
-      Port_2    : IN boolean;
-      Verify    : IN boolean)
-      RETURN boolean
-   IS
+         Import  => true,
+         Size    => 8,
+         Address => Data'address;
    BEGIN
       FOR
          R IN 1 .. Retry_Rate
       LOOP
+         Ready(Is_Ready, Sending => true);
+
          IF
-            Ready_To_Send
+            Is_Ready
          THEN
             FOR
                I IN 1 .. Retry_Rate
@@ -74,93 +62,113 @@ IS
                IF
                   Port_2
                THEN
-                  Output_Byte(Command, Port_2_Data);
+                  -- TODO: No "enum_rep", 0xD4 is "port_2_data".
+                  Output_Byte(Unchecked_Conversion(command_port), 16#D4#);
                END IF;
 
-               Output_Byte(Port_Type, Byte);
+               Output_Byte(Unchecked_Conversion(Port_Type), Data_Byte);
 
                IF
-                  NOT Verify OR ELSE
-                  Receive(Data) = Data_Acknowledged
+                  NOT Verify
                THEN
-                  RETURN true;
+                  Success := true;
+                  RETURN;
+               END IF;
+
+               Receive(Send_Response, data_port);
+
+               IF
+                  Send_Response = data_acknowledged
+               THEN
+                  Success := true;
+                  RETURN;
                END IF;
             END LOOP;
-
-            RETURN false;
          END IF;
       END LOOP;
 
-      RETURN false;
+      Success := false;
    END Send;
 
-   FUNCTION Send_Controller_Command
-     (Operation : IN controller_command)
-      RETURN boolean
-   IS
-      (Send(Command, Operation, false, false));
+   PROCEDURE Send_Controller_Command IS NEW Send
+     (generic_data => controller_command,
+      Port_Type    => command_port,
+      Verify       => false);
 
-   FUNCTION Send_Keyboard_Command
-     (Operation : IN keyboard_command;
-      Port_2    : IN boolean := false)
-      RETURN boolean
-   IS
-      (Send(Data, Operation, Port_2, true));
+   PROCEDURE Send_Device_Command IS NEW Send
+     (generic_data => keyboard_command,
+      Port_Type    => data_port,
+      Verify       => true);
 
-   FUNCTION Send_Mouse_Command
-     (Operation : IN mouse_command;
-      Port_2    : IN boolean := true)
-      RETURN boolean
-   IS
-      (Send(Data, Operation, Port_2, true));
+   PROCEDURE Send_Device_Command IS NEW Send
+     (generic_data => mouse_command,
+      Port_Type    => data_port,
+      Verify       => true);
 
-   FUNCTION Send_Data
-     (Byte_Data : IN number;
-      Port_2    : IN boolean := false;
-      Verify    : IN boolean := true)
-      RETURN boolean
-   IS
-      (Send(Data, Byte_Data, Port_2, Verify));
+   PROCEDURE Send_Configuration IS NEW Send
+     (generic_data => configuration,
+      Port_Type    => data_port,
+      Verify       => false);
 
-   FUNCTION Receive
-     (Port_Type : IN port)
-      RETURN response
+   PROCEDURE Send_Typematics IS NEW Send
+     (generic_data => typematics,
+      Port_Type    => data_port,
+      Verify       => true);
+
+   PROCEDURE Send_Scancode_Set IS NEW Send
+     (generic_data => scancode_set,
+      Port_Type    => data_port,
+      Verify       => true);
+
+   PROCEDURE Receive
+     (Message   : OUT response;
+      Port_Type : IN port)
    IS
-      Received  : response;
+      Is_Ready     : boolean;
+      Port_Address : CONSTANT number RANGE 0 .. 2**8 - 1
+      WITH
+         Import  => true,
+         Size    => 8,
+         Address => Port_Type'address;
+
+      Raw_Response         : ALIASED number RANGE 0 .. 2**8 - 1;
+      Unvalidated_Response : response
+      WITH
+         Import  => true,
+         Size    => 8,
+         Address => Raw_Response'address; -- Aliased.
    BEGIN
       FOR
          R IN 1 .. Retry_Rate
       LOOP
+         Ready(Is_Ready, Sending => false);
+
          IF
-            Ready_To_Receive
+            Is_Ready
          THEN
-            Received := Input_Byte(Port_Type);
-            IF
-               Received /= Test_Port_Pass       AND THEN
-               Received /= Test_Controller_Pass AND THEN
-               Received /= Data_Acknowledged    AND THEN
-               Received /= Failure              AND THEN
-               Received /= Data_Resend
-            THEN
-               RETURN Failure;
-            ELSE
-               RETURN Received;
-            END IF;
+            Raw_Response := Input_Byte(Port_Address);
+            PRAGMA Warnings(GNATprove, off,
+               "attribute Valid is assumed to return True",
+               Reason => "Failure is indicated on an invalid response.");
+            Message := (IF Unvalidated_Response'valid
+               THEN Unvalidated_Response ELSE failure);
+            RETURN;
          END IF;
       END LOOP;
 
-      RETURN Failure;
+      Message := failure;
    END Receive;
 
    PROCEDURE Flush
    IS
       -- Magic variable name for GNAT. See pragma "Unmodified".
-      Discard : number;
+      Discard     : number;
+      Full_Buffer : boolean;
    BEGIN
-      WHILE
-         Ready_To_Receive
       LOOP
-         Discard := Input_Byte(Data);
+         Ready(Full_Buffer, Sending => false);
+         EXIT WHEN NOT Full_Buffer;
+         Discard := Input_Byte(Unchecked_Conversion(data_port));
       END LOOP;
    END Flush;
 
@@ -168,165 +176,87 @@ IS
    -- are the same across devices (0xFE, 0xF5, and 0xF4 respectively),
    -- but the device IDs themselves are not.
    PROCEDURE Identify_Device
-     (Port_2     : IN boolean)
+     (New_Device : OUT device;
+      Port_2     : IN boolean)
    IS
       Port_Image : CONSTANT character := (IF Port_2 THEN '2' ELSE '1');
 
-      FUNCTION Identity_Resolve
-        (ID      : IN number) -- Only really need the first byte.
-         RETURN device
-      WITH
-         Inline => true;
-
-      FUNCTION Identity_Resolve
-        (ID      : IN number)
-         RETURN device
-      IS
-      (
-         CASE ID IS
-         WHEN Standard_Keyboard    => Standard_Keyboard,
-         WHEN Standard_Mouse       => Standard_Mouse,
-         WHEN Mouse_With_Scroll    => Mouse_With_Scroll,
-         WHEN Mouse_With_5_Buttons => Mouse_With_5_Buttons,
-         WHEN OTHERS               => Unrecognised
-      );
-
       -- Default values in this array are for the while loop.
-      ID_Bytes          : ARRAY(number RANGE 1 .. 2) OF number :=
-        (Data_Acknowledged, 256);
+      Identity          : ARRAY(number RANGE 1 .. 2)
+         OF ALIASED number := (number'last, number'last);
       Identified_Device : device;
+      Successful        : boolean;
    BEGIN
       Flush;
 
+      -- The keyboard and mouse identity bytes are the same.
+      Send_Device_Command(Successful, keyboard_identity, Port_2);
+
       IF
-         NOT Port_2 AND THEN
-         NOT Send_Keyboard_Command(Keyboard_Identity)
+         NOT Successful
       THEN
-         Port_1_Device := Unrecognised;
-         RETURN;
-      ELSIF
-         Port_2 AND THEN
-         NOT Send_Mouse_Command(Mouse_Identity)
-      THEN
-         Port_2_Device := Unrecognised;
+         New_Device := unrecognised;
          RETURN;
       END IF;
 
       WHILE
-         ID_Bytes(1)  = Data_Acknowledged
+         Identity(1) = number'last -- Wait for it to change to something else.
       LOOP
-         ID_Bytes(1) := Input_Byte(Data);
+         Identity(1) := Input_Byte(Unchecked_Conversion(data_port));
       END LOOP;
 
-      ID_Bytes(2) := Input_Byte(Data);
+      Identity(2) := Input_Byte(Unchecked_Conversion(data_port));
       Flush;
-      Identified_Device := Identity_Resolve(ID_Bytes(1));
+
+      DECLARE -- Convert the "byte" (actually a 64-bit value) to a device byte.
+         Unchecked_Identity : device
+         WITH
+            Import  => true,
+            Size    => number'size,
+            Address => Identity(1)'address;
+      BEGIN
+         PRAGMA Warnings(GNATprove, off,
+            "attribute Valid is assumed to return True",
+            Reason => "If invalid, the variable won't be read.");
+         IF
+            NOT Unchecked_Identity'valid
+         THEN
+            Log("PS/2 port " & Port_Image & " has an unrecognised device -" &
+               number'image(Identity(1)) & number'image(Identity(2)) & '.',
+               warning);
+            New_Device := unrecognised;
+            RETURN;
+         ELSE
+            Identified_Device := Unchecked_Identity;
+         END IF;
+      END;
 
       CASE
-         ID_Bytes(1)
+         Identified_Device
       IS
-         WHEN Standard_Keyboard    =>
+         WHEN standard_keyboard    =>
             Log("PS/2 port " & Port_Image & " has a standard keyboard.",
                nominal);
-         WHEN Standard_Mouse       =>
+         WHEN standard_mouse       =>
             Mouse_Support := true;
             Log("PS/2 port " & Port_Image & " has a standard mouse.",
                nominal);
-         WHEN Mouse_With_Scroll    =>
+         WHEN mouse_with_scroll    =>
             Mouse_Support := true;
             Log("PS/2 port " & Port_Image & " has a scroll-wheel mouse.",
                nominal);
-         WHEN Mouse_With_5_Buttons =>
+         WHEN mouse_with_5_buttons =>
             Mouse_Support := true;
             Log("PS/2 port " & Port_Image & " has a 5-button mouse.",
                nominal);
-         WHEN OTHERS               =>
+         WHEN unrecognised         => -- Still technically a valid enumeration.
             Log("PS/2 port " & Port_Image & " has an unrecognised device -" &
-               number'image(ID_Bytes(1)) & number'image(ID_Bytes(2)) & '.',
+               number'image(Identity(1)) & number'image(Identity(2)) & '.',
                warning);
       END CASE;
 
-      IF
-         NOT Port_2
-      THEN
-         Port_1_Device := Identified_Device;
-      ELSE
-         Port_2_Device := Identified_Device;
-      END IF;
+      New_Device := Identified_Device;
    END Identify_Device;
-
-   FUNCTION Send_Configuration
-      RETURN boolean
-   IS
-      Configuration_Settings : CONSTANT configuration :=
-         Current_Configuration;
-
-      Configuration_Byte     : CONSTANT number RANGE 0 .. 16#FF#
-      WITH
-         Import     => true,
-         Convention => Ada,
-         Size       => 8,
-         Address    => Configuration_Settings'address;
-   BEGIN
-      IF
-         NOT Send_Controller_Command(Configuration_Write)
-      THEN
-         RETURN false;
-      ELSE
-         RETURN Send_Data(Configuration_Byte, Verify => false);
-      END IF;
-   END Send_Configuration;
-
-   FUNCTION Send_Typematics
-     (Port_2             : IN boolean := false)
-      RETURN boolean
-   IS
-      Typematic_Settings : CONSTANT typematics :=
-         Current_Typematics;
-
-      Typematics_Byte    : CONSTANT number RANGE 0 .. 16#FF#
-      WITH
-         Import     => true,
-         Convention => Ada,
-         Size       => 8,
-         Address    => Typematic_Settings'address;
-   BEGIN
-      IF
-         Port_2 AND THEN
-        (NOT Port_2_Support OR ELSE Port_2_Device /= Standard_Keyboard)
-      THEN
-         RETURN false;
-      END IF;
-
-      IF
-         NOT Send_Keyboard_Command(Typematics_Write, Port_2)
-      THEN
-         RETURN false;
-      ELSE
-         RETURN Send_Data(Typematics_Byte);
-      END IF;
-   END Send_Typematics;
-
-   FUNCTION Send_Scancode_Set
-     (Port_2    : IN boolean := false)
-      RETURN boolean
-   IS
-   BEGIN
-      IF
-         Port_2 AND THEN
-        (NOT Port_2_Support OR ELSE Port_2_Device /= Standard_Keyboard)
-      THEN
-         RETURN false;
-      END IF;
-
-      IF
-         NOT Send_Keyboard_Command(Scancode_Set_Options, Port_2)
-      THEN
-         RETURN false;
-      ELSE
-         RETURN Send_Data(Current_Scancode_Set);
-      END IF;
-   END Send_Scancode_Set;
 
    FUNCTION Check_Condition
       RETURN controller_condition
@@ -339,32 +269,37 @@ IS
      (Mouse_Support);
 
    PROCEDURE Setup -- TODO: Perhaps break this procedure up into separate ones.
+   WITH
+      -- TODO: `gnatprove` crashes here with the below error:
+      -- "This expression has type bool, but is expected to have type int"
+      -- Re-enable it later. Nothing should go wrong here outside of hardware.
+      SPARK_Mode => off
    IS
       -- Make read-only copies of the variable so a warning doesn't appear.
-      Configuration_Settings     : CONSTANT configuration :=
+      Configuration_Settings     : ALIASED CONSTANT configuration :=
          Current_Configuration;
-      Typematics_Settings        : CONSTANT    typematics :=
+      Typematics_Settings        : ALIASED CONSTANT    typematics :=
          Current_Typematics;
 
+      Old_Configuration_Byte     :          number RANGE 0 .. 2**8 - 1;
       Current_Configuration_Byte : CONSTANT number RANGE 0 .. 2**8 - 1
       WITH
-         Import     => true,
-         Convention => Ada,
-         Size       => 8,
-         Address    => Configuration_Settings'address;
-
-      Old_Configuration_Byte     :          number RANGE 0 .. 2**8 - 1;
+         Import  => true,
+         Size    => 8,
+         Address => Configuration_Settings'address;
 
       Current_Typematics_Byte    : CONSTANT number RANGE 0 .. 2**8 - 1
       WITH
-         Import     => true,
-         Convention => Ada,
-         Size       => 8,
-         Address    => Typematics_Settings'address;
+         Import  => true,
+         Size    => 8,
+         Address => Typematics_Settings'address;
+
+      Successful : boolean;
+      Message    : response;
    BEGIN
-      -- First, stop any interrupts that'll ruin our expected IO communication.
-      -- An alternative would be to disable interrupts in the configuration,
-      -- but this is quicker and more reliable.
+      -- First, stop any interrupts that'll ruin our expected I/O
+      -- communication. An alternative would be to disable interrupts in the
+      -- configuration, but this is quicker and more reliable.
       Disable_Interrupts;
 
       -- Flush anything in the output buffer to make sure.
@@ -372,21 +307,25 @@ IS
 
       -- Get the old configuration before we modify it. Needed to make sure
       -- a port 2 exists, which is nearly always where the PS/2 mouse is.
+      Send_Controller_Command(Successful, configuration_read);
+
       IF
-         NOT Send_Controller_Command(Configuration_Read)
+         NOT Successful
       THEN
          Log("Could not read default PS/2 controller configuration.", fatal);
          Current_Condition := unreliable;
          RETURN;
       ELSE
-         Old_Configuration_Byte := Input_Byte(Data);
+         Old_Configuration_Byte := Input_Byte(Unchecked_Conversion(data_port));
       END IF;
 
       -- Disable any scanning or reporting by the devices. Note that the
       -- disabling commands are the same byte. The difference between the
       -- two send functions here are to do with default ports.
+      Send_Device_Command(Successful, scanning_disable);
+
       IF
-         NOT Send_Keyboard_Command(Scanning_Disable)
+         NOT Successful
       THEN
          Log("Failed to disable PS/2 port 1 data.", fatal);
          Current_Condition := unreliable;
@@ -394,8 +333,10 @@ IS
       ELSIF
          Bit_Test(Old_Configuration_Byte, 5) -- Check for "Port_2_Clock".
       THEN
+         Send_Device_Command(Successful, reporting_disable, Port_2 => true);
+
          IF
-            NOT Send_Mouse_Command(Reporting_Disable)
+            NOT Successful
          THEN
             Log("Failed to disable PS/2 port 2 data.", fatal);
             Current_Condition := unreliable;
@@ -406,30 +347,38 @@ IS
          END IF;
       END IF;
 
-      -- Run the controller and port tests.
-      -- First, test the PS/2 controller itself.
+      -- Run the controller and port tests. First, test the PS/2 controller
+      -- itself.
       Log("Testing PS/2 controller.", nominal);
+      Send_Controller_Command(Successful, test_controller_begin);
+      Receive(Message, data_port);
+
       IF
-         NOT Send_Controller_Command(Test_Controller_Begin) OR ELSE
-         Receive(Data) /= Test_Controller_Pass
+         NOT Successful OR ELSE
+         Message /= test_controller_pass
       THEN
          Current_Condition := unreliable;
          Log("PS/2 controller test fail.", fatal);
          RETURN;
+      ELSE
+         Log("PS/2 controller test success.", nominal);
       END IF;
-      Log("PS/2 controller test success.", nominal);
 
       -- Secondly, test the first PS/2 data port for a device.
       Log("Testing PS/2 port 1.");
+      Send_Controller_Command(Successful, test_port_1_begin);
+      Receive(Message, data_port);
+
       IF
-         NOT Send_Controller_Command(Test_Port_1_Begin) OR ELSE
-         Receive(Data) /= Test_Port_Pass
+         NOT Successful OR ELSE
+         Message /= test_port_pass
       THEN
          Current_Condition := unreliable;
          Log("PS/2 port 1 test fail.", fatal);
          RETURN;
+      ELSE
+         Log("PS/2 port 1 test success.", nominal);
       END IF;
-      Log("PS/2 port 1 test success.", nominal);
 
       -- Now determine if we have a second port and check the port 2 clock if
       -- it is enabled already by the system. See the configuration record.
@@ -437,9 +386,12 @@ IS
          Current_Configuration.Port_2_Clock
       THEN
          Log("Testing PS/2 port 2.");
+         Send_Controller_Command(Successful, test_port_2_begin);
+         Receive(Message, data_port);
+
          IF
-            NOT Send_Controller_Command(Test_Port_2_Begin) OR ELSE
-            Receive(Data) /= Test_Port_Pass
+            NOT Successful OR ELSE
+            Message /= test_port_pass
          THEN
             -- Since the previous port worked, we will ignore this extra port.
             Log("PS/2 port 2 test fail.", warning);
@@ -451,67 +403,166 @@ IS
          Log("PS/2 controller does not support port 2.", warning);
       END IF;
 
-      -- Flush any incoming bytes left over from the tests and leave.
-      -- Depends on the PS/2 controller's implementation.
+      -- Flush any incoming bytes left over from the tests. It depends on the
+      -- PS/2 controller's implementation.
       Flush;
 
-      -- See what devices are connected to the ports.
-      Identify_Device(Port_2 => false);
-      IF
+      -- -- See what device is connected to port 1. Nearly always a keyboard.
+      Identify_Device(Port_1_Device, Port_2 => false);
+
+      IF -- Check port 2 if we have support for it.
          Port_2_Support
       THEN
-         Identify_Device(Port_2 =>  true);
+         Identify_Device(Port_2_Device, Port_2 =>  true);
       END IF;
 
       -- Write my configuration.
+      Send_Controller_Command(Successful, configuration_write);
+
       IF
-         NOT Send_Configuration
+         NOT Successful
       THEN
          Current_Condition := unreliable;
+         Log("Failed to write PS/2 controller configuration.", fatal);
          RETURN;
+      ELSE
+         Send_Configuration(Successful, Current_Configuration);
+
+         IF
+            NOT Successful
+         THEN
+            Current_Condition := unreliable;
+            Log("Failed to send PS/2 controller configuration.", fatal);
+            RETURN;
+         END IF;
       END IF;
 
       -- Write my typematic features configuration.
+      Send_Device_Command(Successful, typematics_write); -- Port 1 first.
+
       IF
-         NOT Send_Typematics
+         NOT Successful
       THEN
          Current_Condition := unreliable;
+         Log("Failed to write PS/2 keyboard typematics on port 1.", fatal);
          RETURN;
+      ELSE
+         Send_Typematics(Successful, Current_Typematics);
+
+         IF
+            NOT Successful
+         THEN
+            Current_Condition := unreliable;
+            Log("Failed to send PS/2 keyboard typematics on port 1.", fatal);
+            RETURN;
+         END IF;
+      END IF;
+
+      IF -- Now do port 2's typematics if there's a keyboard on it.
+         Port_2_Device = standard_keyboard AND THEN
+         Port_2_Support
+      THEN
+         Send_Device_Command(Successful, typematics_write, Port_2 => true);
+
+         IF
+            NOT Successful
+         THEN
+            Log("Failed to write PS/2 keyboard typematics on port 2.",
+               warning);
+            Port_2_Support := false; -- Unreliable port 2.
+         ELSE
+            Send_Typematics(Successful, Current_Typematics, Port_2 => true);
+
+            IF
+               NOT Successful
+            THEN
+               Log("Failed to send PS/2 keyboard typematics on port 2.",
+                  warning);
+               Port_2_Support := false; -- Unreliable port 2.
+            END IF;
+         END IF;
       END IF;
 
       -- Use the default scancode set (set 2).
+      Send_Device_Command(Successful, scancode_set_options); -- Port 1 first.
+
       IF
-         NOT Send_Scancode_Set
+         NOT Successful
       THEN
+         Log("Couldn't write the PS/2 keyboard's scancode set on port 1.",
+            fatal);
          Current_Condition := unreliable;
          RETURN;
+      ELSE
+         Send_Scancode_Set(Successful, Current_Scancode_Set);
+
+         IF
+            NOT Successful
+         THEN
+            Log("Couldn't send the PS/2 keyboard's scancode set on port 1.",
+               fatal);
+            Current_Condition := unreliable;
+            RETURN;
+         END IF;
+      END IF;
+
+      IF -- Now do port 2's scancode set if there's a keyboard on it.
+         Port_2_Device = standard_keyboard AND THEN
+         Port_2_Support
+      THEN
+         Send_Device_Command(Successful, scancode_set_options, Port_2 => true);
+
+         IF
+            NOT Successful
+         THEN
+            Log("Couldn't write the PS/2 keyboard's scancode set on port 2.",
+               warning);
+            Port_2_Support := false;
+         ELSE
+            Send_Scancode_Set(Successful, Current_Scancode_Set,
+               Port_2 => true);
+
+            IF
+               NOT Successful
+            THEN
+               Log("Couldn't send the PS/2 keyboard's scancode set on port 2.",
+                  warning);
+               Port_2_Support := false;
+            END IF;
+         END IF;
       END IF;
 
       -- Enable interrupts from the first PS2 port.
+      Send_Controller_Command(Successful, port_1_enable);
+
       IF
-         NOT Send_Controller_Command(Port_1_Enable)
+         NOT Successful
       THEN
-         Log("Couldn't enable PS/2 port 1.", fatal);
+         Log("Couldn't enable PS/2 port 1 interrupts.", fatal);
          Current_Condition := unreliable;
          RETURN;
       END IF;
 
-      -- Enable interrupts from the second PS2 port if it exists,
-      -- but it is not vital.
+      -- Enable interrupts from the second PS2 device port if it exists, but it
+      -- is not vital.
       IF
          Port_2_Support
       THEN
+         Send_Controller_Command(Successful, port_2_enable);
+
          IF
-            NOT Send_Controller_Command(Port_1_Enable)
+            NOT Successful
          THEN
-            Log("Couldn't enable PS/2 port 2.", fatal);
+            Log("Couldn't enable PS/2 port 2 interrupts.", warning);
             Port_2_Support := false; -- Unreliable port 2.
          END IF;
       END IF;
 
-      -- Now re-enable scanning and/or reporting.
+      -- Now re-enable scanning/reporting.
+      Send_Device_Command(Successful, scanning_enable);
+
       IF
-         NOT Send_Keyboard_Command(Scanning_Enable)
+         NOT Successful
       THEN
          Log("Failed to enable PS/2 port 1 data.", fatal);
          Current_Condition := unreliable;
@@ -519,12 +570,13 @@ IS
       ELSIF
          Port_2_Support
       THEN
+         Send_Device_Command(Successful, reporting_enable, Port_2 => true);
+
          IF
-            NOT Send_Mouse_Command(Reporting_Enable)
+            NOT Successful
          THEN
-            Log("Failed to enable PS/2 port 2 data.", fatal);
+            Log("Failed to enable PS/2 port 2 data.", warning);
             Port_2_Support := false; -- Unreliable port 2.
-            RETURN;
          END IF;
       END IF;
 

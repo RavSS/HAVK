@@ -1,5 +1,5 @@
 # Tasklist for the HAVK operating system
-### Last Updated: 2020-04-06
+### Last Updated: 2020-04-29
 #### High priority
 - The kernel crashes on AMD systems (but not Intel systems) during
   some point in which my descriptor tables are prepared and loaded, which
@@ -10,8 +10,11 @@
   A general refactor of the entire RTS would be good.
 - Create a package for better concurrency support e.g. mutexes and make
   numerous subprograms safer for ring 0 tasks.
-- Get access to the main disk, either via DMA or PIO. The former requires
-  PCI enumeration, but the latter is much slower.
+- Improve the memory manager so it can split and merge free blocks to
+  minimise wasted space.
+- Create a package that handles loading and tracking of external programs
+  from the drives.
+- Start implementing various system calls so user space can do something.
 
 #### Low priority
 - Begin to create a solution for PS/2 mouse capabilities.
@@ -21,4 +24,6 @@
 - Reorganise the bootloader arguments structure and provide
   a consistent format that does away with some of UEFI's oddities.
 - Properly calibrate the LAPIC timer so it's more accurate than the PIT.
-- Use more abstract states for SPARK to help indicate external logic.
+- Implement FAT12 and FAT32 support, along with a VFAT driver.
+- Improve the capabilities of the ATA PIO operations, particularly error
+  checking.

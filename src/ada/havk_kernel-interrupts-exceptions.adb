@@ -88,7 +88,7 @@ IS
      (Stack_Frame : IN access_interrupted_state)
    IS
    BEGIN
-      Log("Invalid opcode at: 0x" & Hex_Image(Stack_Frame.RIP) & '.', warning);
+      Log("Invalid opcode at: 0x" & Image(Stack_Frame.RIP) & '.', warning);
       RAISE Panic
       WITH
          Source_Location & " - Cannot handle invalid opcodes as of now.";
@@ -159,7 +159,7 @@ IS
    BEGIN
       Log("ISR 13: General protection fault triggered - Error code:" &
          number'image(Error_Code) & " - Fault address: 0x" &
-         Hex_Image(Stack_Frame.RIP) & '.', warning);
+         Image(Stack_Frame.RIP) & '.', warning);
       RAISE Panic
       WITH
          Source_Location & " - Unexpected ISR 13 handler entry (GPF).";

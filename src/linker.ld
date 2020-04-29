@@ -62,6 +62,44 @@ SECTIONS
 		__kernel_bss_end = .;
 	}
 
+	/* Below are the isolated sections. They're for "ramdisk" purposes.
+	/  The idea is to keep them in ring 3 only. The section attributes
+	/  for the below are not important during loading, we'll resolve their
+	/  read-write-execute states according to their names at runtime. */
+
+	.isolated_text ALIGN(4K) :
+		AT(ADDR(.isolated_text) - __kernel_virtual_base)
+	{
+		__kernel_isolated_text_base = .;
+
+		*(.isolated_text)
+
+		. = ALIGN(4K);
+		__kernel_isolated_text_end = .;
+	}
+
+	.isolated_data ALIGN(4K) :
+		AT(ADDR(.isolated_data) - __kernel_virtual_base)
+	{
+		__kernel_isolated_data_base = .;
+
+		*(.isolated_data)
+
+		. = ALIGN(4K);
+		__kernel_isolated_data_end = .;
+	}
+
+	.isolated_bss ALIGN(4K) :
+		AT(ADDR(.isolated_bss) - __kernel_virtual_base)
+	{
+		__kernel_isolated_bss_base = .;
+
+		*(.isolated_bss)
+
+		. = ALIGN(4K);
+		__kernel_isolated_bss_end = .;
+	}
+
 	. = ALIGN(2M);
 	__kernel_virtual_end = .;
 
@@ -70,5 +108,8 @@ SECTIONS
 	__kernel_rodata_size = SIZEOF(.rodata);
 	__kernel_data_size = SIZEOF(.data);
 	__kernel_bss_size = SIZEOF(.bss);
+	__kernel_isolated_text_size = SIZEOF(.isolated_text);
+	__kernel_isolated_data_size = SIZEOF(.isolated_data);
+	__kernel_isolated_bss_size = SIZEOF(.isolated_bss);
 	__kernel_size = __kernel_virtual_end - __kernel_virtual_base;
 }

@@ -13,22 +13,25 @@ IS
    PROCEDURE Send
      (Data : IN generic_data)
    IS
-      Value : CONSTANT byte
+      Byte_Value : CONSTANT number RANGE 0 .. 2**08 - 1
       WITH
          Import  => true,
          Size    => 8,
          Address => Data'address;
+
+      Port_Word  : number RANGE 0 .. 2**16 - 1
+      WITH
+         Import  => true,
+         Size    => 16,
+         Address => Channel_Port'address;
    BEGIN
-      -- The assumption holds true because the largest value is under 2^16 - 1.
-      -- TODO: Remove this with you-know-what when we shift to Ada 202X.
-      PRAGMA Assume(Enum_Rep(Channel_Port) < 2**16);
-      Intrinsics.Output_Byte(Enum_Rep(Channel_Port), Value);
+      Intrinsics.Output_Byte(Port_Word, Byte_Value);
    END Send;
 
    PROCEDURE Setup
    IS
       PROCEDURE Send_Divisor_Byte IS NEW Send
-        (generic_data => byte, Channel_Port => channel_0_port);
+        (generic_data => number, Channel_Port => channel_0_port);
 
       PROCEDURE Send_Command IS NEW Send
         (generic_data => command, Channel_Port => command_register_port);
@@ -45,8 +48,8 @@ IS
       Intrinsics.Disable_Interrupts;
 
       Send_Command(Timer_Setting);
-      Send_Divisor_Byte(Divisor AND byte'last);
-      Send_Divisor_Byte(Shift_Right(Divisor, 8) AND byte'last);
+      Send_Divisor_Byte(Divisor AND 2**8 - 1);
+      Send_Divisor_Byte(Shift_Right(Divisor, 8) AND 2**8 - 1);
 
       Intrinsics.Enable_Interrupts;
       Log("The PIT has been configured.", nominal);

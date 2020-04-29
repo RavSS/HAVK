@@ -52,7 +52,8 @@ IS
    -- IRQs so we can avoid polling the PS/2 controller.
    PROCEDURE Set_IO_APIC_Redirects
    WITH
-      Global => (In_Out => Interrupt_Controller_State),
+      Global => (In_Out => (Intrinsics.CPU_MSR_State,
+                            Interrupt_Controller_State)),
       Pre    => ACPI.Valid_Implementation;
 
    -- Simply writes a zero to the LAPIC's EOI register.
@@ -423,16 +424,16 @@ PRIVATE
    -- instantiation.
    GENERIC
       TYPE generic_format IS PRIVATE;
-   FUNCTION Read_LAPIC
-     (MSR   : IN LAPIC_MSR)
-     RETURN generic_format;
+      MSR   : IN LAPIC_MSR;
+   PROCEDURE Read_LAPIC
+     (Value : OUT generic_format);
 
    -- Writes to an MSR a number or a format depending on the instantiation.
    GENERIC
       TYPE generic_format IS PRIVATE;
+      MSR   : IN LAPIC_MSR;
    PROCEDURE Write_LAPIC
-     (MSR   : IN LAPIC_MSR;
-      Value : IN generic_format);
+     (Value : IN generic_format);
 
    -- Changes the active register window of an I/O APIC. This should be called
    -- before any reads or writes to an I/O APIC. It is not merged into the

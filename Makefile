@@ -13,8 +13,12 @@ BUILD?=Final
 ifeq ("$(BUILD)", "Debug")
 	VERSION=UPCOMING
 else
-	VERSION=$(shell git describe --abbrev=8 --always --tags)
+	VERSION=$(shell git name-rev --tags --name-only --no-undefined HEAD \
+		2> /dev/null | grep '^V[0-9]\{2\}-[0-9]\{2\}-[0-9]\{2\}$$' \
+		|| echo -n UNKNOWN)
 endif
+
+$(info Build: $(VERSION)-$(BUILD) at $(shell date).)
 
 # This only has any effect when the build is Debug. As of now, this
 # only controls the additional test functions added in to the UEFI bootloader,
@@ -72,7 +76,7 @@ OVMF_DIR=./ext/ovmf-x64/
 LIB_DIR=/usr/lib/
 
 EFI_DIR=/usr/include/efi/
-EFI_SRC_DIR=$(SRC_DIR)c/
+EFI_SRC_DIR=$(SRC_DIR)bootloader/
 EFI_CRT0=$(EFI_SRC_DIR)crt0-efi-x86_64.o
 EFI_LINK=$(EFI_SRC_DIR)elf_x86_64_efi.lds
 
@@ -273,7 +277,7 @@ $(HAVK_IMAGE): $(HAVK_PARTITION)
 qemu: $(HAVK_IMAGE)
 	$(call echo, "LOADING QEMU WITH $<")
 
-	qemu-system-x86_64 \
+	-qemu-system-x86_64 \
 	-drive if=pflash,format=raw,unit=0,\
 	file=$(OVMF_DIR)OVMF_CODE-pure-efi.fd,readonly=on \
 	-drive if=pflash,format=raw,unit=1,\
@@ -294,6 +298,7 @@ gdb:
 		-ex "set confirm off" \
 		-ex "set architecture i386:x86-64:intel" \
 		-ex "set max-value-size 10485760" \
+		-ex "set varsize-limit 10485760" \
 		-ex "set tcp auto-retry on" \
 		-ex "set tcp connect-timeout 300" \
 		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \

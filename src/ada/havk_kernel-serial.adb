@@ -5,12 +5,9 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   HAVK_Kernel.Intrinsics;
-USE
-   HAVK_Kernel.Intrinsics;
-
 PACKAGE BODY HAVK_Kernel.Serial
+WITH
+   Refined_State => (UART_State => NULL)
 IS
    PROCEDURE Interface_Initialise
      (Object : IN serial_connection)
@@ -59,14 +56,16 @@ IS
      (Object : IN serial_connection;
       Data   : IN character)
    IS
+      Empty_Buffer : boolean := Object.Get_Status.Empty_Buffer;
    BEGIN
       WHILE
-         NOT Object.Get_Status.Empty_Buffer
+         NOT Empty_Buffer
       LOOP
+         Empty_Buffer := Object.Get_Status.Empty_Buffer;
          Spinlock_Pause; -- Wait for the buffer to become empty.
       END LOOP;
-      -- Send data.
-      Output_Byte(Object.Port, character'pos(Data));
+
+      Output_Byte(Object.Port, character'pos(Data)); -- Send data.
    END Write;
 
    PROCEDURE Print
@@ -89,7 +88,6 @@ IS
      (Object     : IN serial_connection)
       RETURN line_status_register
    IS
-      Error_Text : CONSTANT string := " {ERROR} ";
       Status     : CONSTANT line_status_register
       WITH
          Import     => true,
@@ -97,19 +95,6 @@ IS
          Size       => 8,
          Address    => Input_Byte(Object.Port + 5)'address;
    BEGIN
-      IF -- Output the error text if something has gone wrong.
-         Status.Error_Detected OR ELSE
-         Status.Data_Error     OR ELSE
-         Status.Data_Lost      OR ELSE
-         Status.Incomplete
-      THEN
-         FOR
-            ASCII OF Error_Text
-         LOOP
-            Output_Byte(Object.Port, character'pos(ASCII));
-         END LOOP;
-      END IF; -- Continue regardless.
-
       RETURN Status;
    END Get_Status;
 END HAVK_Kernel.Serial;

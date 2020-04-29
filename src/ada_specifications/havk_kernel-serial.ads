@@ -5,6 +5,11 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   HAVK_Kernel.Intrinsics;
+USE
+   HAVK_Kernel.Intrinsics;
+
 -- The purpose of this package is really just to send debugging information
 -- to the serial ports, not so much actual communication. I do however intend
 -- on adding most of the functionality required, maybe in the future I could
@@ -12,9 +17,16 @@
 -- there will be a lot of unused records and whatnot.
 -- READ: https://en.wikibooks.org/wiki/Serial_Programming/8250_UART_Programming
 PACKAGE HAVK_Kernel.Serial
+WITH
+   Preelaborate   => true,
+   Abstract_State =>
+   (
+      UART_State
+      WITH
+         External => (Async_Readers, Async_Writers,
+                      Effective_Reads, Effective_Writes)
+   )
 IS
-   PRAGMA Preelaborate;
-
    -- An array that contains a few of the COM ports that may be present.
    -- I believe only COM1 and COM2 are actually guaranteed on the hardware.
    COM : CONSTANT ARRAY(number RANGE 1 .. 4) OF number :=
@@ -106,7 +118,6 @@ IS
       Interrupt_Settings : interrupt_enable_register;
    END RECORD;
 
--- PRIVATE
    -- The structure of the line status byte in the line status register,
    -- which can be found 5 bytes after the serial port base's address (+5).
    TYPE line_status_register IS RECORD
@@ -140,23 +151,34 @@ IS
 
    -- Sets up the serial port debugging functionality.
    PROCEDURE Interface_Initialise
-     (Object : IN serial_connection);
+     (Object : IN serial_connection)
+   WITH
+      Global => (In_Out => UART_State, Output => CPU_Port_State);
 
-   -- Prints a string to the serial connection Connection's port. Ignores
+   -- Prints a string to the serial connection object's port. Ignores
    -- everything in the string after a null byte.
    PROCEDURE Print
      (Object : IN serial_connection;
       Data   : IN string)
    WITH
+      Global => (In_Out => (CPU_Port_State, UART_State)),
       Inline => true;
 
    -- Writes a character to the serial connection object's port.
    PROCEDURE Write
      (Object : IN serial_connection;
-      Data   : IN character);
+      Data   : IN character)
+   WITH
+      Global => (In_Out => UART_State, Output => CPU_Port_State);
 
    -- Get the current line status register.
+   PRAGMA Warnings(GNATprove, off, "unused variable ""Object""",
+      Reason => "Only the port is required for the type conversion.");
    FUNCTION Get_Status
      (Object : IN serial_connection)
-      RETURN line_status_register;
+      RETURN line_status_register
+   WITH
+      Volatile_Function => true,
+      Global            => (Input => UART_State);
+
 END HAVK_Kernel.Serial;

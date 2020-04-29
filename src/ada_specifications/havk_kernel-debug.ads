@@ -32,7 +32,7 @@ IS
    PROCEDURE Message
      (Information : IN string)
    WITH
-      Global => (Input => Debugging_State),
+      Global => (In_Out => UART_State, Input => Debugging_State),
       Pre    => Information'length <= 500; -- Absolute maximum.
 
    -- This is for causing an emulator breakpoint, so I can inspect

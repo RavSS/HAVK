@@ -84,103 +84,163 @@ IS
    -- it as a variable in here. It would be nice if a new aspect or something
    -- along it was introduced to alleviate this behaviour.
 
-   Kernel_Virtual_Base   : CONSTANT address
+   Kernel_Virtual_Base       : CONSTANT address
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_virtual_base_address";
 
-   Kernel_Virtual_End    : CONSTANT address
+   Kernel_Virtual_End        : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_virtual_end_address";
 
-   Kernel_Text_Base      : CONSTANT address
+   Kernel_Text_Base          : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_text_base_address";
 
-   Kernel_Text_End       : CONSTANT address
+   Kernel_Text_End           : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_text_end_address";
 
-   Kernel_RO_Data_Base   : CONSTANT address
+   Kernel_RO_Data_Base       : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_rodata_base_address";
 
-   Kernel_RO_Data_End    : CONSTANT address
+   Kernel_RO_Data_End        : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_rodata_end_address";
 
-   Kernel_Data_Base      : CONSTANT address
+   Kernel_Data_Base          : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_data_base_address";
 
-   Kernel_Data_End       : CONSTANT address
+   Kernel_Data_End           : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_data_end_address";
 
-   Kernel_BSS_Base       : CONSTANT address
+   Kernel_BSS_Base           : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_bss_base_address";
 
-   Kernel_BSS_End        : CONSTANT address
+   Kernel_BSS_End            : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_bss_end_address";
 
-   Kernel_Size           : CONSTANT number
+   Kernel_Isolated_Text_Base : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
+   WITH
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "__kernel_isolated_text_base_address";
+
+   Kernel_Isolated_Text_End  : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
+   WITH
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "__kernel_isolated_text_end_address";
+
+   Kernel_Isolated_Data_Base : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
+   WITH
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "__kernel_isolated_data_base_address";
+
+   Kernel_Isolated_Data_End  : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
+   WITH
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "__kernel_isolated_data_end_address";
+
+   Kernel_Isolated_BSS_Base  : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
+   WITH
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "__kernel_isolated_bss_base_address";
+
+   Kernel_Isolated_BSS_End   : CONSTANT address
+      RANGE Kernel_Virtual_Base .. address'last
+   WITH
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "__kernel_isolated_bss_end_address";
+
+   Kernel_Size               : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_size_address";
 
-   Kernel_Text_Size      : CONSTANT number
+   Kernel_Text_Size          : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_text_size_address";
 
-   Kernel_RO_Data_Size   : CONSTANT number
+   Kernel_RO_Data_Size       : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_rodata_size_address";
 
-   Kernel_Data_Size      : CONSTANT number
+   Kernel_Data_Size          : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_data_size_address";
 
-   Kernel_BSS_Size       : CONSTANT number
+   Kernel_BSS_Size           : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "__kernel_bss_size_address";
+
+   Kernel_Isolated_Text_Size : CONSTANT number
+   WITH
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "__kernel_isolated_text_size_address";
+
+   Kernel_Isolated_Data_Size : CONSTANT number
+   WITH
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "__kernel_isolated_data_size_address";
+
+   Kernel_Isolated_BSS_Size : CONSTANT number
+   WITH
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "__kernel_isolated_bss_size_address";
 
 END HAVK_Kernel.Memory;

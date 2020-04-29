@@ -15,6 +15,9 @@ WITH
    HAVK_Kernel.Exceptions,
    HAVK_Kernel.Tasking,
    HAVK_Kernel.Debug,
+   HAVK_Kernel.Drive,
+   HAVK_Kernel.Drive.FAT,
+   HAVK_Kernel.Drive.GPT,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.ACPI,
    HAVK_Kernel.PS2,
@@ -128,6 +131,33 @@ IS
          Kernel_BSS_Size,
          Write_Access => true,
          No_Execution => true);
+
+      -- The same as the text section, but with ring 3 access.
+      Kernel_Paging_Layout.Map_Address_Range
+        (Kernel_Isolated_Text_Base,
+         Kernel_Virtual_To_Physical(Kernel_Isolated_Text_Base),
+         Kernel_Isolated_Text_Size,
+         Write_Access => false,
+         No_Execution => false,
+         User_Access  => true);
+
+      -- The same as the data section, but with ring 3 access.
+      Kernel_Paging_Layout.Map_Address_Range
+        (Kernel_Isolated_Data_Base,
+         Kernel_Virtual_To_Physical(Kernel_Isolated_Data_Base),
+         Kernel_Isolated_Data_Size,
+         Write_Access => true,
+         No_Execution => true,
+         User_Access  => true);
+
+      -- The same as the BSS section, but with ring 3 access.
+      Kernel_Paging_Layout.Map_Address_Range
+        (Kernel_Isolated_BSS_Base,
+         Kernel_Virtual_To_Physical(Kernel_Isolated_BSS_Base),
+         Kernel_Isolated_BSS_Size,
+         Write_Access => true,
+         No_Execution => true,
+         User_Access  => true);
 
       -- Identity-map the framebuffer address space.
       Kernel_Paging_Layout.Map_Address_Range
@@ -427,6 +457,47 @@ IS
       Terminal.Print("CPU ID: " & CPU_Identity.CPU_Identity_1 &
          CPU_Identity.CPU_Identity_2 & CPU_Identity.CPU_Identity_3 & '.');
    END CPU_Feature_Check;
+
+   PROCEDURE Boot_Partition_Check
+   IS
+      USE TYPE
+         Drive.FAT.version;
+
+      EFI_Boot_Partition : Drive.GPT.partition;
+      EFI_File_System    : Drive.FAT.file_system;
+   BEGIN
+      FOR -- Check both buses and both drives for the (U)EFI boot partition.
+         I IN 1 .. 4
+      LOOP
+         Drive.GPT.Get_Partition(EFI_Boot_Partition, "EFI",
+            Secondary_Bus => (I IN 3 | 4), Secondary_Drive => (I IN 2 | 4));
+         EXIT WHEN EFI_Boot_Partition.Present;
+      END LOOP;
+
+      IF
+         NOT EFI_Boot_Partition.Present
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - Could not find the EFI/UEFI boot partition.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "We cannot continue if we don't have access to other files.");
+      END IF;
+
+      Drive.FAT.Get_File_System(EFI_File_System, EFI_Boot_Partition);
+
+      IF
+         Drive.FAT.Get_FAT_Version(EFI_File_System) /= Drive.FAT.FAT16
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - EFI/UEFI boot partition is not FAT16.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "It must be formatted as FAT16 for now, not i.e. FAT12.");
+      END IF;
+
+      -- TODO: Map addresses and load files here etc.
+   END Boot_Partition_Check;
 
    PROCEDURE Enter_Phase_II
    WITH

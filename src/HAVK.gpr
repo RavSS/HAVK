@@ -8,8 +8,12 @@
 PROJECT HAVK
 IS
    FOR Default_Language USE "Ada";
-   FOR Languages        USE("Ada", "ASM");
-   FOR Source_Dirs      USE("./ada/", "./ada_specifications/", "./assembly/");
+   FOR Languages        USE("Ada", "ASM", "C");
+   FOR Source_Dirs      USE
+     ("./ada/",
+      "./ada_specifications/",
+      "./assembly/",
+      "./c");
    FOR Object_Dir       USE "./../build/";
    FOR Exec_Dir         USE "./";
    FOR Main             USE("havk_phase_i.adb");
@@ -42,15 +46,15 @@ IS
          -- Useful CWE identifiers for various issues and vulnerabilities.
          "--cwe",
          -- Highest/most powerful proof level. It's not too much slower.
+         -- Let it determine the memory limit, as there does not seem to be
+         -- a (speed) benefit in giving an endless memory limit.
          "--level=4",
          -- Prove absolutely everything.
          "--mode=all",
          -- Give warnings about proofs if there are any.
          "--proof-warnings",
          -- All range check failures and warnings are treated as errors.
-         "--checks-as-errors", "--warnings=error",
-         -- No memory limit.
-         "--memlimit=0");
+         "--checks-as-errors", "--warnings=error");
 
       FOR Proof_Dir             USE HAVK'Object_Dir;
       FOR Proof_Switches("Ada") USE
@@ -176,24 +180,10 @@ IS
    PACKAGE Compiler
    IS -- `gcc`
       GCC_Basic_Switches :=
-        (-- Stack protector fully enabled, because why not. Doesn't seem to
-         -- actually do anything that Ada's checks don't do already.
-         "-fstack-protector-all",
-         -- Add some extra instructions that check if we've gone
-         -- over the stack space limit. Usually that just causes an
-         -- intense crash like a general page-fault for example.
-         -- I believe this "enables" the "STORAGE_ERROR" exception to
-         -- be caught or raised, so that means the last chance handler
-         -- might be called instead of the general page-fault by the CPU.
-         "-fstack-check",
-         -- Create a "su" file with information about stack usage (SU).
+        (-- Create a "su" file with information about stack usage (SU).
          -- Useful for checking if a function exceeds the stack space
          -- I've allocated in the entry assembly file.
          "-fstack-usage",
-         -- This informs GCC of where the stack ends, so HAVK can appropriately
-         -- raise a signal during a stack overflow. I don't think it's very
-         -- effective, but assembly is generated where it uses the symbol.
-         "-fstack-limit-symbol=__stack_end",
          -- The x86-64 red zone is a problem when handling interrupts as the
          -- stack is shared with the ISR and whatever was executing before.
          "-mno-red-zone",
@@ -214,6 +204,40 @@ IS
          "-march=x86-64",
          -- Optimize code for no particular CPU family.
          "-mtune=generic");
+      
+      Ada_Basic_Switches :=
+        (-- Stack protector fully enabled, because why not. Doesn't seem to
+         -- actually do anything that Ada's checks don't do already. This
+         -- cannot be used from a different privilege ring (any C code), as it
+         -- will try call back to the "__stack_chk_fail" function in ring 0.
+         "-fstack-protector-all",
+         -- Add some extra instructions that check if we've gone
+         -- over the stack space limit. Usually that just causes an
+         -- intense crash like a general page-fault for example.
+         -- I believe this "enables" the "STORAGE_ERROR" exception to
+         -- be caught or raised, so that means the last chance handler
+         -- might be called instead of the general page-fault by the CPU.
+         "-fstack-check",
+         -- This informs GCC of where the stack ends, so HAVK can appropriately
+         -- raise a signal during a stack overflow. I don't think it's very
+         -- effective, but assembly is generated where it uses the symbol.
+         -- TODO: I think this will only cause trouble if we switch from the
+         -- stack indicated in the entry file to another one while still using
+         -- code generated from Ada. It has not done anything... yet.
+         "-fstack-limit-symbol=__stack_end");
+      
+      C_Basic_Switches :=
+        (-- We're dealing with a freestanding environment for the initial user
+         -- mode applications that will be including in the kernel binary.
+         "-ffreestanding");
+      
+      C_Debug_Switches :=
+        (-- This just defines a preprocessor symbol to indicate the build type.
+         -- Some C files are just for debugging purposes as of now.
+         "-DDEBUG=1",
+         -- For some reason, I need to redefine this here, even when it should
+         -- be controlled on the command-line, to get debug information.
+         "-ggdb3");
 
       -- Switches to be used by any files that generate interrupt handlers.
       GCC_Interrupt_Switches :=
@@ -256,21 +280,32 @@ IS
       IS
          WHEN "Final" =>
             FOR Default_Switches("Ada") USE
-               GCC_Basic_Switches;
+               GCC_Basic_Switches &
+               Ada_Basic_Switches;
             FOR Switches("havk_kernel-interrupts*.adb") USE
                GCC_Basic_Switches &
-               GCC_Interrupt_Switches;
+               GCC_Interrupt_Switches &
+               Ada_Basic_Switches;
             FOR Default_Switches("ASM") USE
                GAS_Basic_Switches;
+            FOR Default_Switches("C") USE
+               GCC_Basic_Switches &
+               C_Basic_Switches;
          WHEN "Debug" =>
             FOR Default_Switches("Ada") USE
-               GCC_Basic_Switches;
+               GCC_Basic_Switches &
+               Ada_Basic_Switches;
             FOR Switches("havk_kernel-interrupts*.adb") USE
                GCC_Basic_Switches &
-               GCC_Interrupt_Switches;
+               GCC_Interrupt_Switches &
+               Ada_Basic_Switches;
             FOR Default_Switches("ASM") USE
                GAS_Basic_Switches &
                GAS_Debug_Switches;
+            FOR Default_Switches("C") USE
+               GCC_Basic_Switches &
+               C_Basic_Switches &
+               C_Debug_Switches;
       END CASE;
    END Compiler;
 

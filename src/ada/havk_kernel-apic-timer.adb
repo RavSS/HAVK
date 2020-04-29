@@ -18,16 +18,20 @@ IS
         (Source => timer_divisor, Target => number);
 
       PROCEDURE Set_Timer_Divisor IS NEW Write_LAPIC
-        (generic_format => number);
+        (generic_format => number,
+         MSR            => timer_divisor_register);
 
-      PROCEDURE Set_Timer IS NEW Write_LAPIC
-        (generic_format => timer_register_format);
+      PROCEDURE Set_Timer         IS NEW Write_LAPIC
+        (generic_format => timer_register_format,
+         MSR            => timer_register);
 
-      PROCEDURE Set_Timer_Count IS NEW Write_LAPIC
-        (generic_format => number);
+      PROCEDURE Set_Timer_Count   IS NEW Write_LAPIC
+        (generic_format => number,
+         MSR            => timer_initial_count_register);
 
-      FUNCTION Get_Timer_Count IS NEW Read_LAPIC
-        (generic_format => number);
+      PROCEDURE Get_Timer_Count   IS NEW  Read_LAPIC
+        (generic_format => number,
+         MSR            => timer_current_count_register);
 
       -- There's two leaves we can use for this: the TSC/core crystal leaf
       -- or the CPU frequency leaf. It depends on the platform as to which one
@@ -43,16 +47,15 @@ IS
       -- will just calibrate the APIC timer with the PIT. Use them when they
       -- are present some time later on when accuracy and precision matter.
 
+      Current_Count         : number;
       Default_Count         : CONSTANT number        := 16#FFFFFFFF#;
       Default_Divisor       : CONSTANT timer_divisor := divisor_64;
       Default_Configuration : timer_register_format  :=
-      (
-         Interrupt_Vector   => IRQ_Base + 16,
+        (Interrupt_Vector   => IRQ_Base + 16,
          Delivery_Status    => false,
          Interrupt_Masked   => false,
          Current_Timer_Mode => periodic_mode,
-         OTHERS             => 0
-      );
+         OTHERS             => 0);
    BEGIN
       Log("Calibrating a LAPIC timer using the PIT.");
 
@@ -62,19 +65,19 @@ IS
       -- since my PIT code itself is not exactly optimised enough for this.
       -- Calibration using the PIT would be the worst case scenario, I think.
 
-      Set_Timer_Divisor(timer_divisor_register, Enum_Rep(Default_Divisor));
-      Set_Timer_Count(timer_initial_count_register, Default_Count);
-      Set_Timer(timer_register, Default_Configuration);
+      Set_Timer_Divisor(Enum_Rep(Default_Divisor));
+      Set_Timer_Count(Default_Count);
+      Set_Timer(Default_Configuration);
 
       PIT.Sleep(10);
       Default_Configuration.Interrupt_Masked := true;
-      Set_Timer(timer_register, Default_Configuration);
+      Set_Timer(Default_Configuration);
 
-      Set_Timer_Count(timer_initial_count_register, Default_Count -
-         Get_Timer_Count(timer_current_count_register));
+      Get_Timer_Count(Current_Count);
+      Set_Timer_Count(Default_Count - Current_Count);
 
       Default_Configuration.Interrupt_Masked := false;
-      Set_Timer(timer_register, Default_Configuration);
+      Set_Timer(Default_Configuration);
 
       Log("A LAPIC timer has been calibrated.", nominal);
    END Setup;

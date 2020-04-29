@@ -78,7 +78,8 @@ IS
       Post => HAVK_Build_Datetime'result'first = 01 AND THEN
               HAVK_Build_Datetime'result'last  = 19; -- "YYYY-MM-DDTHH:MM:SS"
 
-   -- Initialises any debug utilities.
+   -- Initialises any debug utilities. The "Printing" parameter controls
+   -- whether or not logs are sent to the terminal/textbox.
    PROCEDURE Debugger
      (Terminal : IN OUT textbox;
       Printing : IN boolean)
@@ -95,6 +96,10 @@ IS
    -- interesting information.
    PROCEDURE CPU_Feature_Check
      (Terminal : IN OUT textbox);
+
+   -- Does various things with the FAT file system on the EFI partition in
+   -- preparation for usage.
+   PROCEDURE Boot_Partition_Check;
 
    -- Prepare the heap, as certain functionality like manipulating virtual
    -- addresses requires dynamic memory.

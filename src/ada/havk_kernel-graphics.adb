@@ -6,6 +6,8 @@
 -------------------------------------------------------------------------------
 
 PACKAGE BODY HAVK_Kernel.Graphics
+WITH
+   Refined_State => (Graphics_Output_Protocol_State => NULL)
 IS
    -- TODO: This doesn't handle pixel bitmasks and only does
    -- RGB and BGR for now.

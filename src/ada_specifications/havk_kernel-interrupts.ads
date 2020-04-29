@@ -7,9 +7,9 @@
 
 -- This package and its sub-packages contain the interrupt handler stubs.
 PACKAGE HAVK_Kernel.Interrupts
+WITH
+   Preelaborate => true
 IS
-   PRAGMA Preelaborate;
-
    -- Hopefully I have defined the 64-bit interrupt stack frame properly.
    -- Check Intel's ASD Manual (6-12 Vol. 1) for a description
    -- of the IA-32 interrupt stack frame or the 32-bit version of HAVK.
@@ -46,6 +46,11 @@ IS
       Reason => "The ISRs must take the parameter in regardless of usage.");
 
    -- Used for handling all spurious interrupt vectors.
+   -- TODO: Need a confirmation that this should or shouldn't signal EOI to
+   -- avoid confusion, as I can't find any information on whether it should.
+   PRAGMA Warnings(GNATprove, off,
+      "subprogram ""Spurious_Interrupt_Handler"" has no effect",
+      Reason => "The handler is empty on purpose and has a hidden effect.");
    PROCEDURE Spurious_Interrupt_Handler
      (Stack_Frame : IN access_interrupted_state);
    PRAGMA Machine_Attribute(Spurious_Interrupt_Handler, "interrupt");
