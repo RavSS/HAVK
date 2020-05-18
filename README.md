@@ -7,8 +7,9 @@ It is influenced by Unix, but it is not necessarily a Unix clone.
 ### What can it do right now?
 You can type to test your keyboard and count seconds inaccurately.
 
-It currently has a primitive task scheduler, a custom text renderer, and is
-working towards a functional user mode.
+It currently has a primitive task scheduler, a custom text renderer, and a
+technically functional user mode. What remains is to create more system calls
+and expand what tasks can do so they can be meaningful.
 
 Expect it to do nothing until I decide to release the first major version, as
 it is still under heavy development.
@@ -17,7 +18,7 @@ it is still under heavy development.
 
 This exists so I can experiment with intriguing security concepts such as
 capabilities and play around with how programs in ring 3 interact with
-anything in ring 0, with the main goal being how much I can harden and 
+anything in ring 0, with the main goal being how much I can harden and
 lockdown the entire operating system itself for fun.
 
 I am more interested in any unique ideas you may have to do with operating
@@ -30,10 +31,10 @@ to port this to other platforms/architectures at this stage.
 
 ### Software requirements
 There are a few mandatory software requirements:
-1. GNAT Community. GCC can compile Ada and the package contains the
-GNAT Project Manager tools, along with GNATprove for SPARK.
-There's a script inside the "ext" folder which you can utilise
-to obtain GNAT Community 2019. You can also modify the Makefile.
+1. GNAT Community. GCC can compile Ada and the package contains the GNAT
+   Project Manager tools, along with GNATprove for SPARK. There's a script
+   inside the "ext" folder which you can utilise to obtain GNAT Community 2019.
+   You can also modify the Makefile.
 2. GNU Make. This is pretty obvious.
 3. GNU-EFI. The bootloader I created uses UEFI to boot HAVK, not BIOS.
 4. GNU Mtools & GNU Parted. Used for creating a hard drive image.
@@ -51,9 +52,11 @@ Cygwin if you wish to compile this on Windows.
 ### Hardware requirements
 There's a few hardware requirements, but they are all critical right now:
 1. An x86-64 system that has a working display/monitor.
-2. UEFI firmware that isn't bugged and acts according to the specification.
-3. A PS/2 controller that is emulated by the system properly, as a USB
-controller would take forever to program (see the GNU Hurd microkernel).
+2. UEFI firmware that isn't bugged and acts according to the specification,
+   along with supporting ACPI 2.0+.
+3. A PS/2 controller that is emulated/implemented by the system properly, as a
+   USB controller would take forever to program (see the GNU Hurd microkernel).
+4. A CPU that supports x2APIC.
 
 Having a serial port (COM1, preferably) on your hardware would help in
 debugging, so you can receive messages from the kernel about its progress.
@@ -88,8 +91,14 @@ http://docs.adacore.com/live/wave/gnat_rm/html/gnat_rm/gnat_rm.html
 
 Disclaimer: This is the first program I have made with either Ada or SPARK, and
 that includes any Hello World examples. A lot of this OS may not be modelled
-correctly as I am new to the concept of formal verification as well. The output
-of `gnatprove` is being treated as advanced compiler errors to catch issues.
+correctly as I am new to the concept of formal verification as well.
+
+There is currently no specification of what the kernel should do, so I'm making
+it up as I go along. `gnatprove` is used until it no longer brings up any
+warnings or unproven checks by being as careful as possible and placing
+restrictive contracts, with the purpose being to avoid runtime errors, not
+proving 100% correctness. There's still SPARK mode exclusions and assumptions
+made, like for when raw memory manipulation is necessary to continue.
 
 ### License
 GNU GPLv3. Applies to everything unless stated otherwise.
