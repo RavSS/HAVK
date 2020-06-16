@@ -5,97 +5,151 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   HAVK_Kernel.UEFI;
-
 PACKAGE BODY HAVK_Kernel.ACPI
+WITH
+   Refined_State => (ACPI_State => NULL)
 IS
-   FUNCTION Valid_Implementation
-      RETURN boolean
+   FUNCTION Get_RSDP
+      RETURN root_system_description_pointer
    IS
-      Bootloader : CONSTANT UEFI.arguments := UEFI.Get_Arguments;
+      USE TYPE
+         UEFI.access_arguments; -- So `gnatprove` knows it cannot be null.
+      PRAGMA Assume(UEFI.Bootloader_Arguments /= NULL, "Bug workaround.");
 
-      RSDP_Bytes : CONSTANT bytes(1 .. Bootloader.RSDP.Length)
+      RSDP       : ALIASED CONSTANT root_system_description_pointer
       WITH
-         Import     => true,
-         Convention => C,
-         Address    => Bootloader.RSDP.ALL'address;
+         Import   => true,
+         Address  => UEFI.Bootloader_Arguments.RSDP_Address;
 
-      XSDT_Bytes : CONSTANT bytes(1 .. Bootloader.RSDP.XSDT.SDT.Length)
+      RSDP_Bytes : ALIASED CONSTANT bytes(1 .. RSDP.Length)
       WITH
-         Import     => true,
-         Convention => C,
-         Address    => Bootloader.RSDP.XSDT.ALL'address;
+         Import   => true,
+         Address  => UEFI.Bootloader_Arguments.RSDP_Address,
+         Annotate => (GNATprove, False_Positive,
+                      "object with constraints on bit representation *",
+                      "The RSDP must be valid, even if other tables aren't.");
 
-      Total_Bytes : number := 0;
+      Total_Size : number := 0;
    BEGIN
-      -- Took me a year to find out that this rather obscure Ada 2012 loop
-      -- syntax existed. It should be shown more prominently.
       FOR
          RSDP_Byte OF RSDP_Bytes
       LOOP
-         Total_Bytes := Total_Bytes + RSDP_Byte;
+         Total_Size := Total_Size + RSDP_Byte;
       END LOOP;
 
       IF
-         (Total_Bytes AND 16#FF#) /= 0
+        (Total_Size AND 16#FF#) /= 0
       THEN
-         RETURN false;
+         RAISE Panic
+         WITH
+            Source_Location & " - The system's ACPI RSDP is corrupt.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "I'll panic if it's corrupt, as it's a sign of a bigger issue.");
+      END IF;
+
+      RETURN RSDP;
+   END Get_RSDP;
+
+   FUNCTION Get_XSDT
+      RETURN access_extended_system_description_table
+   IS
+      RSDP       : CONSTANT root_system_description_pointer := Get_RSDP;
+      XSDT       : ALIASED CONSTANT access_extended_system_description_table
+      WITH
+         Import  => true,
+         Address => RSDP.XSDT_Address'address; -- Pointer to a pointer.
+
+      Total_Size : number := 0;
+   BEGIN
+      IF -- The XSDT address shouldn't be zero, but check it anyway.
+         XSDT /= NULL
+      THEN
+         DECLARE
+            XSDT_Bytes : ALIASED CONSTANT bytes(1 .. XSDT.SDT.Length)
+            WITH
+               Import   => true,
+               Address  => RSDP.XSDT_Address,
+               Annotate => (GNATprove, False_Positive,
+                           "object with constraints on bit representation *",
+                           "The check itself doesn't require a valid table.");
+         BEGIN
+            FOR
+               XSDT_Byte OF XSDT_Bytes
+            LOOP
+               Total_Size := Total_Size + XSDT_Byte;
+            END LOOP;
+         END;
       ELSE
-         Total_Bytes := 0; -- Reset it to check the XSDT's byte sum.
+         Total_Size := 16#FF#; -- Make it fail the checksum verification.
       END IF;
-
-      FOR
-         XSDT_Byte OF XSDT_Bytes
-      LOOP
-         Total_Bytes := Total_Bytes + XSDT_Byte;
-      END LOOP;
 
       IF
-         (Total_Bytes AND 16#FF#) /= 0
+        (Total_Size AND 16#FF#) /= 0
       THEN
-         RETURN false;
+         RAISE Panic
+         WITH
+            Source_Location & " - The system's ACPI XSDT is corrupt.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "I'll panic if it's corrupt, as it's a sign of a bigger issue.");
       END IF;
 
-      RETURN true;
-   END Valid_Implementation;
+      RETURN XSDT;
+   END Get_XSDT;
+
+   FUNCTION Get_XSDT_Tables
+      RETURN system_description_tables
+   WITH
+      SPARK_Mode => off -- Annotations can't cover all the unchecked errors.
+   IS
+      XSDT          : CONSTANT access_extended_system_description_table :=
+         Get_XSDT;
+
+      -- I've hardcoded in the byte size of the SDT or else `gnatprove`
+      -- complains.
+      Tables_Offset : CONSTANT := 36;
+
+      -- The XSDT must be valid before this is ever called.
+      Tables        : system_description_tables
+        (1 .. (XSDT.SDT.Length - Tables_Offset) / 8)
+      WITH
+         Import   => true,
+         Address  => XSDT.Table_Pointers'address;
+   BEGIN
+      RETURN Tables;
+   END Get_XSDT_Tables;
 
    FUNCTION Table_Address
      (Signature : IN string)
       RETURN address
    IS
-      -- Return what the access points to.
-      FUNCTION To_Pointer
+      FUNCTION To_Address
         (Table  : ALIASED NOT NULL ACCESS CONSTANT system_description_table)
          RETURN address
       WITH
          Import     => true,
          Convention => Intrinsic;
 
-      XSDT      : CONSTANT extended_system_description_table :=
-         UEFI.Get_Arguments.RSDP.XSDT.ALL;
-
-      -- I've hardcoded in the size of the SDT or else `gnatprove` complains.
-      -- The XSDT must be valid before this is ever called.
-      Tables    : CONSTANT system_description_tables
-        (1 .. (XSDT.SDT.Length - 36) / 8)
+      Tables : CONSTANT system_description_tables := Get_XSDT_Tables
       WITH
-         Import     => true,
-         Convention => C, -- Use the address without new accesses or copies.
-         Address    => UEFI.Get_Arguments.RSDP.XSDT.Table_Pointers'address;
+         Annotate => (GNATprove, False_Positive,
+                      "memory leak might occur at end of scope",
+                      "Nothing is allocated.");
    BEGIN
       FOR
          Table OF Tables
       LOOP
          IF
+            Table /= NULL AND THEN
             Table.Signature = Signature
          THEN
             DECLARE
-               Table_Bytes : CONSTANT bytes(1 .. Table.Length)
+               Table_Bytes : ALIASED CONSTANT bytes(1 .. Table.Length)
                WITH
-                  Import     => true,
-                  Convention => C,
-                  Address    => Table.ALL'address;
+                  Import  => true,
+                  Address => To_Address(Table),
+                  Annotate => (GNATprove, False_Positive,
+                               "object with constraints on bit *",
+                               "We manually check it for validity.");
 
                Total_Bytes : number := 0;
             BEGIN
@@ -108,9 +162,9 @@ IS
                IF
                   (Total_Bytes AND 16#FF#) = 0
                THEN
-                  RETURN To_Pointer(Table);
+                  RETURN To_Address(Table);
                ELSE
-                  RETURN 0; -- Table is corrupt.
+                  RETURN 0; -- Table is corrupt. I won't panic here.
                END IF;
             END;
          END IF;

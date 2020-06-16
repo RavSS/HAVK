@@ -1,5 +1,5 @@
 # Tasklist for the HAVK operating system
-### Last Updated: 2020-04-29
+### Last Updated: 2020-06-17
 #### High priority
 - The kernel crashes on AMD systems (but not Intel systems) during
   some point in which my descriptor tables are prepared and loaded, which
@@ -8,13 +8,15 @@
   with anything less laggy which can properly terminate tasks.
 - Move the task scheduler to the runtime so we can use Ada's task syntax.
   A general refactor of the entire RTS would be good.
-- Create a package for better concurrency support e.g. mutexes and make
-  numerous subprograms safer for ring 0 tasks.
+- Create a package for better concurrency support e.g. mutexes.
 - Improve the memory manager so it can split and merge free blocks to
   minimise wasted space.
 - Create a package that handles loading and tracking of external programs
   from the drives.
 - Start implementing various system calls so user space can do something.
+  IPC is particularly needed so we can take things out of ring 0.
+- Create a virtual filesystem for the purpose of abstracting the kernel from
+  the current FAT16 driver.
 
 #### Low priority
 - Begin to create a solution for PS/2 mouse capabilities.
@@ -27,3 +29,7 @@
 - Implement FAT12 and FAT32 support, along with a VFAT driver.
 - Improve the capabilities of the ATA PIO operations, particularly error
   checking.
+- Trampoline the APs so we can use more than one core. I'd like to avoid
+  concurrency issues and performance is not a demand, so leave this out until
+  the tasking system is solid.
+- Finally start engaging with security concepts centred around user space.

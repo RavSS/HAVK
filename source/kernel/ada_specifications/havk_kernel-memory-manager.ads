@@ -6,6 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
+   HAVK_Kernel.UEFI,
    HAVK_Kernel.Paging;
 
 -- This package houses a frame allocator and a memory manager for specific
@@ -15,6 +16,8 @@ WITH
 -- real optimisations for now. There is zero block merging and halving, so the
 -- memory manager is not (space) efficient at all; however, we do have the
 -- ability to free allocations, which is better than a static buffer allocator.
+-- TODO: With the new version of GNATprove in GNAT CE 2020, I think this entire
+-- package could use a redo.
 PACKAGE HAVK_Kernel.Memory.Manager
 WITH
    Preelaborate   => true,
@@ -53,7 +56,8 @@ IS
       Size        : IN number;
       Error_Check : OUT error)
    WITH
-      Global => (In_Out => Frame_Allocator_State),
+      Global => (In_Out => Frame_Allocator_State,
+                 Input  => UEFI.Bootloader_Arguments),
       Pre    => Size IN Paging.Page .. number(address'last) - Paging.Page - 1
                    AND THEN
                 Size MOD Paging.Page = 0,
@@ -64,7 +68,8 @@ IS
    PROCEDURE Prepare_Kernel_Heap
    WITH
       Global => (In_Out => (Kernel_Heap_State, Frame_Allocator_State,
-                            Kernel_Heap_Base));
+                            Kernel_Heap_Base),
+                 Input  => UEFI.Bootloader_Arguments);
 
    -- A generic wrapper for the internal `Allocate()` procedure that can return
    -- a specific access type in one of its parameters. The size is in bytes.

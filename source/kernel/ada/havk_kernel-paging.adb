@@ -138,6 +138,10 @@ IS
       -- Points to a page directory table on the heap.
       L2 : access_directory_table;
 
+      PRAGMA Annotate(GNATprove, Intentional,
+         "memory leak might occur at end of scope",
+         "Freeing of page structures hasn't yet been implemented.");
+
       -- Points to a page table on the heap.
       L1 : access_page_table;
 
@@ -201,9 +205,6 @@ IS
          WITH
             Source_Location & " - Heap has been exhausted; can't create a " &
             "page directory table for a 2-MiB or 4-KiB page mapping.";
-         PRAGMA Annotate(GNATprove, False_Positive,
-            "exception might be raised",
-            "The pointer arithmetic is fine. Heap issues crash externally.");
       END IF;
 
       IF
@@ -225,9 +226,6 @@ IS
          WITH
             Source_Location & " - Heap has been exhausted; can't create a " &
             "page table for a 4-KiB page mapping.";
-         PRAGMA Annotate(GNATprove, False_Positive,
-            "exception might be raised",
-            "The pointer arithmetic is fine. Heap issues crash externally.");
       END IF;
 
       Object.L4(L4_Offset).Pointer      := Encode_Table(Table_Pointer(L3));
@@ -342,12 +340,8 @@ IS
    BEGIN
       -- Read the manuals to see which lower bits need to be zeroed.
       -- It should be rather obvious from the alignment itself.
-      RETURN Shift_Right(Aligned_Size,
-        (CASE  Alignment    IS
-         WHEN       Page => 12,
-         WHEN  Huge_Page => 21,
-         WHEN Giant_Page => 30,
-         WHEN     OTHERS => 64));
+      RETURN Shift_Right(Aligned_Size, (IF Alignment = Page THEN 12
+         ELSIF Alignment = Huge_Page THEN 21 ELSE 30));
    END Size_To_Pages;
 
    PROCEDURE Load
@@ -414,7 +408,7 @@ IS
       -- TODO: Add more to describe the page fault. I've only covered 2 fields.
    BEGIN
       Log("ISR 14: Page fault triggered - Error code:"     &
-         number'image(Error_Code) & " - Fault address: 0x" &
+         Image(Error_Code, Base => 16) & " - Fault address: 0x" &
          Image(Fault_Address) & " - " & Present_Field  &
          Write_Field, Warn => true);
 

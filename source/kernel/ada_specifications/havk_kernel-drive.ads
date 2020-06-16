@@ -105,7 +105,8 @@ PRIVATE
       -- Read only. Used for checking drive selection.
       select_port)
    WITH
-      Size => 8;
+      Size        => 8,
+      Object_Size => number'size;
    FOR ATA_port USE
      (data_port           => 0,
       feature_error_port  => 1,
@@ -141,7 +142,8 @@ PRIVATE
       -- The same as "cache_flush", but for LBA48 mode.
       cache_flush_extra)
    WITH
-      Size => 8;
+      Size        => 8,
+      Object_Size => number'size;
    FOR ATA_command USE
      (no_command            => 16#00#,
       sector_read_retry     => 16#20#,
@@ -197,7 +199,9 @@ PRIVATE
       LBA_Addressing : boolean;
       -- Always set.
       Reserved_2     : number RANGE 1 .. 1;
-   END RECORD;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR drive_register USE RECORD
       Block_Number       AT 0 RANGE 0 .. 3;
       Drive_Number       AT 0 RANGE 4 .. 4;
@@ -229,7 +233,9 @@ PRIVATE
       -- When true, the drive is busy transferring data. If the drive is busy,
       -- then the other information here is apparently out of date.
       Busy           : boolean;
-   END RECORD;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR status_register USE RECORD
       Error              AT 0 RANGE 0 .. 0;
       Zeroed             AT 0 RANGE 1 .. 1;
@@ -257,7 +263,9 @@ PRIVATE
       -- When true, you can read back the higher bytes when using LBA48 mode.
       -- Otherwise, you will only be able to read the lower bytes (LBA28).
       High_Order_Byte : boolean;
-   END RECORD;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR control_register USE RECORD
       Zeroed              AT 0 RANGE 0 .. 0;
       No_Interrupts       AT 0 RANGE 1 .. 1;
@@ -282,7 +290,9 @@ PRIVATE
       Not_Writing          : boolean;
       -- Not used, although it apparently indicates a high impedance state.
       Reserved             : number RANGE 0 .. 1;
-   END RECORD;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR select_register USE RECORD
       Drive_0_Deselected       AT 0 RANGE 0 .. 0;
       Drive_1_Deselected       AT 0 RANGE 1 .. 1;

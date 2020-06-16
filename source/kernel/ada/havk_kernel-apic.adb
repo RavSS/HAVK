@@ -13,12 +13,12 @@ WITH
    Refined_State => (Interrupt_Controller_State => (IO_APICs, IRQ_Remaps))
 IS
    PROCEDURE Remap_PICs
-     (Disable_Emulation : boolean := false)
+     (Disable_Emulation : boolean := true)
    IS
-      Master_Command    : CONSTANT number := 16#20#;
-      Master_Data       : CONSTANT number := 16#21#;
-      Slave_Command     : CONSTANT number := 16#A0#;
-      Slave_Data        : CONSTANT number := 16#A1#;
+      Master_Command : CONSTANT := 16#20#;
+      Master_Data    : CONSTANT := 16#21#;
+      Slave_Command  : CONSTANT := 16#A0#;
+      Slave_Data     : CONSTANT := 16#A1#;
    BEGIN
       -- Initialise the PICs.
       Intrinsics.Output_Byte(Master_Command, 16#11#);
@@ -78,31 +78,41 @@ IS
    PROCEDURE Read_LAPIC
      (Value : OUT generic_format)
    IS
-      FUNCTION MSR_Format IS NEW Ada.Unchecked_Conversion
+      FUNCTION Register_Format IS NEW Ada.Unchecked_Conversion
         (Source => number, Target => generic_format);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "Manual care must be taken to ensure the format matches the index.");
 
-      -- This is temporary until GNAT CE 2020 comes around. GNAT CE 2019's
-      -- bundled `gnatprove` does not support the "enum_rep" attribute.
-      -- It missed the commit for the feature by a few days.
-      FUNCTION MSR_Value IS NEW Ada.Unchecked_Conversion
+      -- This is temporary until Ada 202X comes around.
+      FUNCTION Register_Index IS NEW Ada.Unchecked_Conversion
         (Source => LAPIC_MSR, Target => Intrinsics.model_specific_register);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "This is an alternative to the ""enum_rep"" attribute.");
 
       Register_Value : number;
    BEGIN
       Intrinsics.Memory_Fence; -- See `Write_LAPIC()` for more.
-      Register_Value := Intrinsics.Read_MSR(MSR_Value(MSR));
+      Register_Value := Intrinsics.Read_MSR(Register_Index(MSR));
       Intrinsics.Memory_Fence;
-      Value := MSR_Format(Register_Value);
+      Value := Register_Format(Register_Value);
    END Read_LAPIC;
 
    PROCEDURE Write_LAPIC
      (Value : IN generic_format)
    IS
-      FUNCTION MSR_Value_Number IS NEW Ada.Unchecked_Conversion
+      FUNCTION Register_Value IS NEW Ada.Unchecked_Conversion
         (Source => generic_format, Target => number);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "The data will fit inside the MSR itself. Check representations.");
 
-      FUNCTION LAPIC_MSR_Value IS NEW Ada.Unchecked_Conversion
+      FUNCTION Register_Index IS NEW Ada.Unchecked_Conversion
         (Source => LAPIC_MSR, Target => Intrinsics.model_specific_register);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "This is an alternative to the ""enum_rep"" attribute.");
    BEGIN
       -- Intel recommends `MFENCE` then `LFENCE` for the below barrier, but I
       -- don't see how the second instruction does anything the first doesn't.
@@ -110,7 +120,7 @@ IS
       -- TODO: An update on the above, it controls how memory is serialised.
       -- It might be worth making an entirely new intrinsic for LAPIC MSRs.
       Intrinsics.Memory_Fence; -- `WRMSR` etc. to APIC MSRs is not serialising.
-      Intrinsics.Write_MSR(LAPIC_MSR_Value(MSR), MSR_Value_Number(Value));
+      Intrinsics.Write_MSR(Register_Index(MSR), Register_Value(Value));
       Intrinsics.Memory_Fence;
    END Write_LAPIC;
 
@@ -118,9 +128,11 @@ IS
      (Mapped_IO_APIC : IN IO_APIC)
      RETURN generic_register
    IS
-      SUBTYPE GSI_value IS number RANGE 0 .. 16#FFFFFFFF#; -- Silence warnings.
       FUNCTION Return_Register IS NEW Ada.Unchecked_Conversion
-        (Source => GSI_value, Target => generic_register);
+        (Source => number, Target => generic_register);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "The value taken from the mapped I/O APIC can't be invalid.");
    BEGIN
       RETURN
          Register_Data : generic_register
@@ -135,12 +147,16 @@ IS
      (Mapped_IO_APIC : IN OUT IO_APIC;
       Register_Data  : IN generic_register)
    IS
-      SUBTYPE IOREGWIN IS number RANGE 0 .. 16#FFFFFFFF#;
-      FUNCTION Value_Number IS NEW Ada.Unchecked_Conversion
+      SUBTYPE IOREGWIN IS number RANGE 0 .. 2**32 -1;
+
+      FUNCTION Raw_Register_Data IS NEW Ada.Unchecked_Conversion
         (Source => generic_register, Target => IOREGWIN);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "The register format's representation is manually verified.");
    BEGIN
       Intrinsics.Memory_Fence;
-      Mapped_IO_APIC.MMIO.Register_Window := Value_Number(Register_Data);
+      Mapped_IO_APIC.MMIO.Register_Window := Raw_Register_Data(Register_Data);
       Intrinsics.Memory_Fence;
    END Write_IO_APIC;
 
@@ -149,18 +165,22 @@ IS
       Register       : IN IO_APIC_register;
       GSI            : IN number := number'last)
    IS
-      SUBTYPE IOREGSEL IS number RANGE 0 .. 16#FF#;
+      SUBTYPE IOREGSEL IS number RANGE 0 .. 2**IO_APIC_register'size - 1;
+
       FUNCTION Index_Number IS NEW Ada.Unchecked_Conversion
         (Source => IO_APIC_register, Target => IOREGSEL);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "This is an alternative to the ""enum_rep"" attribute.");
 
       -- While the index will never get this big, we'll mask it anyway so
       -- proving it is easier without needing a more realistic GSI limit.
-      Index : CONSTANT number RANGE 0 .. 16#FFFFFFFF# :=
+      Index : CONSTANT number RANGE 0 .. 2**32 - 1 :=
       (
          IF
             Register IN IOREDTBL_low | IOREDTBL_high
          THEN -- The +1 offset is handled by the register's representation.
-            Index_Number(Register) + GSI * 2 AND 16#FFFFFFFF#
+            Index_Number(Register) + GSI * 2 AND 2**32 - 1
          ELSE
             Index_Number(Register)
       );
@@ -173,14 +193,14 @@ IS
    PROCEDURE Enumerate_MADT
      (Paging_Structure : IN OUT Paging.page_layout)
    WITH
-      Refined_Global => (In_Out => (IO_APICs, IRQ_Remaps, CPU_Cores))
+      Refined_Global => (In_Out => (IO_APICs, IRQ_Remaps, CPU_Cores),
+                         Input  => (SPARK.Heap.Dynamic_Memory,
+                                    ACPI.ACPI_State))
    IS
       FUNCTION Get_IO_APIC_Version IS NEW Read_IO_APIC
         (generic_register => IO_APIC_version_register);
 
-      MADT_Address : CONSTANT address :=
-         (IF ACPI.Valid_Implementation THEN ACPI.Table_Address("APIC") ELSE 0);
-
+      MADT_Address : CONSTANT address := ACPI.Table_Address("APIC");
       APICs        : interrupt_controller_descriptors;
    BEGIN
       IF
@@ -215,9 +235,11 @@ IS
 
                   New_IO_APIC : CONSTANT IO_APIC_descriptor
                   WITH
-                     Import     => true,
-                     Convention => C,
-                     Address    => APIC_Entry.Record_Address;
+                     Import   => true,
+                     Address  => APIC_Entry.Record_Address,
+                     Annotate => (GNATprove, False_Positive,
+                                  "object with constraints on bit *",
+                                  "We've checked it already.");
                BEGIN
                   FOR
                      Mapped_IO_APIC OF IO_APICs
@@ -273,9 +295,11 @@ IS
                DECLARE
                   IRQ_Remap : CONSTANT interrupt_source_override_descriptor
                   WITH
-                     Import     => true,
-                     Convention => C,
-                     Address    => APIC_Entry.Record_Address;
+                     Import   => true,
+                     Address  => APIC_Entry.Record_Address,
+                     Annotate => (GNATprove, False_Positive,
+                                  "object with constraints on bit *",
+                                  "We've checked it already.");
                BEGIN
                   IF
                      IRQ_Remap.IRQ_Value IN IRQ_Remaps'range

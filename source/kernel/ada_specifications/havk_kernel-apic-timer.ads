@@ -35,7 +35,7 @@ PRIVATE
       divisor_128,
       divisor_1)
    WITH
-      Size => 64; -- Just for easy conversion.
+      Object_Size => number'size;
    FOR timer_divisor USE
      (divisor_2   => 2#0000#,
       divisor_4   => 2#0001#,
@@ -80,7 +80,9 @@ PRIVATE
       -- Indicates the LAPIC timer's mode. See the type's comment for detail.
       Current_Timer_Mode : timer_mode;
       Reserved_3         : number RANGE 00 .. 16#1FFFFFFFFFFF#;
-   END RECORD;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR timer_register_format USE RECORD
       Interrupt_Vector       AT 0 RANGE 00 .. 07;
       Reserved_1             AT 0 RANGE 08 .. 11;

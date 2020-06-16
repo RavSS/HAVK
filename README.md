@@ -33,8 +33,8 @@ to port this to other platforms/architectures at this stage.
 There are a few mandatory software requirements:
 1. GNAT Community. GCC can compile Ada and the package contains the GNAT
    Project Manager tools, along with GNATprove for SPARK. There's a script
-   inside the "ext" folder which you can utilise to obtain GNAT Community 2019.
-   You can also modify the Makefile.
+   inside the "tools" folder which you can utilise to obtain GNAT Community
+   2020. You can also modify the Makefile.
 2. GNU Make. This is pretty obvious.
 3. GNU-EFI. The bootloader I created uses UEFI to boot HAVK, not BIOS.
 4. GNU Mtools & GNU Parted. Used for creating a hard drive image.
@@ -44,10 +44,7 @@ to create a hard drive image inside "build" called "HAVK.img". Then, simply
 `dd` it to a USB flash drive or install QEMU (`qemu-system-x86_64`) to emulate
 HAVK in a VM by performing `make qemu`.
 
-Note that HAVK can only be (easily) compiled on GNU/Linux. The Windows version
-of GNAT Community 2019 unfortunately lacks x86-64 ELF support for its linker,
-as it was not compiled with support for it. You will have to use WSL or
-Cygwin if you wish to compile this on Windows.
+You can also recreate the proof by executing `make proof`.
 
 ### Hardware requirements
 There's a few hardware requirements, but they are all critical right now:

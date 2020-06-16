@@ -5,6 +5,9 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   Ada.Unchecked_Conversion;
+
 -- This package handles all aspects of the PS/2 controller with error checking.
 -- All specific logic that does not interact specifically with the PS/2
 -- controller should go into child packages.
@@ -49,7 +52,8 @@ PRIVATE
       set_2,
       set_3)
    WITH
-      Size => 8;
+      Size        => 8,
+      Object_Size => number'size;
    FOR scancode_set USE
      (set_1 => 1,
       set_2 => 2,
@@ -60,19 +64,18 @@ PRIVATE
      (data_port,
       command_port)
    WITH
-      Size => 8;
+      Size        => 8,
+      Object_Size => number'size;
    FOR port USE
      (data_port    => 16#60#,
       command_port => 16#64#);
 
    -- TODO: No "enum_rep" yet, so this is used to get the representation.
-   FUNCTION Unchecked_Conversion
-     (Port_Type : IN port)
-      RETURN number
-   WITH
-      Import     => true,
-      Convention => Intrinsic,
-      Post       => Unchecked_Conversion'result <= 2**8 - 1;
+   FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
+     (source => port, target => number);
+   PRAGMA Annotate(GNATprove, False_Positive,
+      "type with constraints on bit representation *",
+      "This is an alternative for the ""enum_rep"" attribute.");
 
    -- There's five common types of devices with these specific identities.
    -- There are various keyboards with negligible differences not worth it.
@@ -89,7 +92,8 @@ PRIVATE
       standard_keyboard,
       unrecognised)
    WITH
-      Size => 8;
+      Size        => 8,
+      Object_Size => number'size;
    FOR device USE
      (standard_mouse       => 16#00#,
       mouse_with_scroll    => 16#03#,
@@ -106,7 +110,8 @@ PRIVATE
       failure,
       data_resend)
    WITH
-      Size => 8;
+      Size        => 8,
+      Object_Size => number'size;
    FOR response USE
      (test_port_pass       => 16#00#,
       test_controller_pass => 16#55#,
@@ -129,7 +134,8 @@ PRIVATE
       keyboard_byte_resend,
       test_keyboard)
    WITH
-      Size => 8;
+      Size        => 8,
+      Object_Size => number'size;
    FOR keyboard_command USE
      (set_lights           => 16#ED#,
       echo_keyboard        => 16#EE#,
@@ -160,7 +166,8 @@ PRIVATE
       mouse_byte_resend,
       mouse_reset)
    WITH
-      Size => 8;
+      Size        => 8,
+      Object_Size => number'size;
    FOR mouse_command USE
      (set_scaling       => 16#E6#,
       set_resolution    => 16#E8#,
@@ -191,7 +198,8 @@ PRIVATE
       port_1_enable,
       port_2_data)
    WITH
-      Size => 8;
+      Size        => 8,
+      Object_Size => number'size;
    FOR controller_command USE
      (configuration_read    => 16#20#,
       configuration_write   => 16#60#,
@@ -222,7 +230,10 @@ PRIVATE
       Port_1_Translation : boolean;
       -- Always zero.
       Zeroed_2           : number RANGE 0 .. 0;
-   END RECORD;
+   END RECORD
+   WITH
+      Size        => 8,
+      Object_Size => number'size;
    FOR configuration USE RECORD
       Port_1_Enabled         AT 0 RANGE 0 .. 0;
       Port_2_Enabled         AT 0 RANGE 1 .. 1;
@@ -253,7 +264,10 @@ PRIVATE
       Timed_Out_Receive  : boolean;
       -- The keyboard had even parity.
       Parity_Error       : boolean;
-   END RECORD;
+   END RECORD
+   WITH
+      Size        => 8,
+      Object_Size => number'size;
    FOR status USE RECORD
       Output_Ready       AT 0 RANGE 0 .. 0;
       Input_Full         AT 0 RANGE 1 .. 1;
@@ -274,7 +288,10 @@ PRIVATE
       Delay_Rate         : number RANGE 0 .. 000003;
       -- Always zeroed out.
       Zeroed             : number RANGE 0 .. 000000;
-   END RECORD;
+   END RECORD
+   WITH
+      Size        => 8,
+      Object_Size => number'size;
    FOR typematics USE RECORD
       Repeat_Rate            AT 0 RANGE 0 .. 4;
       Delay_Rate             AT 0 RANGE 5 .. 6;

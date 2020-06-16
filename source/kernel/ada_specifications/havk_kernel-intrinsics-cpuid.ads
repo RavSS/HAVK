@@ -53,7 +53,8 @@ IS
       APM_information_leaf,
       address_sizes_leaf)
    WITH
-      Size => 32;
+      Size        => 32,
+      Object_Size => number'size;
    FOR leaf USE
      (highest_function_parameter_leaf          => 16#00000000#,
       processor_information_leaf               => 16#00000001#,
@@ -96,10 +97,11 @@ IS
       highest_extended_function_parameter_leaf .. address_sizes_leaf;
 
    -- TODO: Remove the below when the "enum_rep" attribute is fully supported.
-   PRAGMA Warnings(off, "types for unchecked conversion have different sizes",
-      Reason => "32-bit value properly fits into a larger 64-bit value.");
    FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
      (Source => leaf, Target => number);
+   PRAGMA Annotate(GNATprove, False_Positive,
+      "type with constraints on bit representation *",
+      "This is an alternative to the ""enum_rep"" attribute.");
 
    -- This is how my `CPUID` function in assembly will return the value. It is
    -- a 24-byte record/structure. All records that attempt to describe this

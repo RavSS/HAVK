@@ -6,6 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
+   SPARK.Heap,
    HAVK_Kernel.ACPI,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Paging;
@@ -30,8 +31,8 @@ IS
    PROCEDURE Enumerate_MADT
      (Paging_Structure : IN OUT Paging.page_layout)
    WITH
-      Global => (In_Out => (Interrupt_Controller_State, CPU_Cores)),
-      Pre    => ACPI.Valid_Implementation,
+      Global => (In_Out => (Interrupt_Controller_State, CPU_Cores),
+                 Input  => (SPARK.Heap.Dynamic_Memory, ACPI.ACPI_State)),
       Post   => CPU_Cores /= 0;
 
    -- This remaps the two 8248 PICs and it can optionally disable the emulation
@@ -39,9 +40,7 @@ IS
    -- signals an EOI (end of interrupt) signal if you wish to use the PICs for
    -- whatever reason.
    PROCEDURE Remap_PICs
-     (Disable_Emulation : boolean := false)
-   WITH
-      Pre => (IF Disable_Emulation THEN ACPI.Valid_Implementation);
+     (Disable_Emulation : boolean := true);
 
    -- Flips the global and x2APIC-mode bits to enable them, then it enables
    -- the LAPIC itself. Does not check for the relevant CPUID bits as of now.
@@ -52,8 +51,7 @@ IS
    PROCEDURE Set_IO_APIC_Redirects
    WITH
       Global => (In_Out => (Intrinsics.CPU_MSR_State,
-                            Interrupt_Controller_State)),
-      Pre    => ACPI.Valid_Implementation;
+                            Interrupt_Controller_State));
 
    -- Simply writes a zero to the LAPIC's EOI register.
    PROCEDURE Reset
@@ -68,7 +66,7 @@ PRIVATE
    -- are read-only.
    TYPE IA32_APIC_BASE_format IS RECORD
       -- Used for nothing. Read only.
-      Reserved_1  : number RANGE 0 .. 16#00000FF#;
+      Reserved_1  : number RANGE 0 .. 2**08 - 1;
       -- Indicates whether the LAPIC belongs to a BSP or an AP. Read only.
       BSP_APIC    : boolean;
       -- Used for nothing. Read only.
@@ -81,12 +79,14 @@ PRIVATE
       -- this and the x2APIC mode bit must be set to actually use the x2APIC
       -- interface.
       Global_APIC : boolean;
-      -- The base address of the LAPIC unique to the current processor core.
-      -- This can be moved, but it must be page-aligned.
-      APIC_Base   : number RANGE 0 .. 16#0FFFFFF#;
+      -- The base address of the LAPIC unique to the current logical processor
+      -- core. This can be moved, but it must be page-aligned.
+      APIC_Base   : number RANGE 0 .. 2**24 - 1;
       -- Used for nothing. Read only.
-      Reserved_3  : number RANGE 0 .. 16#FFFFFFF#;
-   END RECORD;
+      Reserved_3  : number RANGE 0 .. 2**28 - 1;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR IA32_APIC_BASE_format USE RECORD
       Reserved_1      AT 0 RANGE 0 .. 07;
       BSP_APIC        AT 1 RANGE 0 .. 00;
@@ -116,7 +116,9 @@ PRIVATE
       -- of 64 bits, so this is just empty padding that is handled by the
       -- `WRMSR` instruction.
       Reserved_2       : number RANGE 00 .. 000;
-   END RECORD;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR spurious_interrupt_vector_register_format USE RECORD
       Interrupt_Vector     AT 0 RANGE 00 .. 007;
       Enabled_APIC         AT 0 RANGE 08 .. 008;
@@ -167,7 +169,8 @@ PRIVATE
       IOREDTBL_low,  -- Redirection table lower register. Field-specific R/W.
       IOREDTBL_high) -- Redirection table higher register. Field-specific R/W.
    WITH
-      Size => 8; -- The register index is a 32-bit value, but it has a limit.
+      Size        => 8, -- Limit of the register index.
+      Object_Size => number'size;
    FOR IO_APIC_register USE
      (IOAPICID      => 16#00#,
       IOAPICVER     => 16#01#,
@@ -178,11 +181,13 @@ PRIVATE
    -- The register for the I/O APIC which contains the identity. The index
    -- is zero.
    TYPE IO_APIC_identity_register IS RECORD
-      Reserved_1 : number RANGE 00 .. 16#FFFFFF#;
+      Reserved_1 : number RANGE 00 .. 2**24 - 1;
       -- The identity of the I/O APIC. This is also found in the MADT.
-      Identity   : number RANGE 00 .. 16#00000F#;
-      Reserved_2 : number RANGE 00 .. 16#00000F#;
-   END RECORD;
+      Identity   : number RANGE 00 .. 2**04 - 1;
+      Reserved_2 : number RANGE 00 .. 2**04 - 1;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR IO_APIC_identity_register USE RECORD
       Reserved_1     AT 0 RANGE 00 .. 23;
       Identity       AT 0 RANGE 24 .. 27;
@@ -193,15 +198,18 @@ PRIVATE
    -- of GSIs (I/O APIC interrupt inputs) that it supports. The index is one.
    TYPE IO_APIC_version_register IS RECORD
       -- The I/O APIC's version or iteration.
-      Version           : number RANGE 00 .. 16#FF#;
-      Reserved_1        : number RANGE 00 .. 16#FF#;
+      Version           : number RANGE 00 .. 2**8 - 1;
+      Reserved_1        : number RANGE 00 .. 2**8 - 1;
       -- The maximum number of redirect entries for IRQs we can provide.
       -- Note that the count begins from zero. See the I/O APIC register
       -- type's comments for an understanding on how to expose them.
       -- Only 239 (240 from one start) redirects are possible for an I/O APIC.
-      Maximum_Redirects : number RANGE 00 .. 16#EF#;
-      Reserved_2        : number RANGE 00 .. 16#FF#;
-   END RECORD;
+      Maximum_Redirects : number RANGE 00 .. 2**8 - 1;
+      Reserved_2        : number RANGE 00 .. 2**8 - 1;
+   END RECORD
+   WITH
+      Dynamic_Predicate => Maximum_Redirects <= 239,
+      Object_Size       => number'size;
    FOR IO_APIC_version_register USE RECORD
       Version               AT 0 RANGE 00 .. 07;
       Reserved_1            AT 0 RANGE 08 .. 15;
@@ -212,12 +220,14 @@ PRIVATE
    -- A register for the I/O APIC that serves a more advanced purpose to do
    -- with I/O APIC priorities. It is of little use to us. The index is two.
    TYPE IO_APIC_arbitration_register IS RECORD
-      Reserved_1        : number RANGE 00 .. 16#FFFFFF#;
+      Reserved_1        : number RANGE 00 .. 2**24 - 1;
       -- The arbitration identity value. This has to do with disputing
       -- bus ownership. Essentially a priority for the APIC.
-      Arbitration_Value : number RANGE 00 .. 16#00000F#;
-      Reserved_2        : number RANGE 00 .. 16#00000F#;
-   END RECORD;
+      Arbitration_Value : number RANGE 00 .. 2**04 - 1;
+      Reserved_2        : number RANGE 00 .. 2**04 - 1;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR IO_APIC_arbitration_register USE RECORD
       Reserved_1            AT 0 RANGE 00 .. 23;
       Arbitration_Value     AT 0 RANGE 24 .. 27;
@@ -231,7 +241,7 @@ PRIVATE
       -- The interrupt vector to redirect the interrupt to. Can be read and
       -- written to. The actual vector range is 0x10 to 0xFE, but this is
       -- zeroed out in the register by default.
-      Interrupt_Vector  : number RANGE 0 .. 16#FF# := 32;
+      Interrupt_Vector  : number RANGE 00 .. 2**08 - 1 := 32;
       -- How the interrupt is delivered. See the enumeration type for
       -- more detail. Can be read and written to.
       Delivery_Mode     : interrupt_delivery := fixed_delivery;
@@ -262,8 +272,10 @@ PRIVATE
       -- intricacies to this, so consult the I/O APIC's datasheet.
       -- Reading and writing is possible.
       Interrupt_Masked  : boolean := false;
-      Reserved          : number RANGE 00 .. 16#7FFF# := 0;
-   END RECORD;
+      Reserved          : number RANGE 00 .. 2**15 - 1 := 0;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR IO_APIC_redirection_table_register_low USE RECORD
       Interrupt_Vector      AT 0 RANGE 00 .. 07;
       Delivery_Mode         AT 0 RANGE 08 .. 10;
@@ -280,7 +292,7 @@ PRIVATE
    -- to LAPIC/PIC IRQs by providing the destination. The destination relies on
    -- the address mode and the index is (16 + ($GSI * 2) + 1).
    TYPE IO_APIC_redirection_table_register_high IS RECORD
-      Reserved    : number RANGE 00 .. 16#FFFFFF#;
+      Reserved    : number RANGE 00 .. 2**24 - 1;
       -- If in logical mode, then this is the logical destination address
       -- for the interrupt; otherwise, it is the physical destination
       -- address. In physical mode, this is actually only 4 bits wide and
@@ -289,8 +301,10 @@ PRIVATE
       -- identities are instead determined by what the LAPIC has been
       -- programmed as. Those registers can be found in Intel's IA-32e guide,
       -- but for now, we will not use them.
-      Destination : number RANGE 00 .. 16#0000FF#;
-   END RECORD;
+      Destination : number RANGE 00 .. 2**08 - 1;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR IO_APIC_redirection_table_register_high USE RECORD
       Reserved        AT 0 RANGE 00 .. 23;
       Destination     AT 0 RANGE 24 .. 31;
@@ -311,10 +325,10 @@ PRIVATE
       -- you will get unexpected results. See the I/O APIC register type for
       -- retrieving the IRQ redirection entries and how to access both
       -- registers or use the generic wrappers that take care of it for you.
-      Register_Index  : number RANGE 0 .. 16#FFFFFFFF#;
+      Register_Index  : number RANGE 0 .. 2**32 - 1;
       Padding_1       : number;
-      Padding_2       : number RANGE 0 .. 16#FFFFFFFF#;
-      Register_Window : number RANGE 0 .. 16#FFFFFFFF#;
+      Padding_2       : number RANGE 0 .. 2**32 - 1;
+      Register_Window : number RANGE 0 .. 2**32 - 1;
    END RECORD
    WITH -- The "Atomic" aspect doesn't work, but "Volatile" is sort of similar.
       Volatile => true; -- Essentially "volatile" in C. Good enough.
@@ -358,7 +372,7 @@ PRIVATE
    -- helps store it more easily in a manageable format.
    TYPE ISA_IRQ_IO_APIC_mapping IS RECORD
       Present  : boolean := false;
-      GSI      : number RANGE 0 .. 16#FFFFFFFF# := 0;
+      GSI      : number RANGE 0 .. 2**32 - 1 := 0;
       Polarity : ACPI.interrupt_signal := ACPI.default_ISA_or_EISA_signal;
       Trigger  : ACPI.interrupt_signal := ACPI.default_ISA_or_EISA_signal;
    END RECORD;
@@ -399,7 +413,7 @@ PRIVATE
       timer_current_count_register,       -- Read only.
       timer_divisor_register)             -- Read/write.
    WITH
-      Size => 32;
+      Object_Size => number'size;
    FOR LAPIC_MSR USE -- 0x800 is the base MSR for the register offsets.
      (IA32_APIC_BASE                     => 16#1B#, -- Doesn't use the base.
       identity_register                  => 16#800# + 16#02#,

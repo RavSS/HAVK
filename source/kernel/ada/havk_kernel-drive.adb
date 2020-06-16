@@ -16,33 +16,31 @@ IS
      (Data          : OUT generic_format;
       Secondary_Bus : IN boolean := false)
    IS
-      -- Make a constant aliased copy of the port to silence warnings.
-      Aliased_Port  : ALIASED CONSTANT ATA_port := Port;
+      -- TODO: Replace this when Ada 202X is available.
+      FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
+        (source => ATA_port, target => number);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "This is an alternative to the ""enum_rep"" attribute.");
 
-      -- Turn it into a raw number since we don't have "enum_rep" yet.
-      Offset        : CONSTANT number
-         RANGE ATA_port'pos(ATA_port'first) .. ATA_port'pos(ATA_port'last)
-      WITH
-         Import  => true,
-         Size    => 8,
-         Address => Aliased_Port'address;
-
-      -- Calculate the true port value.
-      Port_Value    : CONSTANT number :=
-      (
-         IF
-            Aliased_Port <= command_status_port
-         THEN
-           (IF Secondary_Bus THEN Disk_IO_Base_2 ELSE Disk_IO_Base_1) +
-               Offset
-         ELSE -- "control_status_port"/"select_port" offset correction.
-           (IF Secondary_Bus THEN Control_Base_2 ELSE Control_Base_1) +
-              (Offset - 8)
-      );
-
-      -- This is more convenient than the import way due to `gnatprove`.
       FUNCTION Value_To_Format IS NEW Ada.Unchecked_Conversion
         (Source => number, Target => generic_format);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "The retrieved format is manually checked.");
+
+      -- Calculate the true port value.
+      Port_Value : CONSTANT number RANGE 0 .. 2**16 - 1 :=
+      (
+         IF
+            Port <= command_status_port
+         THEN
+           (IF Secondary_Bus THEN Disk_IO_Base_2 ELSE Disk_IO_Base_1) +
+               Enum_Rep(Port)
+         ELSE -- "control_status_port"/"select_port" offset correction.
+           (IF Secondary_Bus THEN Control_Base_2 ELSE Control_Base_1) +
+              (Enum_Rep(Port) - 8)
+      ) AND 16#FFFF#;
 
       -- No masking is necessary as the I/O instruction wrappers/intrinsics
       -- will zero out everything higher than the byte or word.
@@ -63,22 +61,18 @@ IS
      (Data          : IN generic_format;
       Secondary_Bus : IN boolean := false)
    IS
-      -- Make a constant aliased copy of the port to silence warnings.
-      Aliased_Port  : ALIASED CONSTANT ATA_port := Port;
+      -- TODO: Replace this when Ada 202X is available.
+      FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
+        (source => ATA_port, target => number);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "This is an alternative to the ""enum_rep"" attribute.");
 
-      -- Import it into a raw number since we don't fully have "enum_rep" yet.
-      Offset : CONSTANT number
-         RANGE ATA_port'pos(ATA_port'first) .. ATA_port'pos(ATA_port'last)
-      WITH
-         Import  => true,
-         Size    => 8,
-         Address => Aliased_Port'address;
-
-      PRAGMA Warnings(off,
-         "types for unchecked conversion have different sizes",
-         Reason => "8 bits fit inside 16 bits and 16 bits is the limit.");
       FUNCTION Format_To_Value IS NEW Ada.Unchecked_Conversion
         (Source => generic_format, Target => number);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "As long as the format fits inside 64 bits, this is safe.");
 
       -- The value we must send to the port. This is converted using
       -- `Ada.Unchecked_Conversion` to silence nearly all the warnings in one
@@ -88,19 +82,17 @@ IS
       Unmasked_Data_Value : CONSTANT number := Format_To_Value(Data);
 
       -- Calculate the true port value.
-      Port_Value : CONSTANT number RANGE 0 .. 2**16 - 1 :=
+      Port_Value          : CONSTANT number RANGE 0 .. 2**16 - 1 :=
       (
          IF
-            Aliased_Port <= command_status_port
+            Port <= command_status_port
          THEN
            (IF Secondary_Bus THEN Disk_IO_Base_2 ELSE Disk_IO_Base_1) +
-            Offset
+               Enum_Rep(Port)
          ELSE -- "control_status_port"/"select_port" offset correction.
            (IF Secondary_Bus THEN Control_Base_2 ELSE Control_Base_1) +
-           (Offset - 8)
-      )
-      WITH
-         Size => 16;
+              (Enum_Rep(Port) - 8)
+      ) AND 16#FFFF#;
    BEGIN
       IF
          NOT Word_Length
@@ -170,8 +162,11 @@ IS
       -- an address overlay is more efficient. Assumes 512-byte sectors.
       Destination_Area : sectors(1 .. Sector_Count, 1 .. 512 / 2)
       WITH
-         Import  => true,
-         Address => Destination;
+         Import   => true,
+         Address  => Destination,
+         Annotate => (GNATprove, False_Positive,
+                      "object with constraints on bit representation *",
+                      "The destination area has no fixed representation.");
 
       Drive_Selection  : CONSTANT drive_register :=
         (Block_Number   => (IF NOT LBA48_Mode THEN
@@ -278,8 +273,11 @@ IS
       -- Assumes 512-byte sectors.
       Source_Area     : CONSTANT sectors(1 .. Sector_Count, 1 .. 512 / 2)
       WITH
-         Import  => true,
-         Address => Source;
+         Import   => true,
+         Address  => Source,
+         Annotate => (GNATprove, False_Positive,
+                      "object with constraints on bit representation *",
+                      "The source area has no fixed representation.");
 
       Drive_Selection : CONSTANT drive_register :=
         (Block_Number   => Shift_Right(Sector_Base, 24) AND 16#F#,

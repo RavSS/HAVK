@@ -5,17 +5,14 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   HAVK_Kernel.ACPI;
-
 -- This package contains information about UEFI, which is used to interpret
 -- the arguments passed to the kernel by HAVK's bootloader. Make sure that
 -- this package specification accurately reflects the structures passed by
 -- the bootloader itself.
 PACKAGE HAVK_Kernel.UEFI
+WITH
+   Preelaborate => true
 IS
-   PRAGMA Preelaborate;
-
    -- See the UEFI specifications for more about the types of pixel
    -- formats and bitmasks.
    TYPE pixel_formats IS
@@ -133,7 +130,7 @@ IS
    -- kernel.
    -- TODO: Perhaps make a version number for the structure that gets passed
    -- alongside it.
-   TYPE arguments IS RECORD
+   TYPE arguments IS LIMITED RECORD
       Graphics_Mode_Current         : number  RANGE 0 .. 2**32 - 1;
       Graphics_Mode_Max             : number  RANGE 0 .. 2**32 - 1;
       Framebuffer_Address           : address RANGE 1 .. address'last;
@@ -141,23 +138,22 @@ IS
       Horizontal_Resolution         : number  RANGE 1 .. 2**32 - 1;
       Vertical_Resolution           : number  RANGE 1 .. 2**32 - 1;
       Pixels_Per_Scanline           : number  RANGE 1 .. 2**32 - 1;
-      Pixel_Format                  : pixel_formats;
+      Pixel_Format                  : pixel_formats RANGE RGB .. bitmask;
       Pixel_Bitmask                 : pixel_bitmasks;
       Memory_Map_Address            : address RANGE 1 .. address'last;
       Memory_Map_Key                : number  RANGE 1 .. number'last;
       Memory_Map_Size               : number  RANGE 1 .. number'last;
       Memory_Map_Descriptor_Size    : number  RANGE 1 .. number'last;
       Memory_Map_Descriptor_Version : number  RANGE 0 .. 2**32 - 1;
-      RSDP : NOT NULL ACCESS ACPI.root_system_description_pointer;
+      RSDP_Address                  : address RANGE 1 .. address'last;
       Physical_Base_Address         : address RANGE 1 .. address'last;
    END RECORD
    WITH
       Dynamic_Predicate => -- A few limits to counter wrap-around situations.
       (
-         Pixel_Format IN RGB .. bitmask AND THEN
-         Memory_Map_Address < 2**48 - 1 AND THEN -- Will never likely go over.
-         Memory_Map_Size < 4 * GiB      AND THEN
-         -- Memory_Map_Size MOD Memory_Map_Descriptor_Size = 0 AND THEN
+         Pixels_Per_Scanline >= Horizontal_Resolution AND THEN
+         Memory_Map_Address < 2**48 - 1               AND THEN -- Will never
+         Memory_Map_Size < 4 * GiB                    AND THEN -- go over this.
          Memory_Map_Descriptor_Size * (Memory_Map_Size /
             Memory_Map_Descriptor_Size) = Memory_Map_Size
       ),
@@ -177,9 +173,12 @@ IS
       Memory_Map_Size                  AT 072 RANGE 0 .. 063;
       Memory_Map_Descriptor_Size       AT 080 RANGE 0 .. 063;
       Memory_Map_Descriptor_Version    AT 088 RANGE 0 .. 031;
-      RSDP                             AT 092 RANGE 0 .. 063;
+      RSDP_Address                     AT 092 RANGE 0 .. 063;
       Physical_Base_Address            AT 100 RANGE 0 .. 063;
    END RECORD;
+
+   -- I use a double pointer to the bootloader arguments structure.
+   TYPE access_arguments IS NOT NULL ACCESS arguments;
 
    -- Points to a memory descriptor in the memory map.
    TYPE access_memory_descriptor IS ACCESS memory_descriptor;
@@ -190,25 +189,22 @@ IS
    WITH
       Pack => true;
 
-   -- Returns the bootloader arguments structure/record. Only handles UEFI and
-   -- any changes must be reflected across HAVK's kernel and HAVK's bootloader.
-   FUNCTION Get_Arguments
-      RETURN arguments
-   WITH
-      Post => Get_Arguments'result.Pixels_Per_Scanline >=
-              Get_Arguments'result.Horizontal_Resolution;
-
    -- Returns a UEFI-style memory map.
    FUNCTION Get_Memory_Map
       RETURN memory_map
-   WITH -- See the body for why there's a limit on the number of descriptors.
-      Post => -- Get_Memory_Map'result'length <= 100000 AND THEN
-             (FOR ALL Region OF Get_Memory_Map'result => Region /= NULL);
+   WITH
+      Post => (FOR ALL Region OF Get_Memory_Map'result => Region /= NULL);
 
    -- Takes in a memory descriptor and then returns a record of booleans
    -- indicating the status of all possible UEFI memory attributes.
    FUNCTION Get_Memory_Attributes
      (Region : NOT NULL ACCESS CONSTANT memory_descriptor)
       RETURN memory_attributes;
+
+   Bootloader_Arguments : CONSTANT access_arguments
+   WITH
+      Import     => true,
+      Convention => Assembler,
+      Link_Name  => "var__bootloader_arguments";
 
 END HAVK_Kernel.UEFI;

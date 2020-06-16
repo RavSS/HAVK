@@ -33,13 +33,7 @@ IS
          Value := Shift_Left(Blue, 16) OR Mid_Byte OR Red;
       END IF;
 
-      IF -- Validate the range.
-         Value >= number(pixel'last)
-      THEN
-         RETURN pixel'first; -- A black pixel is returned on an invalid value.
-      ELSE
-         RETURN pixel(Value);
-      END IF;
+      RETURN pixel(Value);
    END Create_Pixel;
 
    PROCEDURE Draw_Fill
@@ -67,13 +61,7 @@ IS
       FOR
          I IN number RANGE Pixel_Start .. Line_Length
       LOOP
-         IF
-            I <= Object.Framebuffer_Elements
-         THEN
-            Object.Screen(I,  Pixel_Colour);
-         ELSE
-            RETURN;
-         END IF;
+         Object.Screen(I,  Pixel_Colour);
       END LOOP;
    END Draw_Horizontal_Line;
 

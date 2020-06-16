@@ -17,7 +17,6 @@ WITH
    HAVK_Kernel.Debug,
    HAVK_Kernel.Drive.GPT,
    HAVK_Kernel.UEFI,
-   HAVK_Kernel.ACPI,
    HAVK_Kernel.PS2,
    HAVK_Kernel.PIT;
 USE
@@ -29,22 +28,9 @@ IS
    PROCEDURE Interrupt_Controllers
    IS
    BEGIN
-      IF
-         NOT ACPI.Valid_Implementation
-      THEN
-         Log("Skipping ACPI tables due to corruption.", Warn => true,
-            Tag => Initialise_Tag);
-         APIC.Remap_PICs(Disable_Emulation => false);
-         Enable_Interrupts;
-         Log("Interrupts enabled (PIC).", Tag => Initialise_Tag);
-         RETURN;
-      ELSE
-         Log("ACPI tables RSDP and XSDT are valid.", Tag => Initialise_Tag);
-      END IF;
-
-      -- Disable the LAPIC's PIC-compatible mode.
+      -- Remap and disable the LAPIC's PIC-compatible mode.
       Log("Disabling PICs.", Tag => Initialise_Tag);
-      APIC.Remap_PICs(Disable_Emulation => true);
+      APIC.Remap_PICs;
       Log("PICs have been disabled.", Tag => Initialise_Tag);
 
       -- See what's in the ACPI MADT's APIC structure area.
@@ -63,7 +49,7 @@ IS
       Log("I/O APIC configured.", Tag => Initialise_Tag);
 
       Log("Interrupt controllers have been set up.", Tag => Initialise_Tag);
-      Log("Detected" & number'image(APIC.CPU_Cores) & " CPU cores.",
+      Log("Detected " & Image(APIC.CPU_Cores) & " CPU cores.",
          Tag => Initialise_Tag);
 
       Enable_Interrupts;
@@ -77,12 +63,8 @@ IS
       -- if it's emulated by a present HPET or something along those lines.
       PIT.Setup;
 
-      IF
-         ACPI.Valid_Implementation
-      THEN
-         -- Start the LAPIC timer. It will be calibrated using the PIT.
-         APIC.Timer.Setup;
-      END IF;
+      -- Start the LAPIC timer. It will be calibrated using the PIT.
+      APIC.Timer.Setup;
    END Timers;
 
    PROCEDURE Default_Page_Layout
@@ -107,8 +89,7 @@ IS
             Kernel_Virtual_To_Physical(Paging.Kernel_Paging_Layout.L4'address);
       END Set_Kernel_CR3_Value;
 
-      Bootloader : CONSTANT UEFI.arguments  := UEFI.Get_Arguments;
-      Map        : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map;
+      Map : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map;
    BEGIN
       Set_Kernel_CR3_Value;
 
@@ -178,9 +159,9 @@ IS
 
       -- Identity-map the framebuffer address space.
       Paging.Kernel_Paging_Layout.Map_Address_Range
-        (Bootloader.Framebuffer_Address,
-         Bootloader.Framebuffer_Address,
-         Bootloader.Framebuffer_Size,
+        (UEFI.Bootloader_Arguments.Framebuffer_Address,
+         UEFI.Bootloader_Arguments.Framebuffer_Address,
+         UEFI.Bootloader_Arguments.Framebuffer_Size,
          Write_Access => true,
          No_Execution => true);
 
@@ -411,11 +392,10 @@ IS
          Halt; -- Don't burn the CPU.
          Terminal.Current_X_Index := Terminal.Data'first(2);
 
-         Terminal.Print("LAPIC timer:" & -- TODO: Presume the tick rate.
-            number'image(APIC.Timer.Ticks / 100));
+         Terminal.Print("LAPIC timer: " & -- TODO: Presume the tick rate.
+            Image(APIC.Timer.Ticks / 100));
 
-         Terminal.Print("PIT        :" &
-            number'image(PIT.Ticks / PIT.Tick_Rate),
+         Terminal.Print("PIT        : " & Image(PIT.Ticks / PIT.Tick_Rate),
             Next_Line => false);
 
          Terminal.Current_Y_Index := Previous_Line;
@@ -430,8 +410,8 @@ IS
      (Terminal : IN OUT textbox)
    IS
    BEGIN
-      Terminal.Print("Total usable system memory:" &
-         number'image(Memory.System_Limit / MiB) & " mebibytes.");
+      Terminal.Print("Total usable system memory: " &
+         Image(Memory.System_Limit / MiB) & " mebibytes.");
    END Memory_Map_Info;
 
    PROCEDURE Debugger

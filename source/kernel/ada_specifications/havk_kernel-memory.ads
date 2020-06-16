@@ -45,9 +45,11 @@ IS
      (Size : IN number)
       RETURN address
    WITH
-      Pre  => Size /= 0 AND THEN Size MOD Paging.Page = 0,
-      Post => Allocate_System_Stack'result MOD 16 = 0 AND THEN
-             (number(Allocate_System_Stack'result) - Size) MOD Paging.Page = 0;
+      Volatile_Function => true,
+      Pre               => Size /= 0 AND THEN Size MOD Paging.Page = 0,
+      Post              => Allocate_System_Stack'result MOD 16 = 0 AND THEN
+                          (number(Allocate_System_Stack'result) - Size)
+                              MOD Paging.Page = 0;
 
    -- Converts a virtual address inside kernel space (higher-half virtual
    -- memory) to a physical one. This is needed as the physical base address of

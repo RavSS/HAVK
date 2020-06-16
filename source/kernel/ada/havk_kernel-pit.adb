@@ -6,6 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
+   Ada.Unchecked_Conversion,
    HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.PIT
@@ -13,19 +14,20 @@ IS
    PROCEDURE Send
      (Data : IN generic_data)
    IS
-      Byte_Value : CONSTANT number RANGE 0 .. 2**08 - 1
-      WITH
-         Import  => true,
-         Size    => 8,
-         Address => Data'address;
+      FUNCTION To_Word IS NEW Ada.Unchecked_Conversion
+        (source => port, target => number);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "This is an alternative to the ""enum_rep"" attribute.");
 
-      Port_Word  : number RANGE 0 .. 2**16 - 1
-      WITH
-         Import  => true,
-         Size    => 16,
-         Address => Channel_Port'address;
+      FUNCTION To_Byte IS NEW Ada.Unchecked_Conversion
+        (source => generic_data, target => number);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "The format is manually checked (see the representation for it).");
    BEGIN
-      Intrinsics.Output_Byte(Port_Word, Byte_Value);
+      Intrinsics.Output_Byte
+        (To_Word(Channel_Port) AND 16#FFFF#, To_Byte(Data) AND 16#FF#);
    END Send;
 
    PROCEDURE Setup

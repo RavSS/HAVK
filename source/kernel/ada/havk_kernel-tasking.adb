@@ -23,14 +23,16 @@ IS
       Refined_Global => (In_Out => (Tasks, Descriptors.TSS,
                                     Paging.Kernel_Paging_Layout,
                                     Memory.Manager.Frame_Allocator_State),
-                         Input  => (Memory.Memory_State, Enabled,
+                         Input  => (SPARK.Heap.Dynamic_Memory,
+                                    Memory.Memory_State, Enabled,
                                     Memory.Kernel_Virtual_Base,
                                     Memory.Kernel_Isolated_Text_Base,
                                     Memory.Kernel_Isolated_Text_Size,
                                     Memory.Kernel_Isolated_Data_Base,
                                     Memory.Kernel_Isolated_Data_Size,
                                     Memory.Kernel_Isolated_BSS_Base,
-                                    Memory.Kernel_Isolated_BSS_Size))
+                                    Memory.Kernel_Isolated_BSS_Size,
+                                    UEFI.Bootloader_Arguments))
    IS
       TYPE pointer IS ACCESS void; -- Need a generic pointer type for now.
 
@@ -49,29 +51,19 @@ IS
          Import     => true,
          Convention => Intrinsic;
 
-      -- TODO: This crashes `gnatprove` with the following message:
-      -- "unregistered entity havk_kernel__paging__page_layout"
-      -- I've moved it to a non-analysed procedure for now.
-      -- Tasks(Task_Index).Virtual_Space := NEW Paging.page_layout;
-      PROCEDURE Create_Virtual_Space
-        (Current_Page_Layout : IN OUT Paging.access_page_layout)
-      WITH
-         Post => Current_Page_Layout /= NULL;
-
-      PROCEDURE Create_Virtual_Space
-        (Current_Page_Layout : IN OUT Paging.access_page_layout)
-      WITH
-         SPARK_Mode => off -- This crashes `gnatprove` for GNAT CE 2019.
-      IS
-      BEGIN
-         Current_Page_Layout := NEW Paging.page_layout;
-      END Create_Virtual_Space;
-
       Total_Size     : CONSTANT number := Code_Size + (Stack_Size + Heap_Size);
       Error_Check    : error;
-      New_Stack      : Memory.access_x86_stack;
-      Physical_Entry : pointer;
       Padded_Name    : string(1 .. 64) := (OTHERS => character'val(0));
+      New_Stack      : Memory.access_x86_stack
+      WITH
+         Annotate => (GNATprove, Intentional,
+                      "memory leak might occur at end of scope",
+                      "Task cleanup not yet implemented.");
+      Physical_Entry : pointer
+      WITH
+         Annotate => (GNATprove, Intentional,
+                      "memory leak might occur at end of scope",
+                      "Task cleanup not yet implemented.");
    BEGIN
       Padded_Name(Task_Name'range) := Task_Name;
       Intrinsics.Disable_Interrupts;
@@ -93,17 +85,17 @@ IS
                Total_Size, Error_Check);
 
             IF
-               Error_Check = no_error
+               Error_Check /= no_error
             THEN
-               Paging.Kernel_Paging_Layout.Map_Address_Range
-                 (Memory.Manager.Get_Base(Tasks(Task_Index).Physical_Space),
-                  Memory.Manager.Get_Base(Tasks(Task_Index).Physical_Space),
-                  number(Memory.Manager.Get_Base
-                    (Tasks(Task_Index).Physical_Space)) + Total_Size,
-                  Write_Access => true);
-            ELSE
                RETURN;
             END IF;
+
+            Paging.Kernel_Paging_Layout.Map_Address_Range
+              (Memory.Manager.Get_Base(Tasks(Task_Index).Physical_Space),
+               Memory.Manager.Get_Base(Tasks(Task_Index).Physical_Space),
+               number(Memory.Manager.Get_Base
+                 (Tasks(Task_Index).Physical_Space)) + Total_Size,
+               Write_Access => true);
 
             -- All (ring 3) tasks need a kernel stack for ISR functionality.
             Tasks(Task_Index).Kernel_Stack :=
@@ -123,6 +115,8 @@ IS
             -- Allocate it first. It's allocated on a physical page boundary.
             Allocate(Tasks(Task_Index).Physical_Space, New_Stack, Stack_Size,
                Alignment => Paging.Page);
+            PRAGMA Annotate(GNATprove, Intentional, "memory leak might occur",
+               "Task cleanup not yet implemented.");
 
             -- Modify the stack from the allocated block's end due to how x86
             -- stacks progress in usage and then prepare it.
@@ -144,18 +138,22 @@ IS
             -- section and does everything on the predefined task stack.
             Allocate(Tasks(Task_Index).Physical_Space, Physical_Entry,
                Code_Size, Alignment => Paging.Page);
+            PRAGMA Annotate(GNATprove, Intentional, "memory leak might occur",
+               "Task cleanup not yet implemented.");
 
             IF
                To_Address(Physical_Entry) =
                   Memory.Manager.Null_Allocation_Address
             THEN
                RETURN; -- TODO: Add better error handling.
-            ELSE
-               Tasks(Task_Index).Physical_Entry := To_Address(Physical_Entry);
             END IF;
 
+            Tasks(Task_Index).Physical_Entry := To_Address(Physical_Entry);
+
             -- Each task needs its own virtual memory layout.
-            Create_Virtual_Space(Tasks(Task_Index).Virtual_Space);
+            Tasks(Task_Index).Virtual_Space := NEW Paging.page_layout;
+            PRAGMA Annotate(GNATprove, Intentional, "memory leak might occur",
+               "Task cleanup not yet implemented.");
 
             -- Map the given code size itself. User executable code.
             Tasks(Task_Index).Virtual_Space.Map_Address_Range
@@ -238,10 +236,13 @@ IS
       -- "HAVK_Kernel.Interrupts", just so we have more freedom in placing
       -- things on the stack here. We're storing 8-byte addresses on it. First
       -- index represents the last/newest value placed on the stack.
-      Task_Stack : quad_words(1 .. 5)
+      Task_Stack : quadwords(1 .. 5)
       WITH
-         Import  => true, -- This is overlayed from low to high address-wise.
-         Address => Stack_Base - ((address'size / 8) * 5);
+         Import   => true, -- This is overlayed from low to high address-wise.
+         Address  => Stack_Base - ((address'size / 8) * 5),
+         Annotate => (GNATprove, False_Positive,
+                      "object with constraints on bit representation *",
+                      "It's manually checked due to its low-level purpose.");
    BEGIN
       PRAGMA Warnings(GNATprove, off, "unused assignment",
          Reason => "It will be used later during a context switch.");
@@ -302,7 +303,7 @@ IS
       IF -- A true state-of-the-art scheduler.
          Yield OR ELSE APIC.Timer.Ticks MOD Tasks(Active_Task).Max_Ticks = 0
       THEN
-         Switch(Tasks(Active_Task).State);
+         Switch;
       END IF;
    END Round_Robin;
 

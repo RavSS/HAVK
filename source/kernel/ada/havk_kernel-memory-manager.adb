@@ -5,9 +5,6 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   HAVK_Kernel.UEFI;
-
 PACKAGE BODY HAVK_Kernel.Memory.Manager
 WITH
    Refined_State => (Frame_Allocator_State => Physical_Memory,
@@ -18,22 +15,20 @@ IS
       RETURN boolean
    IS
       USE TYPE
-         UEFI.memory_type,
-         UEFI.access_memory_descriptor;
+         UEFI.memory_type;
 
       -- Returns true if there's a number of attributes that are not suitable
       -- for the memory manager.
       -- TODO: Expand this and the encompassing function for requesting
       -- specific attributes on a frame.
       FUNCTION Undesirable_Attributes
-        (Region : IN UEFI.access_memory_descriptor)
+        (Region : NOT NULL ACCESS CONSTANT UEFI.memory_descriptor)
          RETURN boolean
       WITH
-         Inline => true,
-         Pre    => Region /= NULL;
+         Inline => true;
 
       FUNCTION Undesirable_Attributes
-        (Region : IN UEFI.access_memory_descriptor)
+        (Region : NOT NULL ACCESS CONSTANT UEFI.memory_descriptor)
          RETURN boolean
       IS
          Attributes : CONSTANT UEFI.memory_attributes :=
@@ -51,7 +46,11 @@ IS
 
       Frame_Base_Address : CONSTANT frame_address :=
          frame_address(Frame_Index * Paging.Page);
-      Map                : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map;
+      Map                : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map
+      WITH
+         Annotate => (GNATprove, False_Positive,
+                      "memory leak might occur at end of scope",
+                      "No allocation is occurring.");
    BEGIN
       FOR
          Region OF Map
@@ -144,7 +143,7 @@ IS
          IF
             Alignment /= 0
          THEN
-            Size + (Alignment + (address'size / 8)) -- `address'size / 8`
+            Size + (Alignment + (address'size / 8))
          ELSE
             Size
       );
@@ -223,6 +222,8 @@ IS
       THEN
          Deallocate(Deallocation_Space, Deallocation_Address);
          Deallocation := To_Pointer(Deallocation_Address);
+         PRAGMA Annotate(GNATprove, False_Positive, "memory leak might occur",
+            "It's either not a valid address to begin with or it turns null.");
       END IF;
    END Deallocator;
 
@@ -241,9 +242,17 @@ IS
          Post       => To_Pointer'result /= NULL;
 
       Current_Limit : address := Allocation_Space.Base_Limit;
-      Current_Block : access_block;
       Valid_Block   : boolean;
-      New_Block     : access_block;
+      Current_Block : access_block
+      WITH
+         Annotate => (GNATprove, False_Positive,
+                      "memory leak might occur at end of scope",
+                      "Handled through manual memory access.");
+      New_Block     : access_block
+      WITH
+         Annotate => (GNATprove, False_Positive,
+                      "memory leak might occur at end of scope",
+                      "Handled through manual memory access.");
    BEGIN
       IF -- Specially handle the first block.
          Allocation_Space.Base_Block = NULL
@@ -256,6 +265,8 @@ IS
             Used       => true,
             Size       => Allocation_Size,
             Data       => void'first);
+         PRAGMA Annotate(GNATprove, Intentional, "memory leak might occur",
+            "This is the allocation itself that is later manually freed.");
          Allocation := Block_Data(Allocation_Space.Base_Block);
          RETURN;
       ELSE
@@ -298,6 +309,8 @@ IS
             Valid_Block
          THEN -- It's valid, so we traverse forward.
             Current_Block := Current_Block.Next_Block;
+            PRAGMA Annotate(GNATprove, False_Positive,
+               "memory leak might occur", "Leave the previous block alone.");
          ELSE
             RAISE Panic
             WITH
@@ -324,6 +337,8 @@ IS
          Used       => true,
          Size       => Allocation_Size,
          Data       => void'first);
+      PRAGMA Annotate(GNATprove, False_Positive, "memory leak might occur",
+         "We're manually creating a new block in a checked area.");
 
       Allocation    := Block_Data(New_Block);
       Current_Block := New_Block.Last_Block;
@@ -342,6 +357,8 @@ IS
             Valid_Block
          THEN
             Current_Block := Current_Block.Last_Block;
+            PRAGMA Annotate(GNATprove, False_Positive,
+               "memory leak might occur", "We're just going backwards.");
          ELSE
             RAISE Panic
             WITH
@@ -359,7 +376,11 @@ IS
      (Deallocation_Space : IN OUT space;
       Deallocation       : IN OUT address)
    IS
-      Current_Block      : access_block := Deallocation_Space.Base_Block;
+      Current_Block      : access_block := Deallocation_Space.Base_Block
+      WITH
+         Annotate => (GNATprove, False_Positive,
+                      "memory leak might occur at end of scope",
+                      "We're only traversing and marking a block as unused.");
       Current_Block_Data : address;
       Valid_Block        : boolean;
    BEGIN
@@ -395,6 +416,8 @@ IS
             Valid_Block
          THEN
             Current_Block := Current_Block.Next_Block;
+            PRAGMA Annotate(GNATprove, False_Positive,
+               "memory leak might occur", "Leave the previous block alone.");
          ELSE
             RAISE Panic
             WITH
@@ -423,6 +446,8 @@ IS
             Valid_Block
          THEN
             Current_Block := Current_Block.Last_Block;
+            PRAGMA Annotate(GNATprove, False_Positive,
+               "memory leak might occur", "We're just going backwards.");
          ELSE
             RAISE Panic
             WITH
@@ -493,13 +518,14 @@ IS
       Size        : IN number;
       Error_Check : OUT error)
    WITH
-      Refined_Global => (In_Out => Physical_Memory),
+      Refined_Global => (In_Out => Physical_Memory,
+                         Input  => UEFI.Bootloader_Arguments),
       Refined_Post   => Error_Check IN no_error | memory_error | size_error
                            AND THEN
                        (IF Error_Check IN no_error | memory_error THEN
                            New_Space.Frames_Set)
    IS
-      Base_Frame_Address : frame_address := Null_Frame_Address;
+      Base_Frame_Address : frame_address;
    BEGIN
       IF
          New_Space.Frames_Set -- Don't redo the initialisation.
@@ -523,6 +549,8 @@ IS
          Base_Limit => Base_Frame_Address,
          End_Limit  => Base_Frame_Address + address(Size),
          Frames_Set => true);
+      PRAGMA Annotate(GNATprove, False_Positive, "memory leak might occur",
+         "We cannot destruct heap spaces yet. Freeing happens elsewhere.");
 
       Error_Check := no_error;
    END Initialise_Space;
@@ -578,7 +606,8 @@ IS
    PROCEDURE Prepare_Kernel_Heap
    WITH
       Refined_Global => (In_Out => (Physical_Memory, Kernel_Heap,
-                                    Kernel_Heap_Base)),
+                                    Kernel_Heap_Base),
+                         Input  => UEFI.Bootloader_Arguments),
       Refined_Post   => Kernel_Heap.Frames_Set
    IS
       Error_Check : error;

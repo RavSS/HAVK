@@ -73,6 +73,8 @@ IS
    Word_Size    : CONSTANT := 64;
    Memory_Size  : CONSTANT := 2 ** 64;
 
+   -- RavSS: RM 13.7(37) says this should be private, but I don't think it
+   -- really matters?
    TYPE address IS MOD Memory_Size;
    PRAGMA Provide_Shift_Operators(address);
    Null_Address : CONSTANT address := 0;

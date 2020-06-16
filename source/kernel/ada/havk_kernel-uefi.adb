@@ -56,27 +56,6 @@ IS
             THEN false)
    );
 
-   FUNCTION Get_Arguments
-      RETURN arguments
-   IS
-      -- The bootloader will never pass a null pointer, so this type is just
-      -- here to inform `gnatprove` of it without an explicit pragma.
-      TYPE access_arguments  IS NOT NULL ACCESS arguments;
-      Bootloader_Arguments : CONSTANT access_arguments
-      WITH
-         Import     => true,
-         Convention => Assembler,
-         Link_Name  => "var__bootloader_arguments";
-   BEGIN
-      -- It's not physically possible for a scanline to have less pixels than
-      -- the scanline's width, so the UEFI GOP implementation will never return
-      -- anything to the contrary.
-      PRAGMA Assume(Bootloader_Arguments.Pixels_Per_Scanline >=
-         Bootloader_Arguments.Horizontal_Resolution);
-
-      RETURN Bootloader_Arguments.ALL;
-   END Get_Arguments;
-
    FUNCTION Get_Memory_Map
       RETURN memory_map
    IS
@@ -89,13 +68,13 @@ IS
          Pre        => Memory_Map_Descriptor_Address /= 0,
          Post       => To_Pointer'result /= NULL;
 
-      Bootloader : CONSTANT arguments := Get_Arguments;
-      Limit      : CONSTANT address := Bootloader.Memory_Map_Address +
-         address(Bootloader.Memory_Map_Size);
-      Offset     : address RANGE Bootloader.Memory_Map_Address .. Limit :=
-         Bootloader.Memory_Map_Address;
-      Map        : memory_map(1 .. Bootloader.Memory_Map_Size /
-         Bootloader.Memory_Map_Descriptor_Size);
+      Limit  : CONSTANT address := Bootloader_Arguments.Memory_Map_Address +
+         address(Bootloader_Arguments.Memory_Map_Size);
+      Offset : address
+         RANGE Bootloader_Arguments.Memory_Map_Address .. Limit :=
+            Bootloader_Arguments.Memory_Map_Address;
+      Map    : memory_map(1 .. Bootloader_Arguments.Memory_Map_Size /
+         Bootloader_Arguments.Memory_Map_Descriptor_Size);
    BEGIN
       FOR
          Region OF Map
@@ -103,9 +82,11 @@ IS
          Region := To_Pointer(Offset);
 
          IF
-            Offset + address(Bootloader.Memory_Map_Descriptor_Size) < Limit
+            Offset +
+               address(Bootloader_Arguments.Memory_Map_Descriptor_Size) < Limit
          THEN
-            Offset := Offset + address(Bootloader.Memory_Map_Descriptor_Size);
+            Offset := Offset +
+               address(Bootloader_Arguments.Memory_Map_Descriptor_Size);
          END IF;
       END LOOP;
 

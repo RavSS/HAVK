@@ -112,9 +112,9 @@ IS
       -- Remember that the standard string type in Ada only supports a positive
       -- index (one-based or higher), so a length of zero needs to be
       -- interpreted as a length of one.
-      Log_C_Length    : CONSTANT natural := (IF Log_Pointer /= 0 THEN
+      Log_C_Length  : CONSTANT natural := (IF Log_Pointer /= 0 THEN
          Length(Log_Pointer, log_string_limit'last) ELSE 0);
-      Tag_C_Length    : CONSTANT natural := (IF Tag_Pointer /= 0 THEN
+      Tag_C_Length  : CONSTANT natural := (IF Tag_Pointer /= 0 THEN
          Length(Tag_Pointer, log_tag_limit'last) ELSE 0);
 
       Log_C_String  : CONSTANT string
@@ -122,7 +122,10 @@ IS
       WITH
          Import     => true,
          Convention => C,
-         Address    => Log_Pointer;
+         Address    => Log_Pointer,
+         Annotate   => (GNATprove, False_Positive,
+                        "object with constraints on bit representation *",
+                        "It's just an array of bytes, no inner alignment.");
 
       Tag_C_String  : CONSTANT string
         (1 .. (IF Tag_C_Length /= 0 THEN Tag_C_Length ELSE 1))
@@ -161,40 +164,39 @@ IS
          Digit_Count : number RANGE 0 .. 64 := 0;
          Temporary   : number := Value;
       BEGIN
-         CASE
-            Base
-         IS -- TODO: Unsure why the digit counts aren't automatically provable.
-            WHEN 10 =>
-               WHILE
-                  Temporary /= 0
-               LOOP
-                  PRAGMA Loop_Invariant(Digit_Count <= Base * 2);
+         IF
+            Base = 10
+         THEN -- TODO: The digit counts aren't automatically provable.
+            WHILE
+               Temporary /= 0
+            LOOP
+               PRAGMA Loop_Invariant(Digit_Count <= Base * 2);
 
-                  IF
-                     Digit_Count < Base * 2
-                  THEN
-                     Digit_Count := Digit_Count + 1;
-                  END IF;
+               IF
+                  Digit_Count < Base * 2
+               THEN
+                  Digit_Count := Digit_Count + 1;
+               END IF;
 
-                  Temporary := Temporary / Base;
-               END LOOP;
-            WHEN 16 =>
-               WHILE
-                  Temporary /= 0
-               LOOP
-                  PRAGMA Loop_Invariant(Digit_Count <= Base);
+               Temporary := Temporary / Base;
+            END LOOP;
+         ELSIF
+            Base = 16
+         THEN
+            WHILE
+               Temporary /= 0
+            LOOP
+               PRAGMA Loop_Invariant(Digit_Count <= Base);
 
-                  IF
-                     Digit_Count < Base
-                  THEN
-                     Digit_Count := Digit_Count + 1;
-                  END IF;
+               IF
+                  Digit_Count < Base
+               THEN
+                  Digit_Count := Digit_Count + 1;
+               END IF;
 
-                  Temporary := Shift_Right(Temporary, 4);
-               END LOOP;
-            WHEN OTHERS =>
-               RETURN 1;
-         END CASE;
+               Temporary := Shift_Right(Temporary, 4);
+            END LOOP;
+         END IF;
 
          IF
             Digit_Count < Padding
@@ -215,29 +217,28 @@ IS
       Imaged    : string(1 .. positive(Get_Digits)) := (OTHERS => '0');
       Temporary : number := Value;
    BEGIN
-      CASE
-         Base
-      IS
-         WHEN 10 =>
-            FOR
-               Index IN REVERSE Imaged'range
-            LOOP
-               EXIT WHEN Temporary = 0;
-               Imaged(Index) :=
-                  character'val((Temporary MOD Base) + character'pos('0'));
-               Temporary     := Temporary / Base;
-            END LOOP;
-         WHEN 16 =>
-            FOR
-               Index IN REVERSE Imaged'range
-            LOOP
-               EXIT WHEN Temporary = 0;
-               Imaged(Index) := Base_16(Temporary AND Base - 1);
-               Temporary     := Shift_Right(Temporary, 4);
-            END LOOP;
-         WHEN OTHERS =>
-            NULL;
-      END CASE;
+      IF
+         Base = 10
+      THEN
+         FOR
+            Index IN REVERSE Imaged'range
+         LOOP
+            EXIT WHEN Temporary = 0;
+            Imaged(Index) :=
+               character'val((Temporary MOD Base) + character'pos('0'));
+            Temporary     := Temporary / Base;
+         END LOOP;
+      ELSIF
+         Base = 16
+      THEN
+         FOR
+            Index IN REVERSE Imaged'range
+         LOOP
+            EXIT WHEN Temporary = 0;
+            Imaged(Index) := Base_16(Temporary AND Base - 1);
+            Temporary     := Shift_Right(Temporary, 4);
+         END LOOP;
+      END IF;
 
       RETURN Imaged;
    END Image;

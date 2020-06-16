@@ -10,13 +10,12 @@ PACKAGE HAVK_Kernel.Interrupts
 WITH
    Preelaborate => true
 IS
-   -- Hopefully I have defined the 64-bit interrupt stack frame properly.
-   -- Check Intel's ASD Manual (6-12 Vol. 1) for a description
-   -- of the IA-32 interrupt stack frame or the 32-bit version of HAVK.
-   -- So far, there does not seem to be any changes to its definition.
-   -- Also check Figure 8-13. in AMD's AMD64 manual. The error code
-   -- (if relevant) will be passed as a separate parameter. Essentially,
-   -- the values change from double-words (4 bytes) to quad-words (8 bytes).
+   -- This is the data structure put on the handler's stack after an interrupt,
+   -- in which `REX.W IRET` uses to return to the interrupted location. The
+   -- error code (if relevant) will be passed as a separate parameter.
+   -- Essentially, the values change from doublewords (4 bytes) to quadwords (8
+   -- bytes) for x86-64. The interrupt frame is placed on a 16-byte alignment
+   -- by the CPU on the stack.
    TYPE interrupted_state IS RECORD
       RIP    : address;
       CS     : number;
@@ -25,7 +24,7 @@ IS
       SS     : number;
    END RECORD
    WITH
-      Alignment => 128; -- The stack frame is on a 16-byte alignment.
+      Object_Size => (32 * 8) + 63 + 1;
    FOR interrupted_state USE RECORD
       RIP    AT 00 RANGE 0 .. 63;
       CS     AT 08 RANGE 0 .. 63;
@@ -34,39 +33,36 @@ IS
       SS     AT 32 RANGE 0 .. 63;
    END RECORD;
 
-   -- The processor passes a pointer to the interrupt stack frame and GCC
-   -- demands that we account for it regardless of interaction. GCC also does
-   -- not allow for this to be replaced with an anonymous access parameter.
-   TYPE access_interrupted_state IS NOT NULL ACCESS interrupted_state;
+   PRAGMA Warnings(off, "unused variable ""Interrupt_Frame""",
+      Reason => "The ISRs should take the parameter in regardless of usage.");
 
-   PRAGMA Warnings(GNATprove, off, "pragma ""Machine_Attribute"" ignored",
-      Reason => "The pragma must be used to create ISRs.");
-
-   PRAGMA Warnings(GNATprove, off, "unused variable ""Stack_Frame""",
-      Reason => "The ISRs must take the parameter in regardless of usage.");
-
-   -- Used for handling all spurious interrupt vectors.
-   -- TODO: Need a confirmation that this should or shouldn't signal EOI to
-   -- avoid confusion, as I can't find any information on whether it should.
-   PRAGMA Warnings(GNATprove, off,
-      "subprogram ""Spurious_Interrupt_Handler"" has no effect",
-      Reason => "The handler is empty on purpose and has a hidden effect.");
-   PROCEDURE Spurious_Interrupt_Handler
-     (Stack_Frame : IN access_interrupted_state)
+   -- The spurious interrupt handler. All interrupt vectors should use this as
+   -- their entry point if nothing else is assigned to them.
+   PROCEDURE ISR_Default
+     (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state)
    WITH
-      Linker_Section => ".isolated_text";
-   PRAGMA Machine_Attribute(Spurious_Interrupt_Handler, "interrupt");
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "assembly__interrupt_handler_spurious";
 
    -- Local APIC timer.
-   PROCEDURE ISR_048_Handler
-     (Stack_Frame : IN access_interrupted_state)
+   PROCEDURE ISR_048_Stub
+     (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state)
    WITH
-      Linker_Section => ".isolated_text";
-   PRAGMA Machine_Attribute(ISR_048_Handler, "interrupt");
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "assembly__interrupt_handler_stub_048";
+   PROCEDURE ISR_048_Handler
+     (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state)
+   WITH
+      Export        => true,
+      Convention    => Assembler,
+      External_Name => "ada__interrupt_handler_048";
 
-   -- Raising this causes a context switch and shifts the task.
-   PROCEDURE ISR_100_Handler
-     (Stack_Frame : IN access_interrupted_state)
+   -- Raising this causes a context switch and shifts the task. This does not
+   -- use an assembly stub; instead, the routine specially deals with the
+   -- interrupt.
+   PROCEDURE ISR_049
    WITH
       Import         => true,
       Convention     => Assembler,

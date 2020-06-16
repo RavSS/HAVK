@@ -58,10 +58,7 @@ IS
    -- Uses the UEFI arguments passed by the bootloader to return a view type.
    FUNCTION Get_Display
      (Configuration : IN UEFI.arguments)
-      RETURN view
-   WITH
-      Pre'class  => Configuration.Pixels_Per_Scanline >=
-                    Configuration.Horizontal_Resolution;
+      RETURN view;
 
    -- TODO: Accesses the framebuffer dynamically. This is where my current
    -- knowledge of Ada falters, I have no idea how to add an imported and

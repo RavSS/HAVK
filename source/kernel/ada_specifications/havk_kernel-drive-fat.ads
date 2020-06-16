@@ -448,6 +448,8 @@ PRIVATE
 
    -- Does some light abstractions for reading sectors off the FAT partition.
    -- Essentially the same as using `PIO_Read()`.
+   PRAGMA Warnings(GNATprove, off, """Object_Location"" is not modified, *",
+      Reason => "The location is modified, but not through the variable.");
    GENERIC
       TYPE object(<>) IS PRIVATE;
       TYPE access_object IS ACCESS object;
@@ -501,14 +503,13 @@ PRIVATE
    -- it will return a FAT32 end-of-cluster-link value.
    -- TODO: This is limited to 8.3 file names.
    FUNCTION Match_Entry
-     (Entries    : IN access_file_entries;
+     (Entries    : NOT NULL ACCESS CONSTANT file_entries;
       Entry_Name : IN string;
       Directory  : IN boolean := false)
       RETURN standard_file_format
    WITH
-      Pre => Entry_Name'first = 1                      AND THEN
-             Entry_Name'last IN Entry_Name'first .. 12 AND THEN
-             Entries /= NULL;
+      Pre => Entry_Name'first = 1 AND THEN
+             Entry_Name'last IN Entry_Name'first .. 12;
 
    -- Searches for an entry inside a dictionary. If the sixth parameter is
    -- true, then it just searches for other dictionaries as opposed to files

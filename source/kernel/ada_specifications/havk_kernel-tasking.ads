@@ -6,6 +6,8 @@
 -------------------------------------------------------------------------------
 
 WITH
+   SPARK.Heap,
+   HAVK_Kernel.UEFI,
    HAVK_Kernel.Descriptors,
    HAVK_Kernel.APIC,
    HAVK_Kernel.APIC.Timer,
@@ -45,8 +47,10 @@ WITH
    )
 IS
    -- Creates a new task. Interrupts are disabled during its call until return.
-   -- The "Initial_Size" parameter indicates how much RAM to reserve for the
-   -- task's space (shared among the code, the stack, and the heap).
+   -- TODO: Due to how I've implemented strict NX compliance, flat binaries
+   -- can't store data properly. I'm not going to add in the equivalent of
+   -- Linux's `mprotect()`, so serious work needs to be done here. An ELF
+   -- loader is very likely necessary in the kernel itself.
    PROCEDURE Create
      (Task_Name  : IN string;
       Code_Size  : IN number;
@@ -56,13 +60,15 @@ IS
       Global => (In_Out => (Tasking_State, Descriptors.TSS,
                             Paging.Kernel_Paging_Layout,
                             Memory.Manager.Frame_Allocator_State),
-                 Input  => (Memory.Memory_State, Memory.Kernel_Virtual_Base,
+                 Input  => (SPARK.Heap.Dynamic_Memory,
+                            Memory.Memory_State, Memory.Kernel_Virtual_Base,
                             Memory.Kernel_Isolated_Text_Base,
                             Memory.Kernel_Isolated_Text_Size,
                             Memory.Kernel_Isolated_Data_Base,
                             Memory.Kernel_Isolated_Data_Size,
                             Memory.Kernel_Isolated_BSS_Base,
-                            Memory.Kernel_Isolated_BSS_Size)),
+                            Memory.Kernel_Isolated_BSS_Size,
+                            UEFI.Bootloader_Arguments)),
       Pre    => Code_Size  MOD Paging.Page = 0          AND THEN
                 Heap_Size  MOD Paging.Page = 0          AND THEN
                 Stack_Size MOD Paging.Page = 0          AND THEN
@@ -214,6 +220,7 @@ PRIVATE
    -- For now, I'll focus on just supporting flat binary files that start at
    -- 0x1000 to avoid clashing with the null page. We'll use a small code model
    -- instead of a medium or large one. GCC should select it automatically.
+   -- Later on, ELF files should recognise this as the standard base as well.
    Virtual_Entry             : CONSTANT address := 16#1000#;
 
    -- This is the virtual address for RSP that is pushed onto the actual stack
@@ -242,20 +249,17 @@ PRIVATE
       Pre            => Enabled AND THEN Tasks(Active_Task) /= NULL,
       Post           => Enabled AND THEN Tasks(Active_Task) /= NULL;
 
-   -- Raises `INT 100`, which is the interrupt vector for the context switch
-   -- ISR. Do not redefine the external name to call the routine directly.
-   -- It passes the first argument (in RDI) to the ISR, which is called
-   -- `ISR_100_Handler()`. Keep in mind that this switches the CR3 to the
-   -- kernel page layout's PML4 base address and then to the active task's one.
-   -- After this returns, do things as if you have the task's view of ring 0
-   -- memory layout.
+   -- Raises `INT 49`, which is the interrupt vector for the context switch
+   -- ISR. Do not redefine the external name to call the
+   -- `assembly__switch_task()` routine directly. This lets the context switch
+   -- itself be independent and additionally change the CR3 contents based on
+   -- which ring it was called from.
    PROCEDURE Switch
-     (Active_State : ALIASED IN OUT callee_saved_registers)
    WITH
       Global         => (In_Out => (Tasks, Active_Task, Descriptors.TSS)),
       Import         => true,
       Convention     => Assembler,
-      External_Name  => "assembly__raise_interrupt_100",
+      External_Name  => "assembly__raise_interrupt_049",
       Linker_Section => ".isolated_text",
       Pre            => Tasks(Active_Task) /= NULL,
       Post           => Tasks(Active_Task) /= NULL;

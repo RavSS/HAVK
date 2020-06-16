@@ -23,7 +23,8 @@ WITH
    No_Return => true
 IS
    -- Get an object which describes the system display.
-   Display        : CONSTANT view := Get_Display(UEFI.Get_Arguments);
+   Display        : CONSTANT view :=
+      Get_Display(UEFI.Bootloader_Arguments.ALL);
 
    -- The main terminal or virtual console used to display text to the user.
    Terminal       : ALIASED textbox -- Font width and font height are 8 pixels.

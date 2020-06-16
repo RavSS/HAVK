@@ -16,16 +16,16 @@ then
 	fi
 
 	GNAT_SRC=https://community.download.adacore.com/v1/
-	GNAT_SHA1=c13b2d02d23057d9251bcdc9a073cb932177f016
+	GNAT_SHA1=966801764ae160828c97d2c33000e9feb08d4cce
 	GNAT_FILE=gnat-community.exe
-	GNAT_DIR=com/gnatgpl_windows
+	GNAT_DIR=com/gnat_gpl_windows
 elif [ "$1" = "linux" ]
 then
 	echo "Obtaining GNAT for Linux."
 	GNAT_SRC=https://community.download.adacore.com/v1/
-	GNAT_SHA1=0cd3e2a668332613b522d9612ffa27ef3eb0815b
+	GNAT_SHA1=4d99b7b2f212c8efdab2ba8ede474bb9fa15888d
 	GNAT_FILE=gnat-community.bin
-	GNAT_DIR=com/gnatgpl_linux
+	GNAT_DIR=com/gnat_gpl_linux
 else
 	echo "Usage: $0 <linux/windows>"
 	exit 1
@@ -55,9 +55,9 @@ then
 	exit 1
 fi
 
-if [ ! -d "./com" ]
+if [ ! -d "./compilers" ]
 then
-	mkdir ./com
+	mkdir ./compilers
 fi
 
 if [ ! -d "./build" ]

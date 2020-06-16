@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2019, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2020, Free Software Foundation, Inc.         --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -19,9 +19,9 @@
 -- OUT ANY WARRANTY;  without even the  implied warranty of MERCHANTABILITY --
 -- or FITNESS FOR A PARTICULAR PURPOSE.                                     --
 --                                                                          --
---                                                                          --
---                                                                          --
---                                                                          --
+-- As a special exception under Section 7 of GPL version 3, you are granted --
+-- additional permissions described in the GCC Runtime Library Exception,   --
+-- version 3.1, as published by the Free Software Foundation.               --
 --                                                                          --
 -- You should have received a copy of the GNU General Public License and    --
 -- a copy of the GCC Runtime Library Exception along with this program;     --
@@ -34,11 +34,11 @@
 ------------------------------------------------------------------------------
 
 --  This is the HI-E version of this file. It provides full object oriented
---  semantics (including dynamic dispatching and support for abstract
---  interface types), assuming that tagged types are declared at the library
---  level. Some functionality has been removed in order to simplify this
---  run-time unit. Compared to the full version of this package, the following
---  subprograms have been removed:
+--  semantics (including dynamic dispatching and support for abstract interface
+--  types), assuming that tagged types are declared at the library level. Some
+--  functionality has been removed in order to simplify this run-time unit.
+--  Compared to the full version of this package, the following subprograms
+--  have been removed:
 
 --     Internal_Tag, Register_Tag, Descendant_Tag, Is_Descendant_At_Same_Level:
 --     These subprograms are used for cross-referencing the external and
@@ -75,35 +75,29 @@ PACKAGE Ada.Tags IS
    PRAGMA Preelaborate;
    --  In accordance with Ada 2005 AI-362
 
-   TYPE Tag IS PRIVATE;
+   TYPE tag IS PRIVATE;
    PRAGMA Preelaborable_Initialization (Tag);
-
-   No_Tag : CONSTANT tag;
-
+   No_Tag : CONSTANT Tag;
    FUNCTION Expanded_Name
-      (T : tag)
-      RETURN string;
-
+      (T : Tag)
+       RETURN String;
    FUNCTION External_Tag
-      (T : tag)
-      RETURN string;
-
+      (T : Tag)
+       RETURN String;
    FUNCTION Parent_Tag
-      (T : tag)
-      RETURN tag;
+      (T : Tag)
+       RETURN Tag;
    PRAGMA Ada_05 (Parent_Tag);
-
    Tag_Error : EXCEPTION;
 
 PRIVATE
-
    --  Structure of the GNAT Primary Dispatch Table
 
    --          +--------------------+
    --          |    Predef_Prims ---------------------------> +------------+
    --          +--------------------+                         |  table of  |
    --          |Typeinfo_Ptr/TSD_Ptr --> Type Specific Data   | predefined |
-   --  Tag --> +--------------------+  +-------------------+  | primitives |
+   --  Tag --> +--------------------+ +-------------------+ | primitives |
    --          |      table of      |  | inheritance depth |  +------------+
    --          :   primitive ops    :  +-------------------+
    --          |      pointers      |  |   access level    |
@@ -130,54 +124,52 @@ PRIVATE
    --  table of user-defined primitives and the Type_Specific_Data record.
 
    PACKAGE SSE RENAMES System.Storage_Elements;
+   SUBTYPE cstring IS String (Positive);
 
-   SUBTYPE Cstring IS string (positive);
-   TYPE Cstring_Ptr IS ACCESS ALL cstring;
+   TYPE cstring_ptr IS ACCESS ALL Cstring;
    PRAGMA No_Strict_Aliasing (Cstring_Ptr);
 
-   TYPE Tag_Table IS ARRAY (natural RANGE <>) OF tag;
+   TYPE tag_table IS ARRAY (Natural RANGE <>) OF Tag;
 
-   TYPE Prim_Ptr IS ACCESS PROCEDURE;
-   TYPE Address_Array IS ARRAY (positive RANGE <>) OF prim_ptr;
+   TYPE prim_ptr IS ACCESS PROCEDURE;
 
-   SUBTYPE Dispatch_Table IS address_array (1 .. 1);
+   TYPE address_array IS ARRAY (Positive RANGE <>) OF Prim_Ptr;
+   SUBTYPE dispatch_table IS Address_Array (1 .. 1);
    --  Used by GDB to identify the _tags and traverse the run-time structure
    --  associated with tagged types. For compatibility with older versions of
    --  gdb, its name must not be changed.
 
-   TYPE Tag IS ACCESS ALL dispatch_table;
+   TYPE tag IS ACCESS ALL Dispatch_Table;
    PRAGMA No_Strict_Aliasing (Tag);
 
-   TYPE Interface_Tag IS ACCESS ALL dispatch_table;
-
-   No_Tag : CONSTANT tag := NULL;
-
+   TYPE interface_tag IS ACCESS ALL Dispatch_Table;
+   No_Tag : CONSTANT Tag := NULL;
    --  The expander ensures that Tag objects reference the Prims_Ptr component
    --  of the wrapper.
 
-   TYPE Tag_Ptr IS ACCESS ALL tag;
+   TYPE tag_ptr IS ACCESS ALL Tag;
    PRAGMA No_Strict_Aliasing (Tag_Ptr);
 
-   TYPE Offset_To_Top_Ptr IS ACCESS ALL SSE.storage_offset;
+   TYPE offset_to_top_ptr IS ACCESS ALL SSE.Storage_Offset;
    PRAGMA No_Strict_Aliasing (Offset_To_Top_Ptr);
 
-   TYPE Type_Specific_Data (Idepth : natural) IS RECORD
+   TYPE type_specific_data (Idepth : Natural) IS RECORD
       --  Inheritance Depth Level: Used to implement the membership test
       --  associated with single inheritance of tagged types in constant-time.
       --  It also indicates the size of the Tags_Table component.
 
-      Access_Level : natural;
-      --  Accessibility level required to give support to Ada 2005 nested type
-      --  extensions. This feature allows safe nested type extensions by
+      Access_Level : Natural;
+      --  Accessibility level required to give support to Ada 2005 nested
+      --  type extensions. This feature allows safe nested type extensions by
       --  shifting the accessibility checks to certain operations, rather than
       --  being enforced at the type declaration. In particular, by performing
       --  run-time accessibility checks on class-wide allocators, class-wide
       --  function return, and class-wide stream I/O, the danger of objects
       --  outliving their type declaration can be eliminated (Ada 2005: AI-344)
 
-      Alignment     : natural;
-      Expanded_Name : cstring_ptr;
-      External_Tag  : cstring_ptr;
+      Alignment     : Natural;
+      Expanded_Name : Cstring_Ptr;
+      External_Tag  : Cstring_Ptr;
       --  Components used to support to the Ada.Tags subprograms in ARM 3.9
 
       --  Note: Expanded_Name is referenced by GDB to determine the actual name
@@ -186,24 +178,24 @@ PRIVATE
       --  string containing its expanded name. GDB has no requirement on a
       --  given position inside the record.
 
-      Transportable : boolean;
+      Transportable : Boolean;
       --  Used to check RM E.4(18), set for types that satisfy the requirements
       --  for being used in remote calls as actuals for classwide formals or as
       --  return values for classwide functions.
 
-      Needs_Finalization : boolean;
+      Needs_Finalization : Boolean;
       --  Used to dynamically check whether an object is controlled or not
 
-      Tags_Table : tag_table (0 .. Idepth);
+      Tags_Table : Tag_Table (0 .. Idepth);
       --  Table of ancestor tags. Its size actually depends on the inheritance
       --  depth level of the tagged type.
    END RECORD;
 
-   TYPE Type_Specific_Data_Ptr IS ACCESS ALL type_specific_data;
+   TYPE type_specific_data_ptr IS ACCESS ALL Type_Specific_Data;
    PRAGMA No_Strict_Aliasing (Type_Specific_Data_Ptr);
 
-   TYPE Dispatch_Table_Wrapper (Num_Prims : natural) IS RECORD
-      Predef_Prims : System.address;
+   TYPE dispatch_table_wrapper (Num_Prims : Natural) IS RECORD
+      Predef_Prims : System.Address;
       --  Pointer to the dispatch table of predefined Ada primitives
 
       --  According to the C++ ABI the components Offset_To_Top and TSD are
@@ -213,54 +205,49 @@ PRIVATE
       --  terminology) must point to the base of the virtual table, just after
       --  these components, to point to the Prims_Ptr table.
 
-      Offset_To_Top : SSE.storage_offset;
-      TSD           : System.address;
-
-      Prims_Ptr : address_array (1 .. Num_Prims);
+      Offset_To_Top : SSE.Storage_Offset;
+      TSD           : System.Address;
+      Prims_Ptr     : Address_Array (1 .. Num_Prims);
       --  The size of the Prims_Ptr array actually depends on the tagged type
       --  to which it applies. For each tagged type, the expander computes the
       --  actual array size, allocates the Dispatch_Table record accordingly.
    END RECORD;
+      --  The following type declaration is used by the compiler when the
+      --  program is compiled with restriction No_Dispatching_Calls
 
-   --  The following type declaration is used by the compiler when the program
-   --  is compiled with restriction No_Dispatching_Calls
-
-   TYPE No_Dispatch_Table_Wrapper IS RECORD
-      NDT_TSD       : System.address;
-      NDT_Prims_Ptr : natural;
+   TYPE no_dispatch_table_wrapper IS RECORD
+      NDT_TSD       : System.Address;
+      NDT_Prims_Ptr : Natural;
    END RECORD;
-
-   DT_Predef_Prims_Size : CONSTANT SSE.storage_count :=
-      SSE.storage_count (1 * (System.address'size / System.storage_unit));
+   DT_Predef_Prims_Size : CONSTANT SSE.Storage_Count :=
+      SSE.Storage_Count (1 * (Standard'Address_Size / System.Storage_Unit));
    --  Size of the Predef_Prims field of the Dispatch_Table
 
-   DT_Offset_To_Top_Size : CONSTANT SSE.storage_count :=
-      SSE.storage_count (1 * (System.address'size / System.storage_unit));
+   DT_Offset_To_Top_Size : CONSTANT SSE.Storage_Count :=
+      SSE.Storage_Count (1 * (Standard'Address_Size / System.Storage_Unit));
    --  Size of the Offset_To_Top field of the Dispatch Table
 
-   DT_Typeinfo_Ptr_Size : CONSTANT SSE.storage_count :=
-      SSE.storage_count (1 * (System.address'size / System.storage_unit));
+   DT_Typeinfo_Ptr_Size : CONSTANT SSE.Storage_Count :=
+      SSE.Storage_Count (1 * (Standard'Address_Size / System.Storage_Unit));
    --  Size of the Typeinfo_Ptr field of the Dispatch Table
 
-   USE TYPE System.Storage_Elements.storage_offset;
-
-   DT_Offset_To_Top_Offset : CONSTANT SSE.storage_count :=
+   USE TYPE System.Storage_Elements.Storage_Offset;
+   DT_Offset_To_Top_Offset : CONSTANT SSE.Storage_Count :=
       DT_Typeinfo_Ptr_Size + DT_Offset_To_Top_Size;
-
-   DT_Predef_Prims_Offset : CONSTANT SSE.storage_count :=
+   DT_Predef_Prims_Offset : CONSTANT SSE.Storage_Count :=
       DT_Typeinfo_Ptr_Size + DT_Offset_To_Top_Size + DT_Predef_Prims_Size;
    --  Offset from Prims_Ptr to Predef_Prims component
 
-   Max_Predef_Prims : CONSTANT positive := 9;
+   Max_Predef_Prims : CONSTANT Positive := 10;
    --  Number of reserved slots for predefined ada primitives: Size, Read,
-   --  Write, Input, Output, "=", assignment, deep adjust, and deep finalize.
-   --  The compiler checks that this value is correct.
+   --  Write, Input, Output, "=", assignment, deep adjust, deep finalize,
+   --  and Put_Image. The compiler checks that this value is correct.
 
-   SUBTYPE Predef_Prims_Table IS address_array (1 .. Max_Predef_Prims);
-   TYPE Predef_Prims_Table_Ptr IS ACCESS predef_prims_table;
+   SUBTYPE predef_prims_table IS Address_Array (1 .. Max_Predef_Prims);
+
+   TYPE predef_prims_table_ptr IS ACCESS Predef_Prims_Table;
    PRAGMA No_Strict_Aliasing (Predef_Prims_Table_Ptr);
 
-   TYPE Addr_Ptr IS ACCESS System.address;
+   TYPE addr_ptr IS ACCESS System.Address;
    PRAGMA No_Strict_Aliasing (Addr_Ptr);
-
 END Ada.Tags;

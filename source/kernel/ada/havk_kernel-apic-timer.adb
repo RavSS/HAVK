@@ -13,9 +13,12 @@ PACKAGE BODY HAVK_Kernel.APIC.Timer
 IS
    PROCEDURE Setup
    IS
-      -- TODO: Replace this with its attribute when switching to Ada 2020.
+      -- TODO: Replace this with its attribute when switching to Ada 202X.
       FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
         (Source => timer_divisor, Target => number);
+      PRAGMA Annotate(GNATprove, False_Positive,
+         "type with constraints on bit representation *",
+         "The enumeration can fit inside the number type.");
 
       PROCEDURE Set_Timer_Divisor IS NEW Write_LAPIC
         (generic_format => number,

@@ -35,7 +35,7 @@ IS
    -- 2 bit values that control the length of the inputted words (data).
    -- Reminder that ASCII only needs 7 bits.
    TYPE length_select  IS(word_5_bit, word_6_bit, word_7_bit, word_8_bit);
-   FOR  length_select USE(0000000000, 0000000001, 0000000002, 0000000003);
+   FOR  length_select USE(         0,          1,          2,          3);
 
    -- 3 bit values that are used to set the parity of serial connection.
    TYPE parity_select  IS(none,  odd,  even,   mark,  space);
@@ -57,7 +57,9 @@ IS
       -- of port offsets, particularly +0 and +1, respectively for LSB and
       -- MSB of the divisor value.
       Divisor_Latch_Access : boolean;
-   END RECORD;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR line_control_register USE RECORD
       Data_Size            AT 0 RANGE 0 .. 1;
       Extra_Stop           AT 0 RANGE 2 .. 2;
@@ -92,7 +94,9 @@ IS
       -- the rest of the extra bits? I'd like to make this into a boolean.
       -- There's two reserved bits, but I've combined them into one variable.
       Zeroed                  : number RANGE 0 .. 0;
-   END RECORD;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR interrupt_enable_register USE RECORD
       Data_Received               AT 0 RANGE 0 .. 0;
       Output_Finished             AT 0 RANGE 1 .. 1;
@@ -108,15 +112,17 @@ IS
       -- 16-bit IO address for the COM port.
       Port               : number RANGE 16#2E8# .. 16#3F8#;
       -- The baud rate used by the connection upon initialisation.
-      Baud_Rate          : number RANGE 0000050 .. 0115200;
+      Baud_Rate          : number RANGE 50 .. 115200;
       -- For the convenience of the data receiver, especially when just
       -- sending ASCII for textual purposes.
-      Line_Ender         :       string(0000001 .. 000002);
+      Line_Ender         : string(1 .. 2);
       -- Holds the settings for the line control register.
       Line_Settings      : line_control_register;
       -- Holds the settings for when to interrupt the system.
       Interrupt_Settings : interrupt_enable_register;
-   END RECORD;
+   END RECORD
+   WITH
+      Dynamic_Predicate => Port IN COM(1) | COM(2) | COM(3) | COM(4);
 
    -- The structure of the line status byte in the line status register,
    -- which can be found 5 bytes after the serial port base's address (+5).
@@ -137,7 +143,9 @@ IS
       Not_Transmitting : boolean;
       -- Occurs when there's an issue with the inputted data.
       Data_Error       : boolean;
-   END RECORD;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR line_status_register USE RECORD
       Data_Ready       AT 0 RANGE 0 .. 0;
       Data_Lost        AT 0 RANGE 1 .. 1;
@@ -169,7 +177,7 @@ IS
      (Object : IN serial_connection;
       Data   : IN character)
    WITH
-      Global => (In_Out => UART_State, Output => CPU_Port_State);
+      Global => (In_Out => (CPU_Port_State, UART_State));
 
    -- Get the current line status register.
    PRAGMA Warnings(GNATprove, off, "unused variable ""Object""",
@@ -179,6 +187,6 @@ IS
       RETURN line_status_register
    WITH
       Volatile_Function => true,
-      Global            => (Input => UART_State);
+      Global            => (Input => (CPU_Port_State, UART_State));
 
 END HAVK_Kernel.Serial;

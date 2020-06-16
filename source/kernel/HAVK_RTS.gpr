@@ -19,7 +19,7 @@ IS
    FOR Library_Dir      USE "./../../build/adalib/";
 
    TYPE Runtime_Type IS("Final", "Debug");
-   Build : Runtime_Type := EXTERNAL("Build");
+   Build : Runtime_Type := EXTERNAL("Build", "Final");
 
    PACKAGE Builder
    IS -- `gprbuild`

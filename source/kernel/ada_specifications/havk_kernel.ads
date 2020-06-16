@@ -37,23 +37,23 @@ IS
    -- to derive from these types and then provide more information about why
    -- they're going to be used; thus, just pretend they are anonymous arrays,
    -- but with each element having a guaranteed/known size.
-   TYPE bits         IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**01 - 1
+   TYPE bits        IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**01 - 1
    WITH
       Component_Size          => 01,
       Default_Component_Value => 00;
-   TYPE bytes        IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**08 - 1
+   TYPE bytes       IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**08 - 1
    WITH
       Component_Size          => 08,
       Default_Component_Value => 00;
-   TYPE words        IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**16 - 1
+   TYPE words       IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**16 - 1
    WITH
       Component_Size          => 16,
       Default_Component_Value => 00;
-   TYPE double_words IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**32 - 1
+   TYPE doublewords IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**32 - 1
    WITH
       Component_Size          => 32,
       Default_Component_Value => 00;
-   TYPE quad_words   IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**64 - 1
+   TYPE quadwords   IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**64 - 1
    WITH
       Component_Size          => 64,
       Default_Component_Value => 00;

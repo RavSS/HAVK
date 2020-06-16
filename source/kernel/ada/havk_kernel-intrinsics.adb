@@ -13,9 +13,7 @@ IS
      (Value : IN number;
       Bit   : IN number)
       RETURN boolean
-   IS -- TODO: Using `boolean'val()` somehow crashes `gnatprove`.
-     (boolean'val(Shift_Right(Value, natural(Bit)) AND 1))
-   WITH
-      SPARK_Mode => off;
+   IS
+     (boolean'val(Shift_Right(Value, natural(Bit)) AND 1));
 
 END HAVK_Kernel.Intrinsics;

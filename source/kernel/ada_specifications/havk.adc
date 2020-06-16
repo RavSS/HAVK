@@ -23,6 +23,10 @@ PRAGMA Warnings(GNATprove, off, -- Be careful of using it to prove a range.
    "attribute ""Size"" has an implementation-defined value",
    Reason => "It returns the size in bits for the type or variable.");
 
+PRAGMA Warnings(off,
+   "types for unchecked conversion have different sizes",
+   Reason => "GNATprove gives a better error if object sizes don't match.");
+
 PRAGMA Restrictions(No_Access_Parameter_Allocators);
 PRAGMA Restrictions(No_Anonymous_Allocators);
 PRAGMA Restrictions(No_Calendar);

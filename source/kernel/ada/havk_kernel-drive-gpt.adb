@@ -6,6 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
+   Ada.Unchecked_Deallocation,
    HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Drive.GPT
@@ -64,6 +65,13 @@ IS
       TYPE access_partition_table_header IS ACCESS partition_table_header;
       TYPE access_partition_table_sector IS ACCESS partition_table_sector;
 
+      PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+        (object =>        partition_table_sector,
+         name   => access_partition_table_sector);
+      PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+        (object =>        partition_table_header,
+         name   => access_partition_table_header);
+
       FUNCTION To_Address
         (Table_Header_Access : IN access_partition_table_header)
          RETURN address
@@ -82,27 +90,11 @@ IS
          Pre        => Table_Sector_Access /= NULL,
          Post       => To_Address'result /= 0;
 
-      PROCEDURE Unchecked_Deallocation
-        (Header_Pointer : IN OUT access_partition_table_header)
-      WITH
-         Global     => (In_Out => Memory.Manager.Kernel_Heap_State),
-         Import     => true,
-         Convention => Intrinsic,
-         Post       => Header_Pointer = NULL;
-
-      PROCEDURE Unchecked_Deallocation
-        (Sector_Pointer : IN OUT access_partition_table_sector)
-      WITH
-         Global     => (In_Out => Memory.Manager.Kernel_Heap_State),
-         Import     => true,
-         Convention => Intrinsic,
-         Post       => Sector_Pointer = NULL;
-
       -- We need to read the header to get any partitions properly.
       Table_Header : access_partition_table_header :=
          NEW partition_table_header;
 
-      -- To eventually store a 512 byte sector at this address.
+      -- To eventually store a 512-byte sector at this object.
       Table_Sector : access_partition_table_sector;
    BEGIN
       New_Partition := (Index => Index, OTHERS => <>);
@@ -114,24 +106,20 @@ IS
       THEN
          New_Partition.Valid_GPT := false;
 
-         Unchecked_Deallocation(Table_Header);
-         PRAGMA Assert(Table_Header = NULL); -- Silence unused warnings.
+         Free(Table_Header);
          RETURN;
       ELSIF -- Checking if we can support this GPT layout.
-         Table_Header.Revision NOT IN revision_support'range OR ELSE
-         Table_Header.Table_Entries /= 128 OR ELSE
-         Table_Header.Table_Entry_Size /= 128
+         Table_Header.Revision NOT IN revision_support'range
       THEN
          New_Partition.Valid_GPT     := true;
          New_Partition.Supported_GPT := false;
 
-         Unchecked_Deallocation(Table_Header);
-         PRAGMA Assert(Table_Header = NULL); -- Silence unused warnings.
+         Free(Table_Header);
          RETURN;
-      ELSE
-         New_Partition.Valid_GPT := true;
-         Table_Sector := NEW partition_table_sector;
       END IF;
+
+      New_Partition.Valid_GPT := true;
+      Table_Sector            := NEW partition_table_sector;
 
       PIO_Read(Table_Header.Table_LBA + (Index / 4), 1,
          To_Address(Table_Sector), Secondary_Bus, Secondary_Drive);
@@ -139,6 +127,8 @@ IS
       IF
          Resolve_UUID(Table_Sector(Index MOD 4).Type_UUID) /= Empty_Partition
       THEN
+         PRAGMA Warnings(GNATprove, off, "unreachable code",
+            Reason => "This seems to be a bug; everything below is executed.");
          New_Partition      :=
            (Present         => true,
             Index           => Index,
@@ -158,10 +148,8 @@ IS
             Supported_GPT   => true);
       END IF;
 
-      Unchecked_Deallocation(Table_Sector);
-      PRAGMA Assert(Table_Sector = NULL);
-      Unchecked_Deallocation(Table_Header);
-      PRAGMA Assert(Table_Header = NULL);
+      Free(Table_Sector);
+      Free(Table_Header);
    END Get_Partition;
 
    PROCEDURE Get_Partition

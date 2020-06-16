@@ -25,7 +25,7 @@ $(info Build: $(VERSION)-$(BUILD) at $(shell date).)
 # and there is two levels: 1 for compiler-related switches, 2 for code changes.
 DEBUG_LEVEL?=1
 
-GNAT_PATH=./compilers/gnatgpl_linux/bin/
+GNAT_PATH?=./compilers/gnat_gpl_linux/bin/
 BUILD_PATH=./build/
 SOURCE_PATH=./source/
 
@@ -240,12 +240,10 @@ $(BUILD_PATH):
 		mkdir "$(HAVK_SYSTEM_BUILD_PATH)"; \
 	fi
 
-# TODO: If any one of the runtime system's files are changed, a force or clean
-# build is necessary. This can be resolved. Perhaps use symbolic links later.
 $(HAVK_ADAINCLUDE_PATH): | $(BUILD_PATH)
 	@if [ -d "$@" ]; then rm -r "$@"; fi
 	@mkdir "$@"
-	@cp $(HAVK_RUNTIME_PATH)* "$@"
+	@ln $(HAVK_RUNTIME_PATH)/* "$@"
 
 $(ESP_PARTITION): | $(BUILD_PATH)
 	$(call echo, "CREATING BLANK \"EFI\" SYSTEM PARTITION AT $@")

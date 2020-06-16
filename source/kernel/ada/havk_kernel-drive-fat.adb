@@ -6,8 +6,8 @@
 -------------------------------------------------------------------------------
 
 WITH
-   System.Case_Util,
-   HAVK_Kernel.Memory.Manager;
+   Ada.Unchecked_Deallocation,
+   System.Case_Util;
 
 PACKAGE BODY HAVK_Kernel.Drive.FAT
 IS
@@ -24,6 +24,9 @@ IS
       -- Temporary type to save stack space.
       TYPE access_boot_record IS ACCESS boot_record;
 
+      PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+        (object => boot_record, name => access_boot_record);
+
       FUNCTION To_Address
         (Boot_Record_Access : IN access_boot_record)
          RETURN address
@@ -32,14 +35,6 @@ IS
          Convention => Intrinsic,
          Pre        => Boot_Record_Access /= NULL,
          Post       => To_Address'result /= 0;
-
-      PROCEDURE Unchecked_Deallocation
-        (Boot_Record_Pointer : IN OUT access_boot_record)
-      WITH
-         Global     => (In_Out => Memory.Manager.Kernel_Heap_State),
-         Import     => true,
-         Convention => Intrinsic,
-         Post       => Boot_Record_Pointer = NULL;
 
       FAT_Boot_Record             : access_boot_record := NEW boot_record;
       FAT_Version                 : version;
@@ -59,8 +54,7 @@ IS
             Image(FAT_Boot_Record.BPB.Jump_Code, Base => 16, Padding => 6) &
             "). Will not proceed.", Tag => FAT_Tag, Warn => true);
 
-         Unchecked_Deallocation(FAT_Boot_Record);
-         PRAGMA Assert(FAT_Boot_Record = NULL);
+         Free(FAT_Boot_Record);
          RETURN;
       ELSIF
          FAT_Boot_Record.BPB.Bytes_Per_Sector /= 512
@@ -69,8 +63,7 @@ IS
            Tag => FAT_Tag, Warn => true);
          Log("Cannot continue as of this time.", Tag => FAT_Tag, Warn => true);
 
-         Unchecked_Deallocation(FAT_Boot_Record);
-         PRAGMA Assert(FAT_Boot_Record = NULL);
+         Free(FAT_Boot_Record);
          RETURN;
       END IF;
 
@@ -86,8 +79,7 @@ IS
          Log("File system on EFI drive is not FAT12 or FAT16 (likely FAT32)," &
             " cannot proceed as of now.", Tag => FAT_Tag, Warn => true);
 
-         Unchecked_Deallocation(FAT_Boot_Record);
-         PRAGMA Assert(FAT_Boot_Record = NULL);
+         Free(FAT_Boot_Record);
          RETURN;
       END IF;
 
@@ -125,8 +117,7 @@ IS
          Log("Can only parse FAT16. Cannot proceed.", Tag => FAT_Tag,
             Warn => true);
 
-         Unchecked_Deallocation(FAT_Boot_Record);
-         PRAGMA Assert(FAT_Boot_Record = NULL);
+         Free(FAT_Boot_Record);
          RETURN;
       END IF;
 
@@ -156,8 +147,7 @@ IS
       New_FAT_Context.EBPB_16     := FAT_Boot_Record.EBPB_16;
       New_FAT_Context.FAT_Version := FAT16; -- Change the predicate logic.
 
-      Unchecked_Deallocation(FAT_Boot_Record);
-      PRAGMA Assert(FAT_Boot_Record = NULL);
+      Free(FAT_Boot_Record);
    END Get_File_System;
 
    PROCEDURE FAT_Read
@@ -217,16 +207,11 @@ IS
       -- entries will occupy 12 bits and 16 bits respectively, while for FAT32,
       -- they're 32 bits.
       PROCEDURE Get_File_Allocation_Table IS NEW FAT_Read
-        (object        => words,
+        (object        =>        words,
          access_object => access_words);
-
-      PROCEDURE Unchecked_Deallocation
-        (File_Allocation_Table_Access : IN OUT access_words)
-      WITH
-         Global     => (In_Out => Memory.Manager.Kernel_Heap_State),
-         Import     => true,
-         Convention => Intrinsic,
-         Post       => File_Allocation_Table_Access = NULL;
+      PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+        (object        =>        words,
+         name          => access_words);
 
       -- Instead of reading the entire file allocation table into our memory
       -- and then getting the next cluster value, we calculate a sector of the
@@ -268,8 +253,7 @@ IS
          Next_Cluster := invalid_cluster_16'last;
       END IF;
 
-      Unchecked_Deallocation(Table_Entries);
-      PRAGMA Assert(Table_Entries = NULL);
+      Free(Table_Entries);
    END Get_Next_Cluster;
 
    FUNCTION Tokenize_Path
@@ -332,7 +316,7 @@ IS
    END Tokenize_Path;
 
    FUNCTION Match_Entry
-     (Entries    : IN access_file_entries;
+     (Entries    : NOT NULL ACCESS CONSTANT file_entries;
       Entry_Name : IN string;
       Directory  : IN boolean := false)
       RETURN standard_file_format
@@ -427,16 +411,11 @@ IS
       Dictionary    : IN boolean := false)
    IS
       PROCEDURE Get_File_Entries IS NEW FAT_Read
-        (object        => file_entries,
+        (object        =>        file_entries,
          access_object => access_file_entries);
-
-      PROCEDURE Unchecked_Deallocation
-        (File_Entries_Access : IN OUT access_file_entries)
-      WITH
-         Global     => (In_Out => Memory.Manager.Kernel_Heap_State),
-         Import     => true,
-         Convention => Intrinsic,
-         Post       => File_Entries_Access = NULL;
+      PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+        (object        =>        file_entries,
+         name          => access_file_entries);
 
       -- The second dimension end range's denominator is
       -- (standard_file_format'size / 8), which `gnatprove` needs help with.
@@ -453,7 +432,7 @@ IS
          PRAGMA Loop_Invariant(Cluster /= NULL);
 
          EXIT WHEN FAT_Context.Drive_Partition.LBA_First +
-            (FAT_Context.First_Data_Sector + ((Temporary_Cluster - 2) *
+           (FAT_Context.First_Data_Sector + ((Temporary_Cluster - 2) *
             FAT_Context.BPB.Sectors_Per_Cluster)) NOT IN
                FAT_Context.Drive_Partition.LBA_First ..
                   FAT_Context.Drive_Partition.LBA_Last;
@@ -475,16 +454,14 @@ IS
          ELSE -- Found the requested entry's first cluster.
             Next_Cluster := Temporary_Cluster;
             File_Entry   := Temporary_Entry;
-            Unchecked_Deallocation(Cluster);
-            PRAGMA Assert(Cluster = NULL);
+            Free(Cluster);
             RETURN;
          END IF;
       END LOOP;
 
       Next_Cluster := No_File_Match;
       File_Entry   := (OTHERS => <>);
-      Unchecked_Deallocation(Cluster);
-      PRAGMA Assert(Cluster = NULL);
+      Free(Cluster);
    END Search_For_Entry;
 
    PROCEDURE File_To_Memory -- TODO: Heavily unoptimised for max simplicity.
@@ -499,16 +476,11 @@ IS
       TYPE access_bytes IS ACCESS bytes;
 
       PROCEDURE Get_File_Data IS NEW FAT_Read
-        (object        => bytes,
+        (object        =>        bytes,
          access_object => access_bytes);
-
-      PROCEDURE Unchecked_Deallocation
-        (Bytes_Access : IN OUT access_bytes)
-      WITH
-         Global     => (In_Out => Memory.Manager.Kernel_Heap_State),
-         Import     => true,
-         Convention => Intrinsic,
-         Post       => Bytes_Access = NULL;
+      PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+        (object        =>        bytes,
+         name          => access_bytes);
 
       -- TODO: In the future, it would be better to try avoiding this buffer
       -- and telling the drive to directly write to the memory up above. That
@@ -528,8 +500,11 @@ IS
       Memory_Area   : bytes(Base_Byte .. Base_Byte +
         (IF Byte_Size /= 0 THEN Byte_Size - 1 ELSE File_Entry.File_Size))
       WITH
-         Import  => true,
-         Address => Destination;
+         Import   => true,
+         Address  => Destination,
+         Annotate => (GNATprove, False_Positive,
+                      "object with constraints on bit representation *",
+                      "This is safe regardless of what data gets written.");
 
       -- The current byte we're on. If the byte index is past the memory area's
       -- last index, then we'll return early to save a little time at least.
@@ -577,8 +552,7 @@ IS
          Get_Next_Cluster(FAT_Context, Data_Cluster, Data_Cluster);
       END LOOP Transfer_Bytes;
 
-      Unchecked_Deallocation(Cluster);
-      PRAGMA Assert(Cluster = NULL);
+      Free(Cluster);
    END File_To_Memory;
 
    PROCEDURE Check_File
@@ -588,16 +562,11 @@ IS
       File_Entry   : OUT standard_file_format)
    IS
       PROCEDURE Get_File_Entries IS NEW FAT_Read
-        (object        => file_entries,
+        (object        =>        file_entries,
          access_object => access_file_entries);
-
-      PROCEDURE Unchecked_Deallocation
-        (File_Entries_Access : IN OUT access_file_entries)
-      WITH
-         Global     => (In_Out => Memory.Manager.Kernel_Heap_State),
-         Import     => true,
-         Convention => Intrinsic,
-         Post       => File_Entries_Access = NULL;
+      PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+        (object        =>        file_entries,
+         name          => access_file_entries);
 
       Parsed_Path    : CONSTANT path := Tokenize_Path(Path_Name);
 
@@ -619,8 +588,7 @@ IS
       Next_Cluster := Shift_Left(File_Entry.Cluster_High, 16) OR
          File_Entry.Cluster_Low;
 
-      Unchecked_Deallocation(Root_Directory);
-      PRAGMA Assert(Root_Directory = NULL);
+      Free(Root_Directory);
 
       IF
          Next_Cluster = No_File_Match

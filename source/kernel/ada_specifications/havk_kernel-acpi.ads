@@ -5,16 +5,203 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
--- This package contains ACPI-related records for ACPI 2.0 tables.
+WITH
+   HAVK_Kernel.UEFI;
+
+-- This package contains ACPI-related records for ACPI 2.0+ tables.
 -- As of now, I've decided against integrating ACPICA, as it's not written
 -- by me, it's all in C, and that's no fun. I don't think I will need any
 -- of its advanced features immediately, and if I do need e.g. the AML parser,
 -- I can try port it over without needing the entire codebase. Avoid ACPI
 -- firmware features as hard as possible unless they're vital.
 PACKAGE HAVK_Kernel.ACPI
+WITH
+   Preelaborate   => true,
+   Abstract_State =>
+   (
+      ACPI_State
+      WITH
+         External => (Async_Readers, Async_Writers,
+                      Effective_Reads, Effective_Writes)
+   )
 IS
-   PRAGMA Preelaborate;
+   -- The type of interrupt controller in the HPET table. Note that a lot of
+   -- these are irrelevant to x86-64, particularly the GIC (General Interrupt
+   -- Controller) which is found on ARM systems and the SAPIC which is for
+   -- IA-64. I've ignored as much of them as I can. The only interrupt
+   -- controllers relevant to us are the (local) x2APICs and the I/O APICs.
+   -- x2APICs should be supported on systems that are new enough to use UEFI.
+   TYPE interrupt_controller IS
+     (local_APIC_entry,
+      IO_APIC_entry,
+      interrupt_source_override_entry,
+      NMI_source_entry,
+      local_APIC_NMI_entry,
+      local_APIC_address_override_entry,
+      IO_SAPIC_entry,
+      local_SAPIC_entry,
+      platform_interrupt_source_entry,
+      local_x2APIC_entry,
+      local_x2APIC_NMI_entry,
+      ARM_interrupt_controller_entry) -- Ignore all below this enumeration.
+   WITH
+      Size => 8;
+   FOR interrupt_controller USE
+     (local_APIC_entry                  => 00,
+      IO_APIC_entry                     => 01,
+      interrupt_source_override_entry   => 02,
+      NMI_source_entry                  => 03,
+      local_APIC_NMI_entry              => 04,
+      local_APIC_address_override_entry => 05,
+      IO_SAPIC_entry                    => 06,
+      local_SAPIC_entry                 => 07,
+      platform_interrupt_source_entry   => 08,
+      local_x2APIC_entry                => 09,
+      local_x2APIC_NMI_entry            => 10,
+      ARM_interrupt_controller_entry    => 11);
 
+   -- Indicates how an e.g. overrided interrupt source's input signal differs
+   -- from a standard ISA/EISA input signal. Reused the polarity and trigger
+   -- mode representations and made them into one enumeration for convenience.
+   TYPE interrupt_signal IS
+     (default_ISA_or_EISA_signal,
+      active_high_or_edge_triggered_signal,
+      reserved_signal,
+      active_low_or_level_triggered_signal)
+   WITH
+      Size => 2;
+   FOR interrupt_signal USE
+     (default_ISA_or_EISA_signal           => 2#00#,
+      active_high_or_edge_triggered_signal => 2#01#,
+      reserved_signal                      => 2#10#,
+      active_low_or_level_triggered_signal => 2#11#);
+
+   -- Due to how the MADT's list of APICs is handled, a subprogram needs to
+   -- scan the list and fill up an array containing this general describer of
+   -- the interrupt controller, so we can later retrieve the full descriptor of
+   -- the APIC via an import. Storing the size is not important for the
+   -- interrupt controllers we wish to seek, as they have static field lengths.
+   TYPE interrupt_controller_descriptor IS RECORD
+      -- The type of interrupt controller found in the MADT. By default,
+      -- this is an IA-64 centric structure so no "Present" field is needed.
+      -- That should never ever come up on IA-32e/AMD64, which isn't Itanium.
+      Enumeration_Value : interrupt_controller :=
+         platform_interrupt_source_entry;
+      -- The address location of its structure/record which can be imported.
+      -- If is better if you check this for zero instead of the controller name
+      -- for an x86 controller's presence.
+      Record_Address    : address := 0;
+   END RECORD;
+
+   -- An array of the general interrupt controller records found in the MADT.
+   -- For now, HAVK only supports 255 APICs, which in turn means it only
+   -- supports 255 processor cores and I/O APICs. I don't foresee that being an
+   -- issue on the type of hardware HAVK is intended for i.e. not huge servers.
+   TYPE interrupt_controller_descriptors IS ARRAY(number RANGE 1 .. 255) OF
+      interrupt_controller_descriptor;
+
+   -- This MADT entry describes how the old/legacy ISA IRQs work in conjuction
+   -- with the I/O APIC. It destroys any notion of identity-mapped IRQs and
+   -- overrides them with a new relation. Should be parsed with the I/O APIC.
+   -- READ: ACPI Specification Version 6.3, Page 155 - 5.2.12.5.
+   TYPE interrupt_source_override_descriptor IS RECORD
+      -- As usual, this is a static value. It should reflect the correct
+      -- value for the record's purpose.
+      Enumeration_Value : interrupt_controller;
+      -- The length of the entire MADT entry. For interrupt source overrides,
+      -- this will be ten every time unless corrupt.
+      Length            : number RANGE 0 .. 2**08 - 1;
+      -- Indicates what bus type this is for. As of ACPI Specification Version
+      -- 6.3, this can only be zero, which indicates it's for ISA.
+      Bus_Variant       : number RANGE 0 .. 2**08 - 1;
+      -- The legacy IRQ itself. If the override was for e.g. IRQ 1 (keyboard),
+      -- then this would be one as well.
+      IRQ_Value         : number RANGE 0 .. 2**08 - 1;
+      -- The global system interrupt (GSI) that corresponds to an I/O APIC.
+      -- Check this value against all of the I/O APIC entries.
+      GSI_Value         : number RANGE 0 .. 2**32 - 1;
+      -- The default or new polarity of the interrupt signal.
+      Polarity          : interrupt_signal;
+      -- The default or new trigger mode for the interrupt signal.
+      Trigger_Mode      : interrupt_signal;
+      -- A zeroed/reserved field.
+      Reserved          : number RANGE 0 .. 2**12 - 1;
+   END RECORD
+   WITH
+      Dynamic_Predicate => Enumeration_Value = interrupt_source_override_entry
+                              AND THEN
+                           Length = 10 AND THEN
+                           Bus_Variant = 0,
+      Object_Size       => (8 * 8) + 15 + 1,
+      Convention        => C;
+   FOR interrupt_source_override_descriptor USE RECORD
+      Enumeration_Value AT 0 RANGE 0 .. 07;
+      Length            AT 1 RANGE 0 .. 07;
+      Bus_Variant       AT 2 RANGE 0 .. 07;
+      IRQ_Value         AT 3 RANGE 0 .. 07;
+      GSI_Value         AT 4 RANGE 0 .. 31;
+      Polarity          AT 8 RANGE 0 .. 01;
+      Trigger_Mode      AT 8 RANGE 2 .. 03;
+      Reserved          AT 8 RANGE 4 .. 15;
+   END RECORD;
+
+   -- This record describes the I/O APIC layout found in the MADT's end.
+   -- READ: ACPI Specification Version 6.3, Page 154 - 5.2.12.3.
+   TYPE IO_APIC_descriptor IS RECORD
+      -- The enumeration value of the interrupt controller. If the structure
+      -- is valid, then this should reflect this record type's purpose.
+      Enumeration_Value : interrupt_controller;
+      -- The length of the entire structure which describes the I/O APIC.
+      -- This will always be twelve as of writing this.
+      Length            : number  RANGE 0 .. 2**08 - 1;
+      -- The I/O APIC's identity. There can be multiple I/O APICs for a system.
+      IO_APIC_Identity  : number  RANGE 0 .. 2**08 - 1;
+      -- Reserved field not used for anything.
+      Reserved          : number  RANGE 0 .. 2**08 - 1;
+      -- The 32-bit MMIO physical address. Each I/O APIC has its own address.
+      IO_APIC_Address   : address RANGE 0 .. 2**32 - 1;
+      -- A global system interrupt number that indicates where the I/O APIC's
+      -- interrupt inputs begin from. To figure out the range, you will have
+      -- to consult the I/O APIC itself and check in the IOAPICVER register.
+      -- Here's Linus's explanation: https://yarchive.net/comp/linux/tla.html
+      GSI_Base          : number  RANGE 0 .. 2**32 - 1;
+   END RECORD
+   WITH
+      Dynamic_Predicate => Enumeration_Value = IO_APIC_entry AND THEN
+                           Length = 12,
+      Object_Size       => (8 * 8) + 31 + 1,
+      Convention        => C;
+   FOR IO_APIC_descriptor USE RECORD
+      Enumeration_Value      AT 0 RANGE 0 .. 07;
+      Length                 AT 1 RANGE 0 .. 07;
+      IO_APIC_Identity       AT 2 RANGE 0 .. 07;
+      Reserved               AT 3 RANGE 0 .. 07;
+      IO_APIC_Address        AT 4 RANGE 0 .. 31;
+      GSI_Base               AT 8 RANGE 0 .. 31;
+   END RECORD;
+
+   -- Parses the list of APIC records in the MADT and returns an array
+   -- of their respective address locations for importation.
+   FUNCTION Get_APICs
+     (MADT_Address : IN address)
+      RETURN interrupt_controller_descriptors
+   WITH
+      Volatile_Function => true,
+      Global            => (Input => ACPI_State),
+      Pre               => MADT_Address /= 0;
+
+   -- Checks if a system table exists in the XSDT's pointer section and then
+   -- returns an address to the start of a table if it exists and is valid.
+   -- Returns zero if it's not found or if it's corrupt.
+   FUNCTION Table_Address
+     (Signature : IN string)
+      RETURN address
+   WITH
+      Volatile_Function => true,
+      Global            => (Input => ACPI_State),
+      Pre               => Signature'length = 4;
+
+PRIVATE
    -- This type (the SDT) is effectively a header that is included in other
    -- tables e.g. the XSDT. It is then "extended" after its inclusion.
    -- READ: ACPI Specification Version 6.3, Page 119 - 5.2.6.
@@ -22,33 +209,34 @@ IS
       -- The table's signature. This can be anything as long as it is listed
       -- in the ACPI specification, which can be found below:
       -- READ: ACPI Specification Version 6.3, Page 120 - Table 5-29.
-      Signature      :       string(1 .. 00000000004);
+      Signature      :       string(1 .. 4);
       -- The length of the entire table (and any extension of it) in bytes.
       -- This will always be (at least) greater than 36, which is just the
       -- size of the header itself.
-      Length         : number RANGE 0 .. 16#FFFFFFFF#;
+      Length         : number RANGE 0 .. 2**32 - 1;
       -- The revision number of the signature.
-      Revision       : number RANGE 0 .. 16#000000FF#;
+      Revision       : number RANGE 0 .. 2**08 - 1;
       -- The checksum of the entire table (including the checksum).
       -- The calculation must equal zero if the table is valid.
-      Checksum       : number RANGE 0 .. 16#000000FF#;
+      Checksum       : number RANGE 0 .. 2**08 - 1;
       -- Identifies the OEM that supplies the ACPI's table implementation.
       -- For example, for Bochs, this can be "BOCHS ", and for QEMU, it is
       -- potentially the same as it borrows the BIOS from Bochs etc.
-      OEM_Identity   :       string(1 .. 00000000006);
+      OEM_Identity   :       string(1 .. 6);
       -- The OEM's own string that identifies the table as opposed to
       -- the signature itself.
-      OEM_Table_Name :       string(1 .. 00000000008);
+      OEM_Table_Name :       string(1 .. 8);
       -- The revision number of the table based on the OEM's preference.
-      OEM_Revision   : number RANGE 0 .. 16#FFFFFFFF#;
+      OEM_Revision   : number RANGE 0 .. 2**32 - 1;
       -- A numerical identity belonging to the utility that made the table.
-      Maker          : number RANGE 0 .. 16#FFFFFFFF#;
+      Maker          : number RANGE 0 .. 2**32 - 1;
       -- The revision number of the maker tool.
-      Maker_Revision : number RANGE 0 .. 16#FFFFFFFF#;
+      Maker_Revision : number RANGE 0 .. 2**32 - 1;
    END RECORD
    WITH
       Dynamic_Predicate => Length > 36, -- The SDT won't be alone in a table.
-      Convention        => C;
+      Convention        => C,
+      Object_Size       => (32 * 8) + 31 + 1;
    FOR system_description_table USE RECORD
       Signature         AT 00 RANGE 0 .. 31;
       Length            AT 04 RANGE 0 .. 31;
@@ -61,12 +249,16 @@ IS
       Maker_Revision    AT 32 RANGE 0 .. 31;
    END RECORD;
 
+   -- These make up the XSDT after its SDT.
+   TYPE access_system_description_table IS
+      ACCESS system_description_table;
+
    -- The XSDT contains an array of pointers to other tables. This is used
    -- to retrieve the SDT header of the tables.
    TYPE system_description_tables IS ARRAY(number RANGE <>) OF
-      ALIASED NOT NULL ACCESS CONSTANT system_description_table
+      ALIASED access_system_description_table
    WITH
-      Component_Size => 64; -- Pack it more explicitly.
+      Pack => true;
 
    -- The XSDT. It contains pointers to all of the other SDTs and it must
    -- be valid before attempting to parse any of the other SDTs.
@@ -81,58 +273,65 @@ IS
       -- then the value must be subtracted by eight due to 64-bit pointers.
       -- That will compute the value of the total tables in the XSDT from one.
       -- Be sure not to use this in an address clause when the XSDT is copied.
-      Table_Pointers : void;
+      Table_Pointers : ALIASED void;
       -- The table does not truly end here. Due to a limitation of Ada
       -- (or at least to my knowledge), I cannot make the record use an
       -- internal field to alter the record itself during type declaration.
    END RECORD
    WITH
       Dynamic_Predicate => SDT.Length >= 36 + 8, -- Minimum of one pointer.
-      Convention        => C;
+      Convention        => C,
+      Object_Size       => (36 * 8) + 7 + 1;
    FOR extended_system_description_table USE RECORD
       SDT                   AT 00 RANGE 0 .. 287;
-      Table_Pointers        AT 36 RANGE 0 .. 000;
+      Table_Pointers        AT 36 RANGE 0 .. 007;
    END RECORD;
+
+   -- We need the actual address of "Table_Pointers" (the first 8 bytes of the
+   -- area), so we can't pass around copied versions of the table.
+   TYPE access_extended_system_description_table IS
+      ACCESS extended_system_description_table;
 
    -- The RSDP. This is the record passed to us by the bootloader.
    -- It has an SDT-like header, but it varies slightly.
    -- READ: ACPI Specification Version 6.3, Page 118 - 5.2.5.3.
    TYPE root_system_description_pointer IS RECORD
       -- The table's signature. It is "RSD PTR " with the ending blank space.
-      Signature          :       string(1 .. 00000000008);
+      Signature          :        string(1 .. 8);
       -- The checksum of the first 20 bytes.
-      Checksum           : number RANGE 0 .. 16#000000FF#;
+      Checksum           : number  RANGE 0 .. 2**08 - 1;
       -- Identifies the OEM that supplies the ACPI's table implementation.
       -- For example, for Bochs, this can be "Bochs", and for QEMU, it is
       -- potentially the same.
-      OEM_Identity       :       string(1 .. 00000000006);
+      OEM_Identity       :        string(1 .. 6);
       -- Table revision number. This should be 2.
-      Revision           : number RANGE 0 .. 16#000000FF#;
+      Revision           : number  RANGE 0 .. 2**08 - 1;
       -- The address for the RSDT. This is not used anymore and should be
       -- avoided, as the XSDT (for 64-bit systems) has superseded it.
-      RSDT_Address       : number RANGE 0 .. 16#FFFFFFFF#;
+      RSDT_Address       : address RANGE 0 .. 2**32 - 1;
       -- Length of the entire table in bytes.
-      Length             : number RANGE 0 .. 16#FFFFFFFF#;
+      Length             : number  RANGE 0 .. 2**32 - 1;
       -- The XSDT which will lead us to other SDTs.
-      XSDT : NOT NULL ACCESS CONSTANT extended_system_description_table;
+      XSDT_Address       : address;
       -- A new checksum of the entire table, including the first checksum.
-      Extra_Checksum     : number RANGE 0 .. 16#000000FF#;
+      Extra_Checksum     : number  RANGE 0 .. 2**08 - 1;
       -- Reserved bytes.
-      Reserved           : number RANGE 0 .. 16#00FFFFFF#;
+      Reserved           : number  RANGE 0 .. 2**24 - 1;
    END RECORD
    WITH
       Convention => C;
    FOR root_system_description_pointer USE RECORD
-      Signature             AT 00 RANGE 0 .. 63;
-      Checksum              AT 08 RANGE 0 .. 07;
-      OEM_Identity          AT 09 RANGE 0 .. 47;
-      Revision              AT 15 RANGE 0 .. 07;
-      RSDT_Address          AT 16 RANGE 0 .. 31;
-      Length                AT 20 RANGE 0 .. 31;
-      XSDT                  AT 24 RANGE 0 .. 63;
-      Extra_Checksum        AT 32 RANGE 0 .. 07;
-      Reserved              AT 33 RANGE 0 .. 23;
+      Signature              AT 00 RANGE 0 .. 63;
+      Checksum               AT 08 RANGE 0 .. 07;
+      OEM_Identity           AT 09 RANGE 0 .. 47;
+      Revision               AT 15 RANGE 0 .. 07;
+      RSDT_Address           AT 16 RANGE 0 .. 31;
+      Length                 AT 20 RANGE 0 .. 31;
+      XSDT_Address           AT 24 RANGE 0 .. 63;
+      Extra_Checksum         AT 32 RANGE 0 .. 07;
+      Reserved               AT 33 RANGE 0 .. 23;
    END RECORD;
+   FOR root_system_description_pointer'object_size USE (33 * 8) + 23 + 1;
 
    TYPE address_space_identity IS
      (system_memory_space,
@@ -190,10 +389,10 @@ IS
       -- Details the type of the address space where the register resides.
       Identity       : address_space_identity;
       -- The width of the register itself. It is zero for structures.
-      Width          : number RANGE 0 .. 16#FF#;
+      Width          : number RANGE 0 .. 2**8 - 1;
       -- The offset of the register within the address space from the start.
       -- This is zero for structures.
-      Offset         : number RANGE 0 .. 16#FF#;
+      Offset         : number RANGE 0 .. 2**8 - 1;
       -- Indicates how many bits we can read and write within each access.
       Access_Size    : register_access_size;
       -- The address of the register or date structure.
@@ -259,7 +458,7 @@ IS
       -- on IA-32. Instead, the clock works via ACPI's timer.
       No_CMOS_RTC       : boolean;
       -- Reserved bits for future IA-32 PC flags.
-      Reserved          : number RANGE 0 .. 16#3FF#;
+      Reserved          : number RANGE 0 .. 2**10 - 1;
    END RECORD
    WITH
       Convention => C;
@@ -343,7 +542,7 @@ IS
       -- higher sleep states, effectively indicating that e.g. S3 is useless.
       S0_Low_Power      : boolean;
       -- Reserved bits for future flags.
-      Reserved          : number RANGE 0 .. 16#000003FF#;
+      Reserved          : number RANGE 0 .. 2**10 - 1;
    END RECORD
    WITH
       Convention => C;
@@ -383,108 +582,108 @@ IS
       -- The header describing the system description table.
       SDT               : system_description_table;
       -- The 32-bit physical address of the FACS, which is the ACPI firmware.
-      FACS_Address_Low  : number RANGE 0 .. 16#FFFFFFFF#;
+      FACS_Address_Low  : number RANGE 0 .. 2**32 - 1;
       -- The 32-bit physical address of the DSDT.
-      DSDT_Address_Low  : number RANGE 0 .. 16#FFFFFFFF#;
+      DSDT_Address_Low  : number RANGE 0 .. 2**32 - 1;
       -- A reserved field. It was originally used in ACPI 1.0.
-      Reserved_1        : number RANGE 0 .. 16#000000FF#;
+      Reserved_1        : number RANGE 0 .. 2**08 - 1;
       -- The power management profile of the current system. HAVK is allowed
       -- to set this field in order to control which profile is used.
       Profile           : power_management_profile;
       -- The 8259 interrupt vector for the system control interrupt (SCI).
-      SCI_Vector        : number RANGE 0 .. 16#0000FFFF#;
+      SCI_Vector        : number RANGE 0 .. 2**16 - 1;
       -- The I/O port of the system management interrupt (SMI) command port.
-      SMI_Port          : number RANGE 0 .. 16#FFFFFFFF#;
+      SMI_Port          : number RANGE 0 .. 2**32 - 1;
       -- This is the value to write to the SMI port if I wish to disable my
       -- ownership of the ACPI hardware registers and pass control over to
       -- OSPM (OS-directed Power Management), which is (supposed to be) a
       -- module of our operating system.
-      Enable_Value      : number RANGE 0 .. 16#000000FF#;
+      Enable_Value      : number RANGE 0 .. 2**08 - 1;
       -- Like with "Enable_Value", but instead, this is used for regaining
       -- ownership of the ACPI hardware registers. You should mask all SCIs
       -- before disabling ACPI.
-      Disable_Value     : number RANGE 0 .. 16#000000FF#;
+      Disable_Value     : number RANGE 0 .. 2**08 - 1;
       -- The value to pass to the SMI port if we wish to enter the S4 state.
-      S4BIOS_Value      : number RANGE 0 .. 16#000000FF#;
+      S4BIOS_Value      : number RANGE 0 .. 2**08 - 1;
       -- If this value is written to the SMI port, then we get control over
       -- the processor's P-state.
-      Pstate_Value      : number RANGE 0 .. 16#000000FF#;
+      Pstate_Value      : number RANGE 0 .. 2**08 - 1;
       -- This is the power management 1a event register block's I/O port.
-      PM1a_Event_Port   : number RANGE 0 .. 16#FFFFFFFF#;
+      PM1a_Event_Port   : number RANGE 0 .. 2**32 - 1;
       -- This is the power management 1b event register block's I/O port.
-      PM1b_Event_Port   : number RANGE 0 .. 16#FFFFFFFF#;
+      PM1b_Event_Port   : number RANGE 0 .. 2**32 - 1;
       -- This is the power management 1a control register block's I/O port.
-      PM1a_Control_Port : number RANGE 0 .. 16#FFFFFFFF#;
+      PM1a_Control_Port : number RANGE 0 .. 2**32 - 1;
       -- This is the power management 1b control register block's I/O port.
-      PM1b_Control_Port : number RANGE 0 .. 16#FFFFFFFF#;
+      PM1b_Control_Port : number RANGE 0 .. 2**32 - 1;
       -- This is the power management 2 control register block's I/O port.
-      PM2_Control_Port  : number RANGE 0 .. 16#FFFFFFFF#;
+      PM2_Control_Port  : number RANGE 0 .. 2**32 - 1;
       -- This is the power management timer control block's I/O port.
-      PMT_Control_Port  : number RANGE 0 .. 16#FFFFFFFF#;
+      PMT_Control_Port  : number RANGE 0 .. 2**32 - 1;
       -- This is the general-purpose event 0 register block's I/O port.
-      GPE0_Port         : number RANGE 0 .. 16#FFFFFFFF#;
+      GPE0_Port         : number RANGE 0 .. 2**32 - 1;
       -- This is the general-purpose event 1 register block's I/O port.
-      GPE1_Port         : number RANGE 0 .. 16#FFFFFFFF#;
+      GPE1_Port         : number RANGE 0 .. 2**32 - 1;
       -- Number of bytes decoded by the power management 1a event register
       -- block and the PM1b event register block if it is supported.
-      PM1_Event_Size    : number RANGE 4 .. 16#000000FF#;
+      PM1_Event_Size    : number RANGE 4 .. 2**08 - 1;
       -- Number of bytes decoded by the power management 1a event register
       -- block and the PM1b event register block if it is supported.
-      PM1_Control_Size  : number RANGE 2 .. 16#000000FF#;
+      PM1_Control_Size  : number RANGE 2 .. 2**08 - 1;
       -- Number of bytes decoded by the power management 2 event register
       -- block. If it is not supported, then this is zero.
-      PM2_Control_Size  : number RANGE 0 .. 16#000000FF#;
+      PM2_Control_Size  : number RANGE 0 .. 2**08 - 1;
       -- Number of bytes decoded by the power management timer control block.
       -- If the power management timer is supported, then the value is four.
       -- Otherwise, it is zero.
-      PMT_Control_Size  : number RANGE 0 .. 16#00000004#;
+      PMT_Control_Size  : number RANGE 0 .. 2**08 - 1;
       -- Number of bytes decoded by the general-purpose event 0 register block.
-      GPE0_Size         : number RANGE 0 .. 16#000000FF#;
+      GPE0_Size         : number RANGE 0 .. 2**08 - 1;
       -- Number of bytes decoded by the general-purpose event 1 register block.
-      GPE1_Size         : number RANGE 0 .. 16#000000FF#;
+      GPE1_Size         : number RANGE 0 .. 2**08 - 1;
       -- The offset of where GPE1-based events start in the ACPI event model.
-      GPE1_Offset       : number RANGE 0 .. 16#000000FF#;
+      GPE1_Offset       : number RANGE 0 .. 2**08 - 1;
       -- If this is not zero, then this contains the value the OSPM writes
       -- to the "SMI_CMD" register to show that HAVK can support C-state
       -- change notifications.
-      Cx_Value          : number RANGE 0 .. 16#000000FF#;
+      Cx_Value          : number RANGE 0 .. 2**08 - 1;
       -- The worst-case latency of how long it takes to shift through
       -- the C2 state. If this is greater than 100, then the system doesn't
       -- support the C2 state.
-      C2_Shift_Latency  : number RANGE 0 .. 16#0000FFFF#;
+      C2_Shift_Latency  : number RANGE 0 .. 2**16 - 1;
       -- The worst-case latency of how long it takes to shift through
       -- the C3 state. If this is greater than 1000, then the system doesn't
       -- support the C3 state.
-      C3_Shift_Latency  : number RANGE 0 .. 16#0000FFFF#;
+      C3_Shift_Latency  : number RANGE 0 .. 2**16 - 1;
       -- If the `WBINVD` instruction is not available, then this is the value
       -- that indicates how many times a cache-line needs to be read in order
       -- to be flushed. This is not useful for us, as it's intended for
       -- ACPI 1.0 compatibility.
-      Flush_Size        : number RANGE 0 .. 16#0000FFFF#;
+      Flush_Size        : number RANGE 0 .. 2**16 - 1;
       -- If the `WBINVD` instruction is not available, then this is the value
       -- that indicates how wide the cache-lines are. This is not useful for
       -- us, as it's intended for ACPI 1.0 compatibility.
-      Flush_Stride      : number RANGE 0 .. 16#0000FFFF#;
+      Flush_Stride      : number RANGE 0 .. 2**16 - 1;
       -- The index of where the duty cycle setting is within the processor's
       -- control register.
-      Duty_Cycle_Index  : number RANGE 0 .. 16#000000FF#;
+      Duty_Cycle_Index  : number RANGE 0 .. 2**08 - 1;
       -- The width of the bits in the processor's duty cycle setting value that
       -- are within the processor's control register. This is used to calculate
       -- a lower frequency than the absolute frequency of a processor.
-      Duty_Cycle_Width  : number RANGE 0 .. 16#000000FF#;
+      Duty_Cycle_Width  : number RANGE 0 .. 2**08 - 1;
       -- This is index for the real-time clock's alarm day in the CMOS RAM.
       -- If this is zero, then it is not supported.
-      RTC_Day_Alarm     : number RANGE 0 .. 16#000000FF#;
+      RTC_Day_Alarm     : number RANGE 0 .. 2**08 - 1;
       -- This is index for the real-time clock's alarm month in the CMOS RAM.
       -- If this is zero, then it is not supported.
-      RTC_Month_Alarm   : number RANGE 0 .. 16#000000FF#;
+      RTC_Month_Alarm   : number RANGE 0 .. 2**08 - 1;
       -- The index for the real-time clock's current century in the CMOS RAM.
       -- If this is zero, then it is not supported for a sensible reason.
-      RTC_Century       : number RANGE 0 .. 16#000000FF#;
+      RTC_Century       : number RANGE 0 .. 2**08 - 1;
       -- This is the IA-PC boot flags, which will be important for us.
       PC_Flags          : fixed_ACPI_description_table_IA_PC_flags;
       -- Another reserved field.
-      Reserved_2        : number RANGE 0 .. 16#000000FF#;
+      Reserved_2        : number RANGE 0 .. 2**08 - 1;
       -- The FADT's feature flags are detailed in this field.
       Feature_Flags     : fixed_ACPI_description_table_feature_flags;
       -- This is the reset register. In order to use it, it must be
@@ -492,12 +691,12 @@ IS
       Reset_Register    : generic_address_structure;
       -- The value that must be written to the reset register port when a
       -- reset is desired. Again, capability for it is in the feature flags.
-      Reset_Value       : number RANGE 0 .. 16#000000FF#;
+      Reset_Value       : number RANGE 0 .. 2**08 - 1;
       -- The boot flags for the ARM architecture. This is irrelevant
       -- for me, so I've disregarded creating a separate record for it.
-      ARM_Flags         : number RANGE 0 .. 16#0000FFFF#;
+      ARM_Flags         : number RANGE 0 .. 2**16 - 1;
       -- The FADT's minor revision. The one in the SDT is the major version.
-      Revision_Minor    : number RANGE 0 .. 16#000000FF#;
+      Revision_Minor    : number RANGE 0 .. 2**08 - 1;
       -- The 64-bit physical address of the FACS, which is the ACPI firmware.
       -- If it's empty, then the address is likely under 4 GiB, which means
       -- the 32-bit physical address must be used.
@@ -599,12 +798,12 @@ IS
       SDT               : system_description_table;
       -- The 32-bit MMIO physical address of the local APIC (LAPIC).
       -- I presume this is only the LAPIC for the bootstrap processor?
-      LAPIC_Address     : number RANGE 0 .. 16#FFFFFFFF#;
+      LAPIC_Address     : number RANGE 0 .. 2**32 - 1;
       -- If true, then the APIC is compatible with the dual-8259 PIC
       -- configuration. By default, every PC should theoretically have this.
       PIC_Compatible    : boolean;
       -- Reserved flags that are not used for anything as of now.
-      Reserved_Flags    : number RANGE 0 .. 16#7FFFFFFF#;
+      Reserved_Flags    : number RANGE 0 .. 2**31 - 1;
       -- Same conundrum as with the XSDT table. From this address, there is a
       -- range of interrupt controller structures/records that describe the
       -- amount of APICs on the system and if they're LAPICs or IOAPIC etc.
@@ -626,75 +825,6 @@ IS
       APIC_Records         AT 44 RANGE 0 .. 000;
    END RECORD;
 
-   -- The type of interrupt controller in the HPET table. Note that a lot of
-   -- these are irrelevant to x86-64, particularly the GIC (General Interrupt
-   -- Controller) which is found on ARM systems and the SAPIC which is for
-   -- IA-64. I've ignored as much of them as I can. The only interrupt
-   -- controllers relevant to us are the (local) x2APICs and the I/O APICs.
-   -- x2APICs should be supported on systems that are new enough to use UEFI.
-   TYPE interrupt_controller IS
-     (local_APIC_entry,
-      IO_APIC_entry,
-      interrupt_source_override_entry,
-      NMI_source_entry,
-      local_APIC_NMI_entry,
-      local_APIC_address_override_entry,
-      IO_SAPIC_entry,
-      local_SAPIC_entry,
-      platform_interrupt_source_entry,
-      local_x2APIC_entry,
-      local_x2APIC_NMI_entry,
-      ARM_interrupt_controller_entry) -- Ignore all below this enumeration.
-   WITH
-      Size => 8;
-   FOR interrupt_controller USE
-     (local_APIC_entry                  => 00,
-      IO_APIC_entry                     => 01,
-      interrupt_source_override_entry   => 02,
-      NMI_source_entry                  => 03,
-      local_APIC_NMI_entry              => 04,
-      local_APIC_address_override_entry => 05,
-      IO_SAPIC_entry                    => 06,
-      local_SAPIC_entry                 => 07,
-      platform_interrupt_source_entry   => 08,
-      local_x2APIC_entry                => 09,
-      local_x2APIC_NMI_entry            => 10,
-      ARM_interrupt_controller_entry    => 11);
-
-   -- This record describes the I/O APIC layout found in the MADT's end.
-   -- READ: ACPI Specification Version 6.3, Page 154 - 5.2.12.3.
-   TYPE IO_APIC_descriptor IS RECORD
-      -- The enumeration value of the interrupt controller. If the structure
-      -- is valid, then this should reflect this record type's purpose.
-      Enumeration_Value : interrupt_controller;
-      -- The length of the entire structure which describes the I/O APIC.
-      -- This will always be twelve as of writing this.
-      Length            : number  RANGE 00 .. 16#000000FF#;
-      -- The I/O APIC's identity. There can be multiple I/O APICs for a system.
-      IO_APIC_Identity  : number  RANGE 00 .. 16#000000FF#;
-      -- Reserved field not used for anything.
-      Reserved          : number  RANGE 00 .. 16#000000FF#;
-      -- The 32-bit MMIO physical address. Each I/O APIC has its own address.
-      IO_APIC_Address   : address RANGE 00 .. 16#FFFFFFFF#;
-      -- A global system interrupt number that indicates where the I/O APIC's
-      -- interrupt inputs begin from. To figure out the range, you will have
-      -- to consult the I/O APIC itself and check in the IOAPICVER register.
-      -- Here's Linus's explanation: https://yarchive.net/comp/linux/tla.html
-      GSI_Base          : number  RANGE 00 .. 16#FFFFFFFF#;
-   END RECORD
-   WITH
-      Dynamic_Predicate => Enumeration_Value = IO_APIC_entry AND THEN
-                           Length = 12,
-      Convention        => C;
-   FOR IO_APIC_descriptor USE RECORD
-      Enumeration_Value      AT 0 RANGE 0 .. 07;
-      Length                 AT 1 RANGE 0 .. 07;
-      IO_APIC_Identity       AT 2 RANGE 0 .. 07;
-      Reserved               AT 3 RANGE 0 .. 07;
-      IO_APIC_Address        AT 4 RANGE 0 .. 31;
-      GSI_Base               AT 8 RANGE 0 .. 31;
-   END RECORD;
-
    -- A record that describes the LAPIC in the MADT table.
    -- READ: ACPI Specification Version 6.3, Page 153 - 5.2.12.2.
    TYPE local_APIC_descriptor IS RECORD
@@ -703,12 +833,12 @@ IS
       Enumeration_Value : interrupt_controller;
       -- The length of the entire structure which describes the local x2APIC.
       -- This will always be eight as of writing this.
-      Length            : number RANGE 00 .. 16#000000FF#;
+      Length            : number RANGE 0 .. 2**08 - 1;
       -- This is related to ACPI AML. OSPM must match each LAPIC (regardless of
       -- specification) to a processor.
-      ACPI_Identity     : number RANGE 00 .. 16#000000FF#;
+      ACPI_Identity     : number RANGE 0 .. 2**08 - 1;
       -- The (presumably physical) identity of the local APIC.
-      APIC_Identity     : number RANGE 00 .. 16#000000FF#;
+      APIC_Identity     : number RANGE 0 .. 2**08 - 1;
       -- Whether or not the local APIC is already enabled.
       Enabled           : boolean;
       -- If true, then the local APIC is not enabled and the logical processor
@@ -716,7 +846,7 @@ IS
       -- already enabled.
       Activatable       : boolean;
       -- Reserved flags that are not used for anything.
-      Reserved_Flags    : number RANGE 00 .. 16#3FFFFFFF#;
+      Reserved_Flags    : number RANGE 0 .. 2**30 - 1;
    END RECORD
    WITH
       Dynamic_Predicate => Enumeration_Value = local_APIC_entry AND THEN
@@ -748,11 +878,11 @@ IS
       Enumeration_Value : interrupt_controller;
       -- The length of the entire structure which describes the local x2APIC.
       -- This will always be sixteen as of writing this.
-      Length            : number RANGE 00 .. 16#000000FF#;
+      Length            : number RANGE 0 .. 2**08 - 1;
       -- A reserved field.
-      Reserved          : number RANGE 00 .. 16#0000FFFF#;
+      Reserved          : number RANGE 0 .. 2**16 - 1;
       -- The (presumably physical) identity of the local x2APIC.
-      x2APIC_Identity   : number RANGE 00 .. 16#FFFFFFFF#;
+      x2APIC_Identity   : number RANGE 0 .. 2**32 - 1;
       -- Whether or not the local x2APIC is already enabled.
       Enabled           : boolean;
       -- If true, then the local x2APIC is not enabled and the logical
@@ -760,10 +890,10 @@ IS
       -- local x2APIC is already enabled.
       Activatable       : boolean;
       -- Reserved flags that are not used for anything.
-      Reserved_Flags    : number RANGE 00 .. 16#3FFFFFFF#;
+      Reserved_Flags    : number RANGE 0 .. 2**30 - 1;
       -- This is related to ACPI AML. OSPM must match each LAPIC (regardless of
       -- specification) to a processor.
-      ACPI_Identity     : number RANGE 00 .. 16#FFFFFFFF#;
+      ACPI_Identity     : number RANGE 0 .. 2**32 - 1;
    END RECORD
    WITH
       Dynamic_Predicate => Enumeration_Value = local_APIC_entry AND THEN
@@ -782,88 +912,6 @@ IS
       ACPI_Identity     AT 12 RANGE 0 .. 31;
    END RECORD;
 
-   -- Indicates how an e.g. overrided interrupt source's input signal differs
-   -- from a standard ISA/EISA input signal. Reused the polarity and trigger
-   -- mode representations and made them into one enumeration for convenience.
-   TYPE interrupt_signal IS
-     (default_ISA_or_EISA_signal,
-      active_high_or_edge_triggered_signal,
-      reserved_signal,
-      active_low_or_level_triggered_signal)
-   WITH
-      Size => 2;
-   FOR interrupt_signal USE
-     (default_ISA_or_EISA_signal           => 2#00#,
-      active_high_or_edge_triggered_signal => 2#01#,
-      reserved_signal                      => 2#10#,
-      active_low_or_level_triggered_signal => 2#11#);
-
-   -- This MADT entry describes how the old/legacy ISA IRQs work in conjuction
-   -- with the I/O APIC. It destroys any notion of identity-mapped IRQs and
-   -- overrides them with a new relation. Should be parsed with the I/O APIC.
-   -- READ: ACPI Specification Version 6.3, Page 155 - 5.2.12.5.
-   TYPE interrupt_source_override_descriptor IS RECORD
-      -- As usual, this is a static value. It should reflect the correct
-      -- value for the record's purpose.
-      Enumeration_Value : interrupt_controller;
-      -- The length of the entire MADT entry. For interrupt source overrides,
-      -- this will be ten every time unless corrupt.
-      Length            : number RANGE 0 .. 16#000000FF#;
-      -- Indicates what bus type this is for. As of ACPI Specification Version
-      -- 6.3, this can only be zero, which indicates it's for ISA.
-      Bus_Variant       : number RANGE 0 .. 16#000000FF#;
-      -- The legacy IRQ itself. If the override was for e.g. IRQ 1 (keyboard),
-      -- then this would be one as well.
-      IRQ_Value         : number RANGE 0 .. 16#000000FF#;
-      -- The global system interrupt (GSI) that corresponds to an I/O APIC.
-      -- Check this value against all of the I/O APIC entries.
-      GSI_Value         : number RANGE 0 .. 16#FFFFFFFF#;
-      -- The default or new polarity of the interrupt signal.
-      Polarity          : interrupt_signal;
-      -- The default or new trigger mode for the interrupt signal.
-      Trigger_Mode      : interrupt_signal;
-      -- A zeroed/reserved field.
-      Reserved          : number RANGE 0 .. 16#00000FFF#;
-   END RECORD
-   WITH
-      Dynamic_Predicate => Enumeration_Value = interrupt_source_override_entry
-                           AND THEN Length = 10 AND THEN Bus_Variant = 0,
-      Convention        => C;
-   FOR interrupt_source_override_descriptor USE RECORD
-      Enumeration_Value AT 0 RANGE 0 .. 07;
-      Length            AT 1 RANGE 0 .. 07;
-      Bus_Variant       AT 2 RANGE 0 .. 07;
-      IRQ_Value         AT 3 RANGE 0 .. 07;
-      GSI_Value         AT 4 RANGE 0 .. 31;
-      Polarity          AT 8 RANGE 0 .. 01;
-      Trigger_Mode      AT 8 RANGE 2 .. 03;
-      Reserved          AT 8 RANGE 4 .. 15;
-   END RECORD;
-
-   -- Due to how the MADT's list of APICs is handled, a subprogram needs to
-   -- scan the list and fill up an array containing this general describer of
-   -- the interrupt controller, so we can later retrieve the full descriptor of
-   -- the APIC via an import. Storing the size is not important for the
-   -- interrupt controllers we wish to seek, as they have static field lengths.
-   TYPE interrupt_controller_descriptor IS RECORD
-      -- The type of interrupt controller found in the MADT. By default,
-      -- this is an IA-64 centric structure so no "Present" field is needed.
-      -- That should never ever come up on IA-32e/AMD64, which isn't Itanium.
-      Enumeration_Value : interrupt_controller :=
-         platform_interrupt_source_entry;
-      -- The address location of its structure/record which can be imported.
-      -- If is better if you check this for zero instead of the controller name
-      -- for an x86 controller's presence.
-      Record_Address    : address := 0;
-   END RECORD;
-
-   -- An array of the general interrupt controller records found in the MADT.
-   -- For now, HAVK only supports 255 APICs, which in turn means it only
-   -- supports 255 processor cores and I/O APICs. I don't foresee that being an
-   -- issue on the type of hardware HAVK is intended for i.e. not huge servers.
-   TYPE interrupt_controller_descriptors IS ARRAY(number RANGE 1 .. 255) OF
-      interrupt_controller_descriptor;
-
    -- The HPET table that details the high-precision event timer.
    -- The specification for the ACPI 2.0 table can be found within the HPET
    -- specification from Intel themselves.
@@ -872,11 +920,11 @@ IS
       -- This platform-specific table also contains an SDT header.
       SDT               : system_description_table;
       -- The HPET hardware's revision number.
-      Hardware_Revision : number RANGE 0 .. 16#00FF#;
+      Hardware_Revision : number RANGE 0 .. 2**08 - 1;
       -- The amount of comparators (current and/or voltage comparison circuit)
       -- that the HPET implementation has. This is usually above three and the
       -- value itself begins from zero, so three comparators would be "2".
-      Comparators       : number RANGE 0 .. 16#001F#;
+      Comparators       : number RANGE 0 .. 2**05 - 1;
       -- If true, then the HPET supports 64-bit operation.
       Long_Mode_Support : boolean;
       -- A reserved field.
@@ -885,22 +933,22 @@ IS
       -- routed to the PIT's PIC IRQs instead.
       PIT_Replacement   : boolean;
       -- The PCI vendor identity number.
-      Vendor_Identity   : number RANGE 0 .. 16#FFFF#;
+      Vendor_Identity   : number RANGE 0 .. 2**16 - 1;
       -- The MMIO address is in ACPI's GAS format. Make sure it's mapped
       -- before you read or write to it as usual.
       Event_Timer_Block : generic_address_structure;
       -- This indicates the current HPET's sequence number. There can be
       -- multiple HPET tables. For example, the first table's HPET sequence
       -- number will be zero, and so on.
-      HPET_Sequence     : number RANGE 0 .. 16#00FF#;
+      HPET_Sequence     : number RANGE 0 .. 2**08 - 1;
       -- The lowest possible clock period/tick supported without
       -- losing any interrupts in periodic mode. The value written to the
       -- HPET's register must be the minimum period divided by the main
       -- counter period.
-      Minimum_Period    : number RANGE 0 .. 16#FFFF#;
+      Minimum_Period    : number RANGE 0 .. 2**16 - 1;
       -- The HPET can support page protection if its MMIO address is exposed to
       -- ring 3. I don't think we will be doing that, so this isn't too useful.
-      Page_Protection   : number RANGE 0 .. 16#00FF#;
+      Page_Protection   : number RANGE 0 .. 2**08 - 1;
    END RECORD
    WITH
       Convention => C;
@@ -918,29 +966,32 @@ IS
       Page_Protection      AT 55 RANGE 0 .. 007;
    END RECORD;
 
-   -- This describes the state of the current system's ACPI status.
-   -- It the UEFI bootloader if it passed the correct information.
-   -- More specifically, this validates the RSDP and the XSDT. As of now, I'm
-   -- not sure how to proceed if the RSDP and/or the XSDT are indeed invalid,
-   -- so I haven't coded it to panic. It's up to an external subprogram to
-   -- handle what to do next.
-   FUNCTION Valid_Implementation
-      RETURN boolean;
-
-   -- Checks if a system table exists in the XSDT's pointer section and then
-   -- returns an address to the start of a table if it exists and is valid.
-   -- Returns zero if it's not found or if it's corrupt.
-   FUNCTION Table_Address
-     (Signature : IN string)
-      RETURN address
+   -- Parses the bootloader arguments and returns the first table. Will raise
+   -- a panic if it's corrupt.
+   FUNCTION Get_RSDP
+      RETURN root_system_description_pointer
    WITH
-      Pre => Valid_Implementation AND THEN Signature'length = 4;
+      Volatile_Function => true,
+      Global            => (Input    => ACPI_State,
+                            Proof_In => UEFI.Bootloader_Arguments);
 
-   -- Parses the list of APIC records in the MADT and returns an array
-   -- of their respective address locations for importation.
-   FUNCTION Get_APICs
-     (MADT_Address : IN address)
-      RETURN interrupt_controller_descriptors
+   -- Does the same as `Get_RSDP()`, but for the XSDT's SDT. The array of other
+   -- tables must be aliased from the original XSDT address plus the SDT
+   -- length. Will raise a panic if it's corrupt.
+   FUNCTION Get_XSDT
+      RETURN access_extended_system_description_table
    WITH
-      Pre => Valid_Implementation AND THEN MADT_Address /= 0;
+      Volatile_Function => true,
+      Global            => (Input    => ACPI_State,
+                            Proof_In => UEFI.Bootloader_Arguments),
+      Post              => Get_XSDT'result /= NULL;
+
+   -- Returns accesses to the tables in the XSDT. They only point to the SDT of
+   -- each table, but they can be imported into different record types.
+   FUNCTION Get_XSDT_Tables
+      RETURN system_description_tables
+   WITH
+      Volatile_Function => true,
+      Global            => (Input => ACPI_State);
+
 END HAVK_Kernel.ACPI;

@@ -33,7 +33,11 @@ IS
       RETURN address
    IS
       -- Creates the new stack for handling interrupts in ring 0.
-      New_Stack_End  : CONSTANT access_x86_stack := NEW x86_stack(1 .. Size);
+      New_Stack_End  : CONSTANT access_x86_stack := NEW x86_stack(1 .. Size)
+      WITH
+         Annotate => (GNATprove, False_Positive,
+                      "memory leak might occur at end of scope",
+                      "This is not freed here.");
 
       -- While the alignment is guaranteed and can be assumed, it's probably
       -- safer to just check for alignment anyway instead of using the pragma.
@@ -62,7 +66,11 @@ IS
       USE
          HAVK_Kernel.UEFI;
 
-      Map        : CONSTANT memory_map := Get_Memory_Map;
+      Map        : CONSTANT memory_map := Get_Memory_Map
+      WITH
+         Annotate => (GNATprove, False_Positive,
+                      "memory leak might occur at end of scope",
+                      "There is no allocations made to obtain it.");
       Attributes : memory_attributes;
       Limit      : number := 0;
    BEGIN
@@ -89,9 +97,8 @@ IS
      (Kernel_Virtual_Address : IN address)
       RETURN address
    IS
-      Bootloader : CONSTANT UEFI.arguments := UEFI.Get_Arguments;
-      Offset     : CONSTANT address        :=
-         Kernel_Virtual_Base - Bootloader.Physical_Base_Address;
+      Offset : CONSTANT address :=
+         Kernel_Virtual_Base - UEFI.Bootloader_Arguments.Physical_Base_Address;
    BEGIN
       RETURN Kernel_Virtual_Address - Offset;
    END Kernel_Virtual_To_Physical;

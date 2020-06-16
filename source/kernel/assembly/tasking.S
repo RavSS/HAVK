@@ -121,7 +121,7 @@ assembly__start_tasking:
 # Reminder that this is an ISR. It is not a simple procedure/function.
 # It can be called from another interrupt handler via interrupt nesting.
 .GLOBAL assembly__switch_task
-# (RDI => active task's register state)
+# ()
 assembly__switch_task:
 	# The SS value of the interrupted state is on the stack (32 bytes after
 	# RSP) and it is a 64-bit zero-extended 16-bit value.
@@ -129,7 +129,9 @@ assembly__switch_task:
 	MOV QWORD PTR [RIP + var__interrupted_dpl_value], RAX # Now store it.
 
 	CALL assembly__switch_to_kernel_cr3 # Only touches RAX and RSP.
-	SAVE_REGISTERS_TO_STATE RDI # Save and continue to clobber if required.
+
+	CALL ada__get_task_state # Active task state structure address in RAX.
+	SAVE_REGISTERS_TO_STATE RAX # Save and continue to clobber if required.
 
 	MOV RDI, RSP # Get ready to pass the task stack in RDI.
 	LEA RSP, [RIP + var__task_management_stack_base] # Load our stack.

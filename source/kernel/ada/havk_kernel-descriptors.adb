@@ -6,10 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.Interrupts,
-   HAVK_Kernel.Interrupts.Exceptions,
-   HAVK_Kernel.Interrupts.ISA_IRQs;
+   HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Descriptors
 WITH
@@ -17,7 +14,7 @@ WITH
 IS
    PROCEDURE Reset_Interrupt_Descriptor_Table
    WITH
-      SPARK_Mode => off -- Need the addresses of the ISRs directly.
+      SPARK_Mode => off -- Need the addresses of the ISR stubs directly.
    IS
       USE
          HAVK_Kernel.Interrupts,
@@ -26,64 +23,64 @@ IS
    BEGIN
       IDT :=
       (  -- CPU exceptions.
-         000 => Interrupt_Entry(ISR_000_Handler'address),
-         001 => Interrupt_Entry(ISR_001_Handler'address),
-         002 => Interrupt_Entry(ISR_002_Handler'address),
-         003 => Interrupt_Entry(ISR_003_Handler'address, Gate => trap_gate),
-         004 => Interrupt_Entry(ISR_004_Handler'address, Gate => trap_gate),
-         005 => Interrupt_Entry(ISR_005_Handler'address),
-         006 => Interrupt_Entry(ISR_006_Handler'address),
-         007 => Interrupt_Entry(ISR_007_Handler'address),
-         008 => Interrupt_Entry(ISR_008_Handler'address),
-         009 => Interrupt_Entry(ISR_009_Handler'address),
-         010 => Interrupt_Entry(ISR_010_Handler'address),
-         011 => Interrupt_Entry(ISR_011_Handler'address),
-         012 => Interrupt_Entry(ISR_012_Handler'address),
-         013 => Interrupt_Entry(ISR_013_Handler'address),
-         014 => Interrupt_Entry(ISR_014_Handler'address),
-         015 => Interrupt_Entry(ISR_015_Handler'address),
-         016 => Interrupt_Entry(ISR_016_Handler'address),
-         017 => Interrupt_Entry(ISR_017_Handler'address),
-         018 => Interrupt_Entry(ISR_018_Handler'address),
-         019 => Interrupt_Entry(ISR_019_Handler'address),
-         020 => Interrupt_Entry(ISR_020_Handler'address),
-         021 => Interrupt_Entry(ISR_021_Handler'address),
-         022 => Interrupt_Entry(ISR_022_Handler'address),
-         023 => Interrupt_Entry(ISR_023_Handler'address),
-         024 => Interrupt_Entry(ISR_024_Handler'address),
-         025 => Interrupt_Entry(ISR_025_Handler'address),
-         026 => Interrupt_Entry(ISR_026_Handler'address),
-         027 => Interrupt_Entry(ISR_027_Handler'address),
-         028 => Interrupt_Entry(ISR_028_Handler'address),
-         029 => Interrupt_Entry(ISR_029_Handler'address),
-         030 => Interrupt_Entry(ISR_030_Handler'address),
-         031 => Interrupt_Entry(ISR_031_Handler'address),
+         000 => Interrupt_Entry(ISR_000_Stub'address),
+         001 => Interrupt_Entry(ISR_001_Stub'address),
+         002 => Interrupt_Entry(ISR_002_Stub'address),
+         003 => Interrupt_Entry(ISR_003_Stub'address, Gate => trap_gate),
+         004 => Interrupt_Entry(ISR_004_Stub'address, Gate => trap_gate),
+         005 => Interrupt_Entry(ISR_005_Stub'address),
+         006 => Interrupt_Entry(ISR_006_Stub'address),
+         007 => Interrupt_Entry(ISR_007_Stub'address),
+         008 => Interrupt_Entry(ISR_008_Stub'address),
+         009 => Interrupt_Entry(ISR_009_Stub'address),
+         010 => Interrupt_Entry(ISR_010_Stub'address),
+         011 => Interrupt_Entry(ISR_011_Stub'address),
+         012 => Interrupt_Entry(ISR_012_Stub'address),
+         013 => Interrupt_Entry(ISR_013_Stub'address),
+         014 => Interrupt_Entry(ISR_014_Stub'address),
+         015 => Interrupt_Entry(ISR_015_Stub'address),
+         016 => Interrupt_Entry(ISR_016_Stub'address),
+         017 => Interrupt_Entry(ISR_017_Stub'address),
+         018 => Interrupt_Entry(ISR_018_Stub'address),
+         019 => Interrupt_Entry(ISR_019_Stub'address),
+         020 => Interrupt_Entry(ISR_020_Stub'address),
+         021 => Interrupt_Entry(ISR_021_Stub'address),
+         022 => Interrupt_Entry(ISR_022_Stub'address),
+         023 => Interrupt_Entry(ISR_023_Stub'address),
+         024 => Interrupt_Entry(ISR_024_Stub'address),
+         025 => Interrupt_Entry(ISR_025_Stub'address),
+         026 => Interrupt_Entry(ISR_026_Stub'address),
+         027 => Interrupt_Entry(ISR_027_Stub'address),
+         028 => Interrupt_Entry(ISR_028_Stub'address),
+         029 => Interrupt_Entry(ISR_029_Stub'address),
+         030 => Interrupt_Entry(ISR_030_Stub'address),
+         031 => Interrupt_Entry(ISR_031_Stub'address),
 
          -- Legacy ISA IRQs.
-         032 => Interrupt_Entry(ISR_032_Handler'address), -- IRQ 00.
-         033 => Interrupt_Entry(ISR_033_Handler'address), -- IRQ 01.
-         034 => Interrupt_Entry(ISR_034_Handler'address), -- IRQ 02.
-         035 => Interrupt_Entry(ISR_035_Handler'address), -- IRQ 03.
-         036 => Interrupt_Entry(ISR_036_Handler'address), -- IRQ 04.
-         037 => Interrupt_Entry(ISR_037_Handler'address), -- IRQ 05.
-         038 => Interrupt_Entry(ISR_038_Handler'address), -- IRQ 06.
-         039 => Interrupt_Entry(ISR_039_Handler'address), -- IRQ 07.
-         040 => Interrupt_Entry(ISR_040_Handler'address), -- IRQ 08.
-         041 => Interrupt_Entry(ISR_041_Handler'address), -- IRQ 09.
-         042 => Interrupt_Entry(ISR_042_Handler'address), -- IRQ 10.
-         043 => Interrupt_Entry(ISR_043_Handler'address), -- IRQ 11.
-         044 => Interrupt_Entry(ISR_044_Handler'address), -- IRQ 12.
-         045 => Interrupt_Entry(ISR_045_Handler'address), -- IRQ 13.
-         046 => Interrupt_Entry(ISR_046_Handler'address), -- IRQ 14.
-         047 => Interrupt_Entry(ISR_047_Handler'address), -- IRQ 15.
+         032 => Interrupt_Entry(ISR_032_Stub'address), -- IRQ 00.
+         033 => Interrupt_Entry(ISR_033_Stub'address), -- IRQ 01.
+         034 => Interrupt_Entry(ISR_034_Stub'address), -- IRQ 02.
+         035 => Interrupt_Entry(ISR_035_Stub'address), -- IRQ 03.
+         036 => Interrupt_Entry(ISR_036_Stub'address), -- IRQ 04.
+         037 => Interrupt_Entry(ISR_037_Stub'address), -- IRQ 05.
+         038 => Interrupt_Entry(ISR_038_Stub'address), -- IRQ 06.
+         039 => Interrupt_Entry(ISR_039_Stub'address), -- IRQ 07.
+         040 => Interrupt_Entry(ISR_040_Stub'address), -- IRQ 08.
+         041 => Interrupt_Entry(ISR_041_Stub'address), -- IRQ 09.
+         042 => Interrupt_Entry(ISR_042_Stub'address), -- IRQ 10.
+         043 => Interrupt_Entry(ISR_043_Stub'address), -- IRQ 11.
+         044 => Interrupt_Entry(ISR_044_Stub'address), -- IRQ 12.
+         045 => Interrupt_Entry(ISR_045_Stub'address), -- IRQ 13.
+         046 => Interrupt_Entry(ISR_046_Stub'address), -- IRQ 14.
+         047 => Interrupt_Entry(ISR_047_Stub'address), -- IRQ 15.
 
          -- HAVK-specific interrupt vectors.
-         048 => Interrupt_Entry(ISR_048_Handler'address), -- LAPIC.
-         100 => Interrupt_Entry(ISR_100_Handler'address), -- Task switching.
+         048 => Interrupt_Entry(ISR_048_Stub'address), -- LAPIC.
+         049 => Interrupt_Entry(ISR_049'address), -- Task switching.
 
          -- Cover the disabled PIC and the APIC (spurious) interrupt vectors.
          -- It is okay if both overlap.
-         OTHERS => Interrupt_Entry(Spurious_Interrupt_Handler'address)
+         OTHERS => Interrupt_Entry(ISR_Default'address)
       );
    END Reset_Interrupt_Descriptor_Table;
 

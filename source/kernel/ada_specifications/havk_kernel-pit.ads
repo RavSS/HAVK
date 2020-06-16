@@ -61,7 +61,8 @@ PRIVATE
       channel_2_port,        -- The PC speaker channel.
       command_register_port) -- Configures the PIT itself. Not readable.
    WITH
-      Size => 16;
+      Size        => 16,
+      Object_Size => number'size;
    FOR port USE
      (channel_0_port        => 16#40#,
       channel_1_port        => 16#41#,
@@ -150,7 +151,9 @@ PRIVATE
       Selected_Timer_Mode : timer_mode;
       Selected_Byte_Mode  : byte_access_mode;
       Selected_Channel    : channel;
-   END RECORD;
+   END RECORD
+   WITH
+      Object_Size => number'size;
    FOR command USE RECORD
       BCD_Mode            AT 0 RANGE 0 .. 0;
       Selected_Timer_Mode AT 0 RANGE 1 .. 3;
@@ -176,8 +179,6 @@ PRIVATE
    END RECORD;
 
    -- Conveniently converts whatever type into a byte and outputs it to a port.
-   PRAGMA Warnings(GNATprove, off, "unused variable ""Data""*",
-      Reason => "The format is only converted/imported into a byte.");
    GENERIC
       TYPE generic_data IS PRIVATE;
       Channel_Port : IN port;

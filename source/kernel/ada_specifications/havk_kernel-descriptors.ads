@@ -5,6 +5,13 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+PRAGMA Warnings(off, """HAVK_Kernel.Interrupts*"" * referenced",
+   Reason => "These packages must be linked regardless of direct usage.");
+WITH
+   HAVK_Kernel.Interrupts,
+   HAVK_Kernel.Interrupts.Exceptions,
+   HAVK_Kernel.Interrupts.ISA_IRQs;
+
 -- Handles the CPU's descriptor functionality, which is necessary for many
 -- things, such as privilege level shifts and processor interrupts.
 PACKAGE HAVK_Kernel.Descriptors

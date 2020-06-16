@@ -48,7 +48,8 @@ IS
          Terminal_Printing AND THEN Terminal_Hook /= NULL
       THEN
          Terminal_Hook.Print(Prefix & Information & Suffix);
-         Terminal_Hook.Draw_On(Graphics.Get_Display(UEFI.Get_Arguments));
+         Terminal_Hook.Draw_On
+           (Graphics.Get_Display(UEFI.Bootloader_Arguments.ALL));
       END IF;
    END Message;
 END HAVK_Kernel.Debug;

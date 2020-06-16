@@ -19,7 +19,7 @@ IS
       -- only a single byte. For example, multiple IRQs will be raised to
       -- handle key breaks, but only a single one will be raised for a press.
       Scancode : CONSTANT number RANGE 0 .. 2**8 - 1 :=
-         Input_Byte(Unchecked_Conversion(data_port));
+         Input_Byte(Enum_Rep(data_port) AND 16#FFFF#);
    BEGIN
       IF -- TODO: This only supports a PS/2 keyboard on port 1.
          PS2.Port_1_Device /= standard_keyboard OR ELSE

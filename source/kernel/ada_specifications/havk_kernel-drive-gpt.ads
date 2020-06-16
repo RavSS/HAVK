@@ -6,7 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Memory.Manager;
+   SPARK.Heap;
 
 -- A package for giving understanding of the GPT partition layout, which is
 -- what I'll use over the older MBR.
@@ -97,8 +97,8 @@ IS
       Secondary_Bus   : IN boolean := false;
       Secondary_Drive : IN boolean := false)
    WITH
-      Global => (In_Out => (Memory.Manager.Kernel_Heap_State,
-                            Intrinsics.CPU_Port_State, Drive_State));
+      Global => (In_Out => (Intrinsics.CPU_Port_State, Drive_State,
+                            SPARK.Heap.Dynamic_Memory));
 
    -- Returns information for a particular requested partition via name.
    -- It will retrieve the first partition that matches the name.
@@ -108,8 +108,8 @@ IS
       Secondary_Bus   : IN boolean := false;
       Secondary_Drive : IN boolean := false)
    WITH
-      Global => (In_Out => (Memory.Manager.Kernel_Heap_State,
-                            Intrinsics.CPU_Port_State, Drive_State)),
+      Global => (In_Out => (Intrinsics.CPU_Port_State, Drive_State,
+                            SPARK.Heap.Dynamic_Memory)),
       Pre    => Name'first = partition_name'first AND THEN
                 Name'last <= partition_name'last;
 
