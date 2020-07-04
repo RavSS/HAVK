@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
 -- Program         -- HAVK                                                   --
--- Filename        -- havk_phase-drive-fat.adb                               --
+-- Filename        -- havk_kernel-drive-fat.adb                              --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -627,7 +627,8 @@ IS
       DOS_File_Entry : standard_file_format;
    BEGIN
       Check_File(FAT_Context, Path_Name, Error_Status, DOS_File_Entry);
-      Found_File.Name := DOS_File_Entry.File_Name & DOS_File_Entry.Extension;
+      Found_File.Name :=
+         DOS_File_Entry.File_Name & '.' & DOS_File_Entry.Extension;
       Found_File.Size := DOS_File_Entry.File_Size;
    END Check_File;
 

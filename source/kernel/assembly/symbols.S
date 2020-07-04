@@ -8,11 +8,10 @@
 # This file provides a cheap workaround for getting the symbol address instead
 # of what is at the symbol. Simply use "External_Name" on a label (with
 # "_address" at the end) below in Ada to get it.
-.MACRO DEFINE_SYMBOL_POINTER SYMBOL:req
+.MACRO SYMBOL_POINTER SYMBOL:req
 	.IFNDEF \SYMBOL\()_address
 		.GLOBAL \SYMBOL\()_address
 		\SYMBOL\()_address:
-			.EXTERN \SYMBOL\()_address
 			.QUAD \SYMBOL
 	.ENDIF
 .ENDM
@@ -20,31 +19,31 @@
 .SECTION .rodata # Kept in read-only data because HAVK shouldn't change them.
 
 # For mapping the entire kernel in virtual space.
-DEFINE_SYMBOL_POINTER var__kernel_virtual_base
-DEFINE_SYMBOL_POINTER var__kernel_virtual_end
+SYMBOL_POINTER global__kernel_virtual_base
+SYMBOL_POINTER global__kernel_virtual_end
 
 # Now the sections. These are also virtual addresses.
-DEFINE_SYMBOL_POINTER var__kernel_text_base
-DEFINE_SYMBOL_POINTER var__kernel_text_end
-DEFINE_SYMBOL_POINTER var__kernel_rodata_base
-DEFINE_SYMBOL_POINTER var__kernel_rodata_end
-DEFINE_SYMBOL_POINTER var__kernel_data_base
-DEFINE_SYMBOL_POINTER var__kernel_data_end
-DEFINE_SYMBOL_POINTER var__kernel_bss_base
-DEFINE_SYMBOL_POINTER var__kernel_bss_end
-DEFINE_SYMBOL_POINTER var__kernel_isolated_text_base
-DEFINE_SYMBOL_POINTER var__kernel_isolated_text_end
-DEFINE_SYMBOL_POINTER var__kernel_isolated_data_base
-DEFINE_SYMBOL_POINTER var__kernel_isolated_data_end
-DEFINE_SYMBOL_POINTER var__kernel_isolated_bss_base
-DEFINE_SYMBOL_POINTER var__kernel_isolated_bss_end
+SYMBOL_POINTER global__kernel_text_base
+SYMBOL_POINTER global__kernel_text_end
+SYMBOL_POINTER global__kernel_rodata_base
+SYMBOL_POINTER global__kernel_rodata_end
+SYMBOL_POINTER global__kernel_data_base
+SYMBOL_POINTER global__kernel_data_end
+SYMBOL_POINTER global__kernel_bss_base
+SYMBOL_POINTER global__kernel_bss_end
+SYMBOL_POINTER global__kernel_isolated_text_base
+SYMBOL_POINTER global__kernel_isolated_text_end
+SYMBOL_POINTER global__kernel_isolated_data_base
+SYMBOL_POINTER global__kernel_isolated_data_end
+SYMBOL_POINTER global__kernel_isolated_bss_base
+SYMBOL_POINTER global__kernel_isolated_bss_end
 
 # The sizes. These don't have to be calculated during execution.
-DEFINE_SYMBOL_POINTER var__kernel_size
-DEFINE_SYMBOL_POINTER var__kernel_text_size
-DEFINE_SYMBOL_POINTER var__kernel_rodata_size
-DEFINE_SYMBOL_POINTER var__kernel_data_size
-DEFINE_SYMBOL_POINTER var__kernel_bss_size
-DEFINE_SYMBOL_POINTER var__kernel_isolated_text_size
-DEFINE_SYMBOL_POINTER var__kernel_isolated_data_size
-DEFINE_SYMBOL_POINTER var__kernel_isolated_bss_size
+SYMBOL_POINTER global__kernel_size
+SYMBOL_POINTER global__kernel_text_size
+SYMBOL_POINTER global__kernel_rodata_size
+SYMBOL_POINTER global__kernel_data_size
+SYMBOL_POINTER global__kernel_bss_size
+SYMBOL_POINTER global__kernel_isolated_text_size
+SYMBOL_POINTER global__kernel_isolated_data_size
+SYMBOL_POINTER global__kernel_isolated_bss_size

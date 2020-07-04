@@ -15,136 +15,164 @@
 # Should be placed into the isolated text section for obvious reasons.
 # If this is for a CPU exception which passes an error code, the second
 # parameter must be specified or else `REX.W IRQ` will mistake it as a part of
-# the interrupt frame.
-.MACRO DEFINE_INTERRUPT_HANDLER_STUB VECTOR:req ERROR_CODE_SUPPORT
-	.IFNDEF assembly__interrupt_handler_stub_\VECTOR
+# the interrupt frame. Third parameter decides whether or not to signal EOI.
+.MACRO INTERRUPT_HANDLER_STUB VECTOR:req ERROR_CODE=0 RESET_LAPIC=0
+	.IF \VECTOR < 10 # Padding so it remains consistent with my Ada code.
+		.GLOBAL assembly__interrupt_handler_stub_00\VECTOR
+		assembly__interrupt_handler_stub_00\VECTOR:
+	.ELSEIF \VECTOR < 100
+		.GLOBAL assembly__interrupt_handler_stub_0\VECTOR
+		assembly__interrupt_handler_stub_0\VECTOR:
+	.ELSEIF \VECTOR < 256
 		.GLOBAL assembly__interrupt_handler_stub_\VECTOR
 		assembly__interrupt_handler_stub_\VECTOR:
-			PUSH RBP
-			MOV RBP, RSP # So it's easier to get the arguments.
+	.ELSE
+		.ERROR "the provided vector is too high"
+	.ENDIF
+		PUSH RBP
+		MOV RBP, RSP # Easier to get the arguments and original RSP.
+		AND RSP, -16 # Align it for faster XMM register storage.
 
-			# These are used for zeroing out the LAPIC EOI register
-			# via `WRMSR`, so it's pushed first.
-			PUSH RCX
-			PUSH RDX
-			PUSH RAX
+		# These are used for zeroing out the LAPIC EOI register
+		# via `WRMSR`, so it's pushed first. Doesn't matter if
+		# EOI isn't signalled.
+		PUSH RCX
+		PUSH RDX
+		PUSH RAX
 
-			PUSH R11
-			PUSH R10
-			PUSH R9
-			PUSH R8
-			PUSH RDI
-			PUSH RSI
+		PUSH R11
+		PUSH R10
+		PUSH R9
+		PUSH R8
+		PUSH RDI
+		PUSH RSI
 
-			# I'm not quite sure how costly this is, but it allows
-			# the actual part of the handlers to use SSE
-			# instructions that don't touch the YMM and ZMM
-			# variants (if present). I've used the aligned version
-			# of `MOVDQU` as we have a 16-byte aligned stack, so
-			# hopefully it's faster. GCC doesn't support this, so
-			# just for show, I will. Note that an extra 8 bytes is
-			# subtracted for alignment so `MOVDQA` (faster) can be
-			# used.
-			# TODO: Maybe replace this with `FXSAVE` etc.
-			SUB RSP, 16 * 17 + 8
-			MOVDQA XMMWORD [RSP], XMM0
-			MOVDQA XMMWORD [RSP + 16], XMM1
-			MOVDQA XMMWORD [RSP + 16 * 2], XMM2
-			MOVDQA XMMWORD [RSP + 16 * 3], XMM3
-			MOVDQA XMMWORD [RSP + 16 * 4], XMM4
-			MOVDQA XMMWORD [RSP + 16 * 5], XMM5
-			MOVDQA XMMWORD [RSP + 16 * 6], XMM6
-			MOVDQA XMMWORD [RSP + 16 * 7], XMM7
-			MOVDQA XMMWORD [RSP + 16 * 8], XMM8
-			MOVDQA XMMWORD [RSP + 16 * 9], XMM9
-			MOVDQA XMMWORD [RSP + 16 * 10], XMM10
-			MOVDQA XMMWORD [RSP + 16 * 11], XMM11
-			MOVDQA XMMWORD [RSP + 16 * 12], XMM12
-			MOVDQA XMMWORD [RSP + 16 * 13], XMM13
-			MOVDQA XMMWORD [RSP + 16 * 14], XMM14
-			MOVDQA XMMWORD [RSP + 16 * 15], XMM15
+		# I'm not quite sure how costly this is, but it allows
+		# the actual part of the handlers to use SSE
+		# instructions that don't touch the YMM and ZMM
+		# variants (if present). I've used the aligned version
+		# of `MOVDQU` as we have a 16-byte aligned stack, so
+		# hopefully it's faster. GCC doesn't support this, so
+		# just for show, I will. Note that an extra 8 bytes is
+		# subtracted for alignment so `MOVDQA` (faster) can be
+		# used.
+		# TODO: Maybe replace this with `FXSAVE` etc.
+		SUB RSP, 16 * 17 + 8
+		MOVDQA [RSP], XMM0
+		MOVDQA [RSP + 16], XMM1
+		MOVDQA [RSP + 16 * 2], XMM2
+		MOVDQA [RSP + 16 * 3], XMM3
+		MOVDQA [RSP + 16 * 4], XMM4
+		MOVDQA [RSP + 16 * 5], XMM5
+		MOVDQA [RSP + 16 * 6], XMM6
+		MOVDQA [RSP + 16 * 7], XMM7
+		MOVDQA [RSP + 16 * 8], XMM8
+		MOVDQA [RSP + 16 * 9], XMM9
+		MOVDQA [RSP + 16 * 10], XMM10
+		MOVDQA [RSP + 16 * 11], XMM11
+		MOVDQA [RSP + 16 * 12], XMM12
+		MOVDQA [RSP + 16 * 13], XMM13
+		MOVDQA [RSP + 16 * 14], XMM14
+		MOVDQA [RSP + 16 * 15], XMM15
 
-			# The ISR can't make an assumption about the direction
-			# flag. GCC also clears it before doing anything else.
-			CLD # READ: https://reviews.llvm.org/D18725
+		# The ISR can't make an assumption about the direction
+		# flag. GCC also clears it before doing anything else.
+		CLD # READ: https://reviews.llvm.org/D18725
 
-			CALL assembly__switch_to_kernel_cr3
+		# Switch to the kernel's page layout.
+		MOV RAX, [RIP + global__kernel_page_map_base_address]
+		MOV CR3, RAX
 
-			# Now prepare the arguments, with RDI being the pointer
-			# to the interrupt frame and RSI holding the value of
-			# the potential error code. The latter is on top of the
-			# stack if it's present and it is an 8-byte value, even
-			# though it only goes up to 32 bits. They are present
-			# on the stack upon entry.
+		# Now prepare the arguments, with RDI being the pointer
+		# to the interrupt frame and RSI holding the value of
+		# the potential error code. The latter is on top of the
+		# stack if it's present and it is an 8-byte value, even
+		# though it only goes up to 32 bits. Note that I push
+		# the RBP first, so they're on top of the stack upon
+		# entry and not after the CPU executes `PUSH RBP`.
 
-			.IF ERROR_CODE_SUPPORT == 1
-				MOV RSI, [RBP] # Error code value on the stack.
-				LEA RDI, [RBP + 8] # Interrupt frame address.
-			.ELSE
-				MOV RDI, RBP # Interrupt frame only.
-			.ENDIF
+		.IF \ERROR_CODE
+			MOV RSI, [RBP + 8] # Error code value.
+			LEA RDI, [RBP + 16] # Interrupt frame address.
+		.ELSE
+			LEA RDI, [RBP + 8] # Interrupt frame only.
+		.ENDIF
 
+		.IF \VECTOR < 10 # Same padding as above.
+			CALL ada__interrupt_handler_00\VECTOR
+		.ELSEIF \VECTOR < 100
+			CALL ada__interrupt_handler_0\VECTOR
+		.ELSE
 			CALL ada__interrupt_handler_\VECTOR
+		.ENDIF
 
-			CALL assembly__switch_to_task_cr3
+		CALL assembly__switch_to_task_cr3
 
-			MOVDQA XMM15, XMMWORD [RSP + 16 * 15]
-			MOVDQA XMM14, XMMWORD [RSP + 16 * 14]
-			MOVDQA XMM13, XMMWORD [RSP + 16 * 13]
-			MOVDQA XMM12, XMMWORD [RSP + 16 * 12]
-			MOVDQA XMM11, XMMWORD [RSP + 16 * 11]
-			MOVDQA XMM10, XMMWORD [RSP + 16 * 10]
-			MOVDQA XMM9, XMMWORD [RSP + 16 * 9]
-			MOVDQA XMM8, XMMWORD [RSP + 16 * 8]
-			MOVDQA XMM7, XMMWORD [RSP + 16 * 7]
-			MOVDQA XMM6, XMMWORD [RSP + 16 * 6]
-			MOVDQA XMM5, XMMWORD [RSP + 16 * 5]
-			MOVDQA XMM4, XMMWORD [RSP + 16 * 4]
-			MOVDQA XMM3, XMMWORD [RSP + 16 * 3]
-			MOVDQA XMM2, XMMWORD [RSP + 16 * 2]
-			MOVDQA XMM1, XMMWORD [RSP + 16]
-			MOVDQA XMM0, XMMWORD [RSP]
-			ADD RSP, 16 * 17 + 8
+		MOVDQA XMM15, [RSP + 16 * 15]
+		MOVDQA XMM14, [RSP + 16 * 14]
+		MOVDQA XMM13, [RSP + 16 * 13]
+		MOVDQA XMM12, [RSP + 16 * 12]
+		MOVDQA XMM11, [RSP + 16 * 11]
+		MOVDQA XMM10, [RSP + 16 * 10]
+		MOVDQA XMM9, [RSP + 16 * 9]
+		MOVDQA XMM8, [RSP + 16 * 8]
+		MOVDQA XMM7, [RSP + 16 * 7]
+		MOVDQA XMM6, [RSP + 16 * 6]
+		MOVDQA XMM5, [RSP + 16 * 5]
+		MOVDQA XMM4, [RSP + 16 * 4]
+		MOVDQA XMM3, [RSP + 16 * 3]
+		MOVDQA XMM2, [RSP + 16 * 2]
+		MOVDQA XMM1, [RSP + 16]
+		MOVDQA XMM0, [RSP]
+		ADD RSP, 16 * 17 + 8
 
-			POP RSI # Recover these first before signalling EOI.
-			POP RDI
-			POP R8
-			POP R9
-			POP R10
-			POP R11
+		POP RSI # Recover these first before signalling EOI.
+		POP RDI
+		POP R8
+		POP R9
+		POP R10
+		POP R11
 
-			# Reset the LAPIC by writing zero to the EOI MSR.
+		.IF \RESET_LAPIC
+			# Reset the LAPIC by writing zero to the EOI
+			# MSR. Not needed for CPU exceptions etc.
 			XOR RAX, RAX
 			XOR RDX, RDX
 			MOV RCX, 0x80B # The EOI MSR index.
 			WRMSR
+		.ENDIF
 
-			POP RAX # Now restore them.
-			POP RDX
-			POP RCX
+		POP RAX # Now restore them.
+		POP RDX
+		POP RCX
 
-			POP RBP # No need to recover RSP, RFLAGS, etc.
+		MOV RSP, RBP
+		POP RBP # No need to recover ring 3 RSP, RFLAGS, etc.
 
-			.IF ERROR_CODE_SUPPORT == 1
-				ADD RSP, 8 # Take the error code off.
-			.ENDIF
+		.IF \ERROR_CODE
+			ADD RSP, 8 # Take the error code off.
+		.ENDIF
 
-			REX.W IRET
-	.ENDIF
+		REX.W IRET
 .ENDM
 
 # Unfortunately, the "INT" instruction can only take in a byte constant (imm8),
 # so I have to declare a function for every single interrupt I wish to raise.
-# TODO: First argument is the padded number for the label, while the second
-# argument is the non-padded value so GAS recognises it. Not sure how to handle
-# it all in the macro.
-.MACRO DEFINE_RAISE_INTERRUPT_FUNCTION DISPLAY_VECTOR:req INT_VECTOR:req
-	.IFNDEF assembly__raise_interrupt_\DISPLAY_VECTOR
-		.GLOBAL assembly__raise_interrupt_\DISPLAY_VECTOR
-		assembly__raise_interrupt_\DISPLAY_VECTOR:
-			INT \INT_VECTOR
-			RET
+.MACRO RAISE_INTERRUPT_FUNCTION VECTOR:req
+	.IF \VECTOR < 10 # Padding so it remains consistent with my Ada code.
+		.GLOBAL assembly__raise_interrupt_00\VECTOR
+		assembly__raise_interrupt_00\VECTOR:
+	.ELSEIF \VECTOR < 100
+		.GLOBAL assembly__raise_interrupt_0\VECTOR
+		assembly__raise_interrupt_0\VECTOR:
+	.ELSEIF \VECTOR < 256
+		.GLOBAL assembly__raise_interrupt_\VECTOR
+		assembly__raise_interrupt_\VECTOR:
+	.ELSE
+		.ERROR "the provided vector is too high"
 	.ENDIF
+		INT \VECTOR
+		RET
 .ENDM
 
 .SECTION .isolated_text
@@ -154,59 +182,59 @@ assembly__interrupt_handler_spurious:
 	REX.W IRET # TODO: Do I need to signal EOI?
 
 # HAVK-specific interrupt handler stubs.
-DEFINE_INTERRUPT_HANDLER_STUB 048 # LAPIC timer.
+INTERRUPT_HANDLER_STUB 48 0 1 # LAPIC timer.
 
 # CPU exception handler stubs.
-DEFINE_INTERRUPT_HANDLER_STUB 000
-DEFINE_INTERRUPT_HANDLER_STUB 001
-DEFINE_INTERRUPT_HANDLER_STUB 002
-DEFINE_INTERRUPT_HANDLER_STUB 003
-DEFINE_INTERRUPT_HANDLER_STUB 004
-DEFINE_INTERRUPT_HANDLER_STUB 005
-DEFINE_INTERRUPT_HANDLER_STUB 006
-DEFINE_INTERRUPT_HANDLER_STUB 007
-DEFINE_INTERRUPT_HANDLER_STUB 008 1
-DEFINE_INTERRUPT_HANDLER_STUB 009
-DEFINE_INTERRUPT_HANDLER_STUB 010 1
-DEFINE_INTERRUPT_HANDLER_STUB 011 1
-DEFINE_INTERRUPT_HANDLER_STUB 012 1
-DEFINE_INTERRUPT_HANDLER_STUB 013 1
-DEFINE_INTERRUPT_HANDLER_STUB 014 1
-DEFINE_INTERRUPT_HANDLER_STUB 015
-DEFINE_INTERRUPT_HANDLER_STUB 016
-DEFINE_INTERRUPT_HANDLER_STUB 017 1
-DEFINE_INTERRUPT_HANDLER_STUB 018
-DEFINE_INTERRUPT_HANDLER_STUB 019
-DEFINE_INTERRUPT_HANDLER_STUB 020
-DEFINE_INTERRUPT_HANDLER_STUB 021
-DEFINE_INTERRUPT_HANDLER_STUB 022
-DEFINE_INTERRUPT_HANDLER_STUB 023
-DEFINE_INTERRUPT_HANDLER_STUB 024
-DEFINE_INTERRUPT_HANDLER_STUB 025
-DEFINE_INTERRUPT_HANDLER_STUB 026
-DEFINE_INTERRUPT_HANDLER_STUB 027
-DEFINE_INTERRUPT_HANDLER_STUB 028
-DEFINE_INTERRUPT_HANDLER_STUB 029
-DEFINE_INTERRUPT_HANDLER_STUB 030 1
-DEFINE_INTERRUPT_HANDLER_STUB 031
+INTERRUPT_HANDLER_STUB 0 0
+INTERRUPT_HANDLER_STUB 1 0
+INTERRUPT_HANDLER_STUB 2 0
+INTERRUPT_HANDLER_STUB 3 0
+INTERRUPT_HANDLER_STUB 4 0
+INTERRUPT_HANDLER_STUB 5 0
+INTERRUPT_HANDLER_STUB 6 0
+INTERRUPT_HANDLER_STUB 7 0
+INTERRUPT_HANDLER_STUB 8 1
+INTERRUPT_HANDLER_STUB 9 0
+INTERRUPT_HANDLER_STUB 10 1
+INTERRUPT_HANDLER_STUB 11 1
+INTERRUPT_HANDLER_STUB 12 1
+INTERRUPT_HANDLER_STUB 13 1
+INTERRUPT_HANDLER_STUB 14 1
+INTERRUPT_HANDLER_STUB 15 0
+INTERRUPT_HANDLER_STUB 16 0
+INTERRUPT_HANDLER_STUB 17 1
+INTERRUPT_HANDLER_STUB 18 0
+INTERRUPT_HANDLER_STUB 19 0
+INTERRUPT_HANDLER_STUB 20 0
+INTERRUPT_HANDLER_STUB 21 0
+INTERRUPT_HANDLER_STUB 22 0
+INTERRUPT_HANDLER_STUB 23 0
+INTERRUPT_HANDLER_STUB 24 0
+INTERRUPT_HANDLER_STUB 25 0
+INTERRUPT_HANDLER_STUB 26 0
+INTERRUPT_HANDLER_STUB 27 0
+INTERRUPT_HANDLER_STUB 28 0
+INTERRUPT_HANDLER_STUB 29 0
+INTERRUPT_HANDLER_STUB 30 1
+INTERRUPT_HANDLER_STUB 31 0
 
 # ISA IRQ handler stubs.
-DEFINE_INTERRUPT_HANDLER_STUB 032
-DEFINE_INTERRUPT_HANDLER_STUB 033
-DEFINE_INTERRUPT_HANDLER_STUB 034
-DEFINE_INTERRUPT_HANDLER_STUB 035
-DEFINE_INTERRUPT_HANDLER_STUB 036
-DEFINE_INTERRUPT_HANDLER_STUB 037
-DEFINE_INTERRUPT_HANDLER_STUB 038
-DEFINE_INTERRUPT_HANDLER_STUB 039
-DEFINE_INTERRUPT_HANDLER_STUB 040
-DEFINE_INTERRUPT_HANDLER_STUB 041
-DEFINE_INTERRUPT_HANDLER_STUB 042
-DEFINE_INTERRUPT_HANDLER_STUB 043
-DEFINE_INTERRUPT_HANDLER_STUB 044
-DEFINE_INTERRUPT_HANDLER_STUB 045
-DEFINE_INTERRUPT_HANDLER_STUB 046
-DEFINE_INTERRUPT_HANDLER_STUB 047
+INTERRUPT_HANDLER_STUB 32 0 1
+INTERRUPT_HANDLER_STUB 33 0 1
+INTERRUPT_HANDLER_STUB 34 0 1
+INTERRUPT_HANDLER_STUB 35 0 1
+INTERRUPT_HANDLER_STUB 36 0 1
+INTERRUPT_HANDLER_STUB 37 0 1
+INTERRUPT_HANDLER_STUB 38 0 1
+INTERRUPT_HANDLER_STUB 39 0 1
+INTERRUPT_HANDLER_STUB 40 0 1
+INTERRUPT_HANDLER_STUB 41 0 1
+INTERRUPT_HANDLER_STUB 42 0 1
+INTERRUPT_HANDLER_STUB 43 0 1
+INTERRUPT_HANDLER_STUB 44 0 1
+INTERRUPT_HANDLER_STUB 45 0 1
+INTERRUPT_HANDLER_STUB 46 0 1
+INTERRUPT_HANDLER_STUB 47 0 1
 
 # For raising the context switch function.
-DEFINE_RAISE_INTERRUPT_FUNCTION 049 49
+RAISE_INTERRUPT_FUNCTION 49

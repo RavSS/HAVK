@@ -6,8 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.Tasking;
+   HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Exceptions
 WITH
@@ -50,20 +49,18 @@ IS
             Convention => C,
             Address    => String_Pointer;
       BEGIN
-         Tasking.Switch_To_Kernel_CR3;
-
          IF
             NOT Elaborated
          THEN
-            Log("Elaboration failed.", Critical => true);
-         END IF;
-
-         IF
+            Log("Elaboration failed.", Tag => Exceptions_Tag,
+               Critical => true);
+         ELSIF
             Line /= 0
          THEN
-            Log(C_String & ":" & integer'image(Line), Critical => true);
+            Log(C_String & ":" & integer'image(Line), Tag => Exceptions_Tag,
+               Critical => true);
          ELSE
-            Log(C_String, Critical => true);
+            Log(C_String, Tag => Exceptions_Tag, Critical => true);
          END IF;
       END Crash_Message;
    BEGIN

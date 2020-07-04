@@ -6,11 +6,9 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Paging,
-   HAVK_Kernel.Intrinsics;
-USE
-   HAVK_Kernel.Paging,
-   HAVK_Kernel.Intrinsics;
+   HAVK_Kernel.Descriptors,
+   HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Tasking;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions
 IS
@@ -60,7 +58,7 @@ IS
    IS
       -- Set this to true in GDB and then single-step out of the ISR to return
       -- to the place where the interrupt was called (at RIP).
-      GDB_Ready   : ALIASED boolean := false
+      GDB_Ready : ALIASED boolean := false
       WITH
          Export   => true,
          Volatile => true;
@@ -68,7 +66,7 @@ IS
       WHILE
          NOT GDB_Ready
       LOOP
-         Spinlock_Pause;
+         Intrinsics.Spinlock_Pause;
       END LOOP;
    END ISR_003_Handler;
 
@@ -197,7 +195,18 @@ IS
       Error_Code      : IN number)
    IS
    BEGIN
-      Page_Fault_Handler(Error_Code AND 2**32 - 1); -- Does not return yet.
+      IF
+         Interrupt_Frame.CS = Descriptors.CS_Ring_3 AND THEN
+         Interrupt_Frame.SS = Descriptors.DS_Ring_3
+      THEN
+         Tasking.Page_Fault_Handler(Error_Code);
+      ELSE
+         RAISE Panic
+         WITH
+            Source_Location & " - Unexpected ISR 14 handler entry.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "Only valid for tasks. The kernel should not cause page faults.");
+      END IF;
    END ISR_014_Handler;
 
    PROCEDURE ISR_015_Handler

@@ -28,14 +28,14 @@ assembly__load_global_descriptor_table:
 	PUSH SI
 
 	# Push the 8-byte address of the local symbol to set the CS register.
-	LEA RAX, [RIP + .reload_segments]
+	LEA RAX, [RIP + .L_reload_segments]
 	PUSH RAX
 
 	# GAS requires you to be rather precise. Meanwhile, the equivalent in
 	# NASM is just `JMP FAR [RSP]`, which then assembles into this.
 	REX.W JMP FWORD PTR [RSP]
 
-	.reload_segments:
+	.L_reload_segments:
 		# All the other segment registers have the same offset as DS.
 		MOV DS, DX
 		MOV ES, DX

@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
 -- Program         -- HAVK                                                   --
--- Filename        -- havk_phase-drive.ads                                   --
+-- Filename        -- havk_kernel-drive.ads                                  --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------

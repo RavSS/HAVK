@@ -2,73 +2,59 @@
 -- Program         -- HAVK                                                   --
 -- Filename        -- havk_kernel-system_call.adb                            --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
 WITH
+   HAVK_Kernel.Memory,
    HAVK_Kernel.Tasking;
 
 PACKAGE BODY HAVK_Kernel.System_Call
 IS
-   PROCEDURE Set_MSRs
+   PROCEDURE Null_Operation_Call
+     (RSI : IN number;
+      RDX : IN number;
+      R8  : IN number;
+      R9  : IN number;
+      RIP : IN address;
+      RAX : OUT error)
    IS
-      -- Set SCE to true and leave everything else, as it's usually good to go.
-      EFER        : CONSTANT number := Intrinsics.Read_MSR(IA32_EFER);
-
-      -- See the comments/ramblings attached to the declaration of "IA32_STAR"
-      -- for an understanding of what goes here.
-      Segments    : CONSTANT number := Shift_Left(16#18#, 48) OR
-         Shift_Left(16#08#, 32);
-
-      -- The mask for RFLAGS. Right now, interrupts are disabled during the
-      -- handling of the system call, as only a single stack exists for it.
-      -- It can be resolved much later when performance can be improved.
-      -- Reminder that a set bit here means that bit is zeroed upon entry.
-      -- READ: https://en.wikipedia.org/wiki/FLAGS_register
-      RFLAGS_Mask : CONSTANT number := 2#1_0_00_1_1_1_1_1_0_1_1_1_0_0_1#;
+      Active_Thread_Index : CONSTANT number := Tasking.Get_Active_Thread_Index;
    BEGIN
-      Intrinsics.Write_MSR(IA32_EFER, EFER OR 1); -- OR'd here due to SPARK.
-      Intrinsics.Write_MSR(IA32_STAR, Segments);
-      Intrinsics.Write_MSR(IA32_LSTAR, number(System_Call_Entry));
-      Intrinsics.Write_MSR(IA32_FMASK, RFLAGS_Mask);
-      Log("System calls ready.", Tag => System_Call_Tag);
-   END Set_MSRs;
+      Log("Task """ & Tasking.Get_Active_Task_Name &
+         """ (thread " & Image(Active_Thread_Index) &
+         ") called the null operation. " &
+         "Argument 1: 0x" & Image(RSI, Base => 16) & " - " &
+         "Argument 2: 0x" & Image(RDX, Base => 16) & " - " &
+         "Argument 3: 0x" & Image(R8,  Base => 16) & " - " &
+         "Argument 4: 0x" & Image(R9,  Base => 16) & " - " &
+         "Call address: 0x" & Image(RIP) & '.',
+         Tag => System_Call_Tag);
+      RAX := no_error;
+   END Null_Operation_Call;
 
-   PROCEDURE System_Call_Handler
-     (Operation    : IN system_operation;
-      Argument_1   : IN number;
-      Argument_2   : IN number;
-      Call_Address : IN address;
-      Argument_3   : IN number;
-      Argument_4   : IN number)
+   PROCEDURE Create_Thread_Operation_Call
+     (RSI : IN number;
+      RDX : IN number;
+      RAX : OUT error)
    IS
+      Active_Task : CONSTANT number := Tasking.Get_Active_Task_Index;
+      Error_Check : error;
    BEGIN
-      PRAGMA Warnings(GNATprove, off,
-         "attribute Valid is assumed to return True",
-         Reason => "Need the validity check. Make sure invalids are handled.");
+      Log("Creating new thread for task " & Image(Active_Task) & '.',
+         Tag => System_Call_Tag);
+
       IF
-         NOT Operation'valid
+         RSI <= number(positive'last) AND THEN
+         RDX <= number(positive'last)
       THEN
-         Log("Task """ & Tasking.Get_Active_Task_Name &
-            """ called a non-existent system operation.",
-            Tag => System_Call_Tag, Warn => true);
-         RETURN;
+         Tasking.Create_Thread(Active_Task, Memory.canonical_address(RSI),
+            Error_Check, Thread_Stack => Memory.canonical_address(RDX),
+            Living => true);
+         RAX := Error_Check;
+      ELSE
+         RAX := memory_error;
       END IF;
+   END Create_Thread_Operation_Call;
 
-      CASE
-         Operation
-      IS
-         WHEN null_operation =>
-            Log("Task """ & Tasking.Get_Active_Task_Name &
-               """ called the null operation. " &
-               "Argument 1: 0x" & Image(Argument_1, Base => 16) & ". " &
-               "Argument 2: 0x" & Image(Argument_2, Base => 16) & ". " &
-               "Argument 3: 0x" & Image(Argument_3, Base => 16) & ". " &
-               "Argument 4: 0x" & Image(Argument_4, Base => 16) & ". " &
-               "Call address: 0x" & Image(Call_Address) & '.',
-               Tag => System_Call_Tag);
-         WHEN OTHERS => -- TODO: Expand these as we implement the user space.
-            NULL;
-         END CASE;
-   END System_Call_Handler;
 END HAVK_Kernel.System_Call;

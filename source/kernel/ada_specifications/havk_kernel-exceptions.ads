@@ -17,6 +17,8 @@ IS
       Linker_Section => ".isolated_bss";
 
 PRIVATE
+   Exceptions_Tag : CONSTANT string := "EXCPTINS";
+
    -- This is is entered upon any and all Ada exceptions. We simply crash.
    PROCEDURE Last_Chance_Handler
      (String_Pointer : IN address;

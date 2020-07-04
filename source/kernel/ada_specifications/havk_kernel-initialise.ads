@@ -8,8 +8,9 @@
 WITH
    HAVK_Kernel.Descriptors,
    HAVK_Kernel.System_Call,
+   HAVK_Kernel.System_Call.Handler,
    HAVK_Kernel.Memory,
-   HAVK_Kernel.Memory.Manager,
+   HAVK_Kernel.Memory.Frames,
    HAVK_Kernel.Graphics,
    HAVK_Kernel.Graphics.Text,
    HAVK_Kernel.Drive,
@@ -71,7 +72,7 @@ IS
 
    -- Initialises the system call instruction's handler by preparing the MSRs.
    PROCEDURE System_Call_Instruction
-   RENAMES System_Call.Set_MSRs;
+   RENAMES System_Call.Handler.Set_MSRs;
 
    -- Retrieves the date and time in ISO 8601 format of when the current
    -- running version of the kernel was compiled and built.
@@ -109,7 +110,7 @@ IS
    -- Prepare the heap, as certain functionality like manipulating virtual
    -- addresses requires dynamic memory.
    PROCEDURE Dynamic_Memory
-   RENAMES Memory.Manager.Prepare_Kernel_Heap;
+   RENAMES Memory.Frames.Prepare_Kernel_Heap;
 
    -- Sets up the mechanisms for multi-tasking and leaves initialisation.
    -- Everything that doesn't have support for concurrency needs to be called

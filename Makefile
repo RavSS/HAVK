@@ -157,8 +157,7 @@ HAVK_SYSTEM_SOURCE_PATH=$(SOURCE_PATH)operating_system/
 HAVK_SYSTEM_ABSOLUTE_BUILD_PATH=$(abspath $(HAVK_SYSTEM_BUILD_PATH))/
 
 HAVK_SYSTEM_FILES=\
-	syscall_tester.bin \
-	shell.elf
+	syscall_tester.elf
 
 # This whitespace separated list includes singular quotes around each program.
 HAVK_SYSTEM=$(foreach FILE, $(HAVK_SYSTEM_FILES), \
@@ -194,11 +193,13 @@ ifeq ("$(BUILD)", "Debug")
 	UEFI_CC_OPT+= -ggdb3 -O$(O)
 	GPR_RTS_FLAGS=-we -k -d -O$(O)
 	GPR_KERNEL_FLAGS=-we -k -d -O$(O)
+	GPR_VARIABLES=-XBuild=$(BUILD)
 else
 	O?=2
 	UEFI_CC_OPT+= -g0 -O$(O)
 	GPR_RTS_FLAGS=-q -vP0 -O$(O)
 	GPR_KERNEL_FLAGS=-q -vP0 -O$(O)
+	GPR_VARIABLES=-XBuild=$(BUILD)
 endif
 
 ifneq ("$(PROVE_FILES)", "")
@@ -228,20 +229,12 @@ endef
 all: $(HAVK_BOOTLOADER) $(HAVK_KERNEL) $(HAVK_SYSTEM)
 
 $(BUILD_PATH):
-	@if [ ! -d "$@" ]; then \
-		mkdir "$@"; \
-	fi
+	@mkdir "$@"
 
-	@if [ ! -d "$(HAVK_ADALIB_PATH)" ]; then \
-		mkdir "$(HAVK_ADALIB_PATH)"; \
-	fi
-
-	@if [ ! -d "$(HAVK_SYSTEM_BUILD_PATH)" ]; then \
-		mkdir "$(HAVK_SYSTEM_BUILD_PATH)"; \
-	fi
+$(HAVK_ADALIB_PATH) $(HAVK_SYSTEM_BUILD_PATH): | $(BUILD_PATH)
+	@mkdir "$@"
 
 $(HAVK_ADAINCLUDE_PATH): | $(BUILD_PATH)
-	@if [ -d "$@" ]; then rm -r "$@"; fi
 	@mkdir "$@"
 	@ln $(HAVK_RUNTIME_PATH)/* "$@"
 
@@ -293,22 +286,22 @@ $(HAVK_BOOTLOADER): $(UEFI_SO_FILE)
 	$(call mtools_create, '/EFI/BOOT')
 	$(call mtools_copy, "$@", '::/EFI/BOOT/BOOTX64.EFI')
 
-$(HAVK_LIBRARY): | $(HAVK_ADAINCLUDE_PATH)
+$(HAVK_LIBRARY): | $(HAVK_ADAINCLUDE_PATH) $(HAVK_ADALIB_PATH)
 	$(call echo, "BUILDING THE HAVK RUNTIME IN $(BUILD_PATH)")
 
-	@gprbuild -P $(HAVK_RUNTIME) -XBuild=$(BUILD) -p -eL \
+	@gprbuild -P $(HAVK_RUNTIME) $(GPR_VARIABLES) -p -eL \
 		--complete-output $(GPR_RTS_FLAGS) -j0 -s -o "./../../$@"
 
 $(HAVK_KERNEL): $(HAVK_LIBRARY)
 	$(call echo, "BUILDING THE HAVK KERNEL TO $@")
 
-	@gprbuild -P $(HAVK_PROJECT) -XBuild=$(BUILD) -p -eL \
+	@gprbuild -P $(HAVK_PROJECT) $(GPR_VARIABLES) -p -eL \
 		--complete-output $(GPR_KERNEL_FLAGS) -j0 -s -o "./../../$@"
 
 	$(call mtools_create, "/$(NAME)")
 	$(call mtools_copy, "$@", "::/$(NAME)/$(NAME).elf")
 
-$(HAVK_SYSTEM): $(HAVK_IMAGE)
+$(HAVK_SYSTEM): $(HAVK_IMAGE) | $(HAVK_SYSTEM_BUILD_PATH)
 	$(call echo, "BUILDING \"$(notdir $@)'\" FOR HAVK\'S OPERATING SYSTEM")
 
 	@$(MAKE) -C "$(HAVK_SYSTEM_SOURCE_PATH)" \
@@ -377,7 +370,7 @@ uefi-gdb:
 proof: $(BUILD_PATH)
 	$(call echo, "PROVING HAVK KERNEL\'S CORRECTNESS")
 
-	@gnatprove -P "$(HAVK_PROJECT)" -XBuild=$(BUILD) $(PROVE_FILES)
+	@gnatprove -P "$(HAVK_PROJECT)" $(GPR_VARIABLES) $(PROVE_FILES)
 
 .PHONY: stats
 stats:
@@ -389,15 +382,23 @@ stats:
 	@echo -e " / $(shell du -sh "$(ESP_PARTITION)" \
 		| awk -F '\t' '{print $$1}')\n"
 
-	@cd "$(HAVK_SOURCE_PATH)" && gnatmetric -P HAVK.gpr -XBuild=$(BUILD) \
-		-U -eL --contract-all --syntax-all --lines-all --lines-spark \
-		--complexity-all
+	@cd "$(HAVK_SOURCE_PATH)" && gnatmetric -P $(NAME).gpr \
+		$(GPR_VARIABLES) -U -eL
 
 .PHONY: clean
-clean: $(BUILD_PATH) $(HAVK_ADAINCLUDE_PATH)
-	$(call echo, "CLEANING BUILD DIRECTORY $<")
+clean: | $(BUILD_PATH) $(HAVK_ADAINCLUDE_PATH) $(HAVK_ADALIB_PATH) \
+$(HAVK_SYSTEM_BUILD_PATH)
+	$(call echo, "CLEANING ALL COMPILED PROJECTS IN $(BUILD_PATH)")
+	@gprclean -P "$(HAVK_RUNTIME)" $(GPR_VARIABLES)
+	@gprclean -P "$(HAVK_PROJECT)" $(GPR_VARIABLES)
+	@rm -vr "$(HAVK_SYSTEM_BUILD_PATH)"
 
-	@gnatprove -P "$(HAVK_PROJECT)" -XBuild=$(BUILD) --clean
-	@gprclean -P "$(HAVK_RUNTIME)" -XBuild=$(BUILD) -q
-	@gprclean -P "$(HAVK_PROJECT)" -XBuild=$(BUILD) -q
-	@rm -vr "$<"
+.PHONY: clean-proof
+clean-proof: | $(BUILD_PATH) $(HAVK_ADAINCLUDE_PATH)
+	$(call echo, "CLEANING ALL PROOF IN $(BUILD_PATH)")
+	@gnatprove -P "$(HAVK_PROJECT)" $(GPR_VARIABLES) --clean
+
+.PHONY: clean-all
+clean-all: clean clean-proof
+	$(call echo, "DELETING BUILD DIRECTORY $(BUILD_PATH)")
+	@rm -vrf "$(BUILD_PATH)"

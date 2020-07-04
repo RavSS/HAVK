@@ -5,6 +5,9 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   Ada.Unchecked_Deallocation;
+
 -- This package has the purpose of managing page translation and mapping.
 -- It should be relatively bug free; however, all page map allocations are
 -- made on the kernel's heap for now.
@@ -13,10 +16,14 @@ WITH
    Preelaborate   => true,
    Abstract_State =>
    (
-      MMU_State
+     (MMU_State
       WITH
-         External => (Async_Readers, Async_Writers, Effective_Reads,
-                      Effective_Writes)
+         External => (Async_Readers, Async_Writers,
+                      Effective_Reads, Effective_Writes)),
+     (Kernel_Page_Layout_State
+      WITH
+         External => (Async_Readers, Async_Writers,
+                      Effective_Reads, Effective_Writes))
    )
 IS
    -- READ: https://wiki.osdev.org/Page_Tables#48-bit_virtual_address_space
@@ -27,7 +34,7 @@ IS
 
    -- For x86-64 (as of writing), there are three page sizes. The standard is
    -- 4 kibibytes. Huge pages are 2 mebibytes and "giant" (as I call them)
-   -- pages are 1 gibibyte, where only the latter may not be supported by the
+   -- pages are 1-gibibyte, where only the latter may not be supported by the
    -- processor. It can be checked in CPUID's output (bit 26 of EAX).
    -- TODO: Replace the subtype with an enumeration when using Ada 202X.
    SUBTYPE page_frame_variant IS number   RANGE 4 * KiB .. 1 * GiB
@@ -37,8 +44,119 @@ IS
    Huge_Page   : CONSTANT page_frame_variant := 2 * MiB;
    Giant_Page  : CONSTANT page_frame_variant := 1 * GiB; -- Needs CPU support.
 
+   -- This is the main type that is passed around outside of this package. The
+   -- fields inside it should not be touched by other packages.
+   TYPE page_layout IS LIMITED PRIVATE;
+
+   -- Moves the base 4 KiB aligned address of the page map table to the CR3
+   -- register to switch virtual address mappings.
+   PROCEDURE Load
+     (Layout : IN page_layout);
+
+   -- This goes through the page layout and frees the pointers to other page
+   -- structures/tables.
+   PROCEDURE Deallocate_Mappings
+     (Layout : IN OUT page_layout);
+
+   -- Converts a size in bytes to a certain amount of pages (depending on the
+   -- page frame variant).
+   FUNCTION Size_To_Pages
+     (Size      : IN number;
+      Alignment : IN page_frame_variant := Page)
+      RETURN number
+   WITH
+      Inline => true,
+      Pre    => Alignment IN Page | Huge_Page | Giant_Page,
+      Post   => Size_To_Pages'result IN 0 .. number'last / Alignment;
+
+   -- Maps a virtual address to a physical address. Handles all page sizes.
+   -- While it does align pages for the caller just to be sure, it rounds
+   -- them downwards. Note that it supports a very limited amount of pages
+   -- to reduce load size. Try using the larger page sizes to avoid oddities.
+   -- You should adhere to W^X, but also favour the least possible privileges.
+   PRAGMA Warnings(GNATprove, off, "unused initial value",
+      Reason => "GNATprove is unaware of MMU page permissions.");
+   PROCEDURE Map_Address
+     (Layout           : IN OUT page_layout;
+      Virtual_Address  : IN address;
+      Physical_Address : IN address;
+      Page_Size        : IN page_frame_variant :=  Page;
+      Present          : IN boolean            :=  true;
+      Write_Access     : IN boolean            := false;
+      User_Access      : IN boolean            := false;
+      No_Execution     : IN boolean            :=  true)
+   WITH -- You can either write or execute. You can also do neither.
+      Pre => Page_Size IN Page | Huge_Page | Giant_Page AND THEN
+            (IF Write_Access THEN No_Execution);
+
+   -- Shortcut procedure for mapping a virtual address range to a physical
+   -- address range. The range is determined by the size, which is then
+   -- converted into physical pages. The range is linear.
+   -- See the `Map_Address` procedure for more details.
+   PROCEDURE Map_Address_Range
+     (Layout           : IN OUT page_layout;
+      Virtual_Address  : IN address;
+      Physical_Address : IN address;
+      Size             : IN number;
+      Page_Size        : IN page_frame_variant :=  Page;
+      Present          : IN boolean            :=  true;
+      Write_Access     : IN boolean            := false;
+      User_Access      : IN boolean            := false;
+      No_Execution     : IN boolean            :=  true)
+   WITH
+      Inline => true, -- See `Map_Address` for the explanation about W^X.
+      Pre    => Page_Size IN Page | Huge_Page | Giant_Page AND THEN
+               (IF Write_Access THEN No_Execution);
+
+   -- The same as `Map_Address()`, but for the kernel's page layout.
+   PROCEDURE Kernel_Map_Address
+     (Virtual_Address  : IN address;
+      Physical_Address : IN address;
+      Page_Size        : IN page_frame_variant :=  Page;
+      Present          : IN boolean            :=  true;
+      Write_Access     : IN boolean            := false;
+      No_Execution     : IN boolean            :=  true)
+   WITH -- See `Map_Address()` for the explanation about W^X.
+      Pre => Page_Size IN Page | Huge_Page | Giant_Page AND THEN
+            (IF Write_Access THEN No_Execution);
+
+   -- The same as `Map_Address_Range()`, but for the kernel's page layout.
+   PROCEDURE Kernel_Map_Address_Range
+     (Virtual_Address  : IN address;
+      Physical_Address : IN address;
+      Size             : IN number;
+      Page_Size        : IN page_frame_variant :=  Page;
+      Present          : IN boolean            :=  true;
+      Write_Access     : IN boolean            := false;
+      No_Execution     : IN boolean            :=  true)
+   WITH
+      Inline => true, -- See `Map_Address()` for the explanation about W^X.
+      Pre    => Page_Size IN Page | Huge_Page | Giant_Page AND THEN
+               (IF Write_Access THEN No_Execution);
+
+   -- This loads the kernel page layout and makes sure external functions
+   -- (particularly assembly routines) can load the layout properly.
+   PROCEDURE Load_Kernel_Page_Layout;
+
+   -- This is for tasking purposes, as it lets the context switching and
+   -- scheduling mechanisms to switch tasks correctly. Note that the address
+   -- of the level 4 page structure should be page-aligned to begin with, as
+   -- I specify the alignment requirement on the array type. If the predicate
+   -- check fails and the returned address is not a page-aligned address, then
+   -- something is wrong. This does not differentiate from physical to virtual,
+   -- so know where the object itself is located in memory before you use this.
+   FUNCTION Get_Page_Map_Address
+     (Layout : IN page_layout)
+      RETURN address
+   WITH
+      Inline => true,
+      Post   => Get_Page_Map_Address'result MOD address(Page) = 0;
+
+PRIVATE
+   Paging_Tag : CONSTANT string := "PAGING";
+
    -- This record contains the structure for a map entry.
-   TYPE map_entry IS RECORD
+   TYPE map_entry IS LIMITED RECORD
       -- Whether the directory is "active".
       Present      : boolean                     := false;
       -- When true, both reading and writing is allowed.
@@ -87,7 +205,7 @@ IS
    END RECORD;
 
    -- This record contains the structure for a directory pointer table entry.
-   TYPE directory_entry IS RECORD
+   TYPE directory_entry IS LIMITED RECORD
       -- Whether the directory is "active".
       Present      : boolean                     := false;
       -- When true, both reading and writing is allowed.
@@ -150,7 +268,7 @@ IS
    TYPE directory_pointer_entry IS NEW directory_entry;
 
    -- This record contains the structure for a page table entry.
-   TYPE page_entry IS RECORD
+   TYPE page_entry IS LIMITED RECORD
       -- Whether the directory is "active".
       Present      : boolean                     := false;
       -- When true, both reading and writing is allowed.
@@ -192,19 +310,19 @@ IS
       NX           : boolean                     := false;
    END RECORD;
    FOR page_entry USE RECORD
-      Present       AT 0 RANGE 00 .. 00;
-      Write_Access  AT 0 RANGE 01 .. 01;
-      User_Access   AT 0 RANGE 02 .. 02;
-      Writethrough  AT 0 RANGE 03 .. 03;
-      Uncacheable   AT 0 RANGE 04 .. 04;
-      Accessed      AT 0 RANGE 05 .. 05;
-      Dirty         AT 0 RANGE 06 .. 06;
-      Attribute     AT 0 RANGE 07 .. 07;
-      Global        AT 0 RANGE 08 .. 08;
-      Available_1   AT 0 RANGE 09 .. 11;
-      Frame         AT 0 RANGE 12 .. 51;
-      Available_2   AT 0 RANGE 52 .. 62;
-      NX            AT 0 RANGE 63 .. 63;
+      Present          AT 0 RANGE 00 .. 00;
+      Write_Access     AT 0 RANGE 01 .. 01;
+      User_Access      AT 0 RANGE 02 .. 02;
+      Writethrough     AT 0 RANGE 03 .. 03;
+      Uncacheable      AT 0 RANGE 04 .. 04;
+      Accessed         AT 0 RANGE 05 .. 05;
+      Dirty            AT 0 RANGE 06 .. 06;
+      Attribute        AT 0 RANGE 07 .. 07;
+      Global           AT 0 RANGE 08 .. 08;
+      Available_1      AT 0 RANGE 09 .. 11;
+      Frame            AT 0 RANGE 12 .. 51;
+      Available_2      AT 0 RANGE 52 .. 62;
+      NX               AT 0 RANGE 63 .. 63;
    END RECORD;
 
    -- The range of entries in any type of directory. I've started it from
@@ -243,96 +361,92 @@ IS
    -- Access types that should point towards a table in the kernel's heap.
    -- A pointer table is guaranteed to be allocated, as the map table is not
    -- capable of defining a physical frame of any size alone. The page map can
-   -- be statically allocated in the BSS section, not the heap.
+   -- be statically allocated in the BSS section, not the heap, but for tasks,
+   -- it should be allocated on latter.
    TYPE access_directory_pointer_table IS ACCESS directory_pointer_table;
    TYPE access_directory_table         IS ACCESS         directory_table;
    TYPE access_page_table              IS ACCESS              page_table;
 
-   -- The default page layout class. Can be freely expanded if needed.
-   -- Only the address of the L4 (PML4/page map) must be accessible, all other
-   -- record fields will not impact the paging mechanism. Don't use the address
-   -- of the record as a substitute for the page map's address, as the hidden
-   -- "_tag" field is likely before it.
-   TYPE page_layout IS TAGGED RECORD
-      L4        : ALIASED map_table;
-   END RECORD;
+   PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+     (object =>        directory_pointer_table,
+      name   => access_directory_pointer_table);
+   PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+     (object =>                directory_table,
+      name   =>         access_directory_table);
+   PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+     (object =>                     page_table,
+      name   =>              access_page_table);
 
-   -- In some cases, we want the object on the heap instead for e.g. a
-   -- processes virtual space. This lets us put it inside another record
-   -- without heavily expanding that parent record itself.
-   TYPE access_page_layout IS ACCESS page_layout;
+   -- This turns an address into a pointer to a table. It's useful for
+   -- turning a pointer in a table entry into a different lower level table.
+   GENERIC
+      TYPE        generic_table IS LIMITED PRIVATE;
+      TYPE access_generic_table IS ACCESS generic_table;
+   FUNCTION To_Pointer
+     (Table_Address : IN address)
+      RETURN access_generic_table
+   WITH
+      Import     => true,
+      Convention => Intrinsic;
 
-   -- Moves the base 4-KiB aligned address of the directory map table
-   -- to the CR3 register to switch virtual address mappings.
-   PROCEDURE Load
-     (Object    : IN page_layout);
+   -- Does the opposite of the above generic function.
+   GENERIC
+      TYPE        generic_table IS LIMITED PRIVATE;
+      TYPE access_generic_table IS ACCESS generic_table;
+   FUNCTION To_Address
+     (Table_Pointer : IN access_generic_table)
+      RETURN address
+   WITH
+      Import     => true,
+      Convention => Intrinsic;
 
-   -- Converts a size in bytes to an amount of certain physical page frames.
-   -- Purposefully does not take in zero bytes or else a condition fails.
-   FUNCTION Size_To_Pages
-     (Size      : IN number;
-      Alignment : IN page_frame_variant := Page)
+   -- This turns an address into an encoded value, which is then placed into
+   -- a page table.
+   FUNCTION Encode_Table
+     (Value : IN address)
       RETURN number
    WITH
       Inline => true,
-      Pre    => Alignment =       Page OR ELSE
-                Alignment =  Huge_Page OR ELSE
-                Alignment = Giant_Page;
+      Post   => Encode_Table'result <= 2**40 - 1;
 
-   -- Maps a virtual address to a physical address. Handles all page sizes.
-   -- While it does align pages for the caller just to be sure, it rounds
-   -- them downwards. Note that it supports a very limited amount of pages
-   -- to reduce load size. Try using the larger page sizes to avoid oddities.
-   -- You should adhere to W^X, but also favour the least possible privileges.
-   PRAGMA Warnings(GNATprove, off, "unused initial value",
-         Reason => "GNATprove is unaware of MMU page permissions.");
-   PROCEDURE Map_Address
-     (Object           : IN OUT page_layout;
-      Virtual_Address  : IN address;
-      Physical_Address : IN address;
-      Page_Size        : IN page_frame_variant :=  Page;
-      Present          : IN boolean            :=  true;
-      Write_Access     : IN boolean            := false;
-      User_Access      : IN boolean            := false;
-      No_Execution     : IN boolean            :=  true)
-   WITH -- You can either write or execute. You can also do neither.
-      Pre'class => (IF Write_Access THEN No_Execution) AND THEN
-                   (Page_Size =       Page              OR ELSE
-                    Page_Size =  Huge_Page              OR ELSE
-                    Page_Size = Giant_Page);
-
-   -- Shortcut procedure for mapping a virtual address range to a physical
-   -- address range. The range is determined by the size, which is then
-   -- converted into physical pages. The range is linear.
-   -- See the `Map_Address` procedure for more details.
-   PROCEDURE Map_Address_Range
-     (Object           : IN OUT page_layout;
-      Virtual_Address  : IN address;
-      Physical_Address : IN address;
-      Size             : IN number;
-      Page_Size        : IN page_frame_variant :=  Page;
-      Present          : IN boolean            :=  true;
-      Write_Access     : IN boolean            := false;
-      User_Access      : IN boolean            := false;
-      No_Execution     : IN boolean            :=  true)
+   -- Reverses the process `Encode_Table()` does.
+   FUNCTION Decode_Table
+     (Value : IN number)
+      RETURN address
    WITH
-      Inline    => true, -- See `Map_Address` for the explanation about W^X.
-      Pre'class => (IF Write_Access THEN No_Execution) AND THEN
-                   (Page_Size =       Page              OR ELSE
-                    Page_Size =  Huge_Page              OR ELSE
-                    Page_Size = Giant_Page);
+      Inline => true,
+      Pre    => Value <= 2**40 - 1,
+      Post   => Decode_Table'result MOD address(Page) = 0;
 
-   PROCEDURE Page_Fault_Handler
-     (Error_Code : IN number)
+   -- This sets the value of the CR3 register for the current core.
+   PROCEDURE Write_CR3
+     (L4_Address : IN address)
    WITH
-      No_Return => true, -- Temporary handling of the page fault.
-      Inline    => true,
-      Pre       => Error_Code <= 2**32 - 1; -- Error codes are 32-bits.
+      Global        => (In_Out => MMU_State),
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "assembly__load_page_structure";
+
+   -- This represents the full page layout. Can be freely expanded if needed.
+   -- Only the address of the L4 (PML4/page map) must be accessible, all other
+   -- record fields will not impact the paging mechanism. Intel is apparently
+   -- going to add the ability for a 5th level page structure (L5), so making
+   -- this into a discriminant record has been kept open.
+   TYPE page_layout IS LIMITED RECORD
+      -- The actual page structure. A value in the CR3 register will point to
+      -- it. Other packages do not need to see what's inside it and memory
+      -- management is handled in a very manual manner.
+      L4 : ALIASED map_table;
+   END RECORD
+   WITH
+      Pack => true;
 
    -- The default paging layout for the entire kernel. This will be referenced
-   -- externally in Assembler, as it should be the only page layout which maps
+   -- externally in assembler, as it should be the only page layout which maps
    -- every section of the kernel itself, and that visibility is sometimes
-   -- needed.
-   Kernel_Paging_Layout : ALIASED Paging.page_layout;
+   -- needed. This is allocated when first required.
+   Kernel_Page_Layout : page_layout
+   WITH
+      Part_Of => Kernel_Page_Layout_State;
 
 END HAVK_Kernel.Paging;

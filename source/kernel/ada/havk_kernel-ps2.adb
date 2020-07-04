@@ -11,6 +11,13 @@ USE
    HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.PS2
+WITH
+   Refined_State => (Controller_State => (Current_Scancode_Set,
+                                          Current_Condition,
+                                          Current_Configuration,
+                                          Current_Typematics,
+                                          Port_2_Support, Mouse_Support,
+                                          Port_1_Device, Port_2_Device))
 IS
    PROCEDURE Ready
      (Is_Ready : OUT boolean;
@@ -276,33 +283,11 @@ IS
      (Mouse_Support);
 
    PROCEDURE Setup -- TODO: Perhaps break this procedure up into separate ones.
-   WITH
-      -- TODO: `gnatprove` crashes here with the below error:
-      -- "This expression has type bool, but is expected to have type int"
-      -- Re-enable it later. Nothing should go wrong here outside of hardware.
-      SPARK_Mode => off
    IS
-      -- Make read-only copies of the variable so a warning doesn't appear.
-      Configuration_Settings     : ALIASED CONSTANT configuration :=
-         Current_Configuration;
-      Typematics_Settings        : ALIASED CONSTANT    typematics :=
-         Current_Typematics;
-
-      Old_Configuration_Byte     :          number RANGE 0 .. 2**8 - 1;
-      Current_Configuration_Byte : CONSTANT number RANGE 0 .. 2**8 - 1
-      WITH
-         Import  => true,
-         Size    => 8,
-         Address => Configuration_Settings'address;
-
-      Current_Typematics_Byte    : CONSTANT number RANGE 0 .. 2**8 - 1
-      WITH
-         Import  => true,
-         Size    => 8,
-         Address => Typematics_Settings'address;
-
-      Successful : boolean;
-      Message    : response;
+      Old_Configuration_Byte : number RANGE 0 .. 2**8 - 1;
+      New_Device             : device;
+      Successful             : boolean;
+      Message                : response;
    BEGIN
       -- First, stop any interrupts that'll ruin our expected I/O
       -- communication. An alternative would be to disable interrupts in the
@@ -324,7 +309,8 @@ IS
          Current_Condition := unreliable;
          RETURN;
       ELSE
-         Old_Configuration_Byte := Input_Byte(Enum_Rep(data_port));
+         Old_Configuration_Byte :=
+            Input_Byte(Enum_Rep(data_port) AND 16#FFFF#);
       END IF;
 
       -- Disable any scanning or reporting by the devices. Note that the
@@ -419,12 +405,14 @@ IS
       Flush;
 
       -- -- See what device is connected to port 1. Nearly always a keyboard.
-      Identify_Device(Port_1_Device, Port_2 => false);
+      Identify_Device(New_Device, Port_2 => false);
+      Port_1_Device := New_Device;
 
       IF -- Check port 2 if we have support for it.
          Port_2_Support
       THEN
-         Identify_Device(Port_2_Device, Port_2 => true);
+         Identify_Device(New_Device, Port_2 => true);
+         Port_2_Device := New_Device;
       END IF;
 
       -- Write my configuration.

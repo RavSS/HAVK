@@ -6,18 +6,51 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.Memory;
-USE
-   HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Memory;
 
 PACKAGE BODY HAVK_Kernel.Paging
 WITH
-   Refined_State => (MMU_State => (NULL))
+   Refined_State => (MMU_State                => NULL,
+                     Kernel_Page_Layout_State => Kernel_Page_Layout)
 IS
+   FUNCTION Encode_Table
+     (Value : IN address)
+      RETURN number
+   IS
+     (number(Shift_Right(Value, 12) AND 2**40 - 1));
+
+   FUNCTION Decode_Table
+     (Value : IN number)
+      RETURN address
+   IS
+     (address(Shift_Left(Value, 12)));
+
+   FUNCTION Table_Access  IS NEW To_Pointer
+            (generic_table =>        directory_pointer_table,
+      access_generic_table => access_directory_pointer_table);
+
+   FUNCTION Table_Address IS NEW To_Address
+            (generic_table =>        directory_pointer_table,
+      access_generic_table => access_directory_pointer_table);
+
+   FUNCTION Table_Access  IS NEW To_Pointer
+            (generic_table =>        directory_table,
+      access_generic_table => access_directory_table);
+
+   FUNCTION Table_Address IS NEW To_Address
+            (generic_table =>        directory_table,
+      access_generic_table => access_directory_table);
+
+   FUNCTION Table_Access  IS NEW To_Pointer
+            (generic_table =>        page_table,
+      access_generic_table => access_page_table);
+
+   FUNCTION Table_Address IS NEW To_Address
+            (generic_table =>        page_table,
+      access_generic_table => access_page_table);
+
    PROCEDURE Map_Address
-     (Object           : IN OUT page_layout;
+     (Layout           : IN OUT page_layout;
       Virtual_Address  : IN address;
       Physical_Address : IN address;
       Page_Size        : IN page_frame_variant :=  Page;
@@ -26,129 +59,52 @@ IS
       User_Access      : IN boolean            := false;
       No_Execution     : IN boolean            :=  true)
    IS
-      -- TODO: Maybe split this up into separate functions and/or procedures.
-      -- That might be useful for the virtual-address-to-offset parts.
-
       -- Make sure to see "Figure 5-17. 4-Kbyte Page Translation-Long Mode"
       -- in the AMD64 system programming manual before you touch anything.
 
-      -- This turns an address into a pointer to a table. It's useful for
-      -- turning a pointer in a table entry into a different lower level table.
-      GENERIC
-         TYPE generic_table        IS PRIVATE;
-         TYPE access_generic_table IS ACCESS generic_table;
-      FUNCTION To_Pointer
-        (Address : IN number)
-         RETURN access_generic_table
-      WITH
-         Import     => true,
-         Convention => Intrinsic;
-
-      -- Does the opposite of the above generic function.
-      GENERIC
-         TYPE generic_table        IS PRIVATE;
-         TYPE access_generic_table IS ACCESS generic_table;
-      FUNCTION To_Address
-        (Pointer : IN access_generic_table)
-         RETURN number
-      WITH
-         Import     => true,
-         Convention => Intrinsic;
-
-      FUNCTION Table_Access  IS NEW To_Pointer
-               (generic_table =>        directory_pointer_table,
-         access_generic_table => access_directory_pointer_table);
-
-      FUNCTION Table_Pointer IS NEW To_Address
-               (generic_table =>        directory_pointer_table,
-         access_generic_table => access_directory_pointer_table);
-
-      FUNCTION Table_Access  IS NEW To_Pointer
-               (generic_table =>        directory_table,
-         access_generic_table => access_directory_table);
-
-      FUNCTION Table_Pointer IS NEW To_Address
-               (generic_table =>        directory_table,
-         access_generic_table => access_directory_table);
-
-      FUNCTION Table_Access  IS NEW To_Pointer
-               (generic_table =>        page_table,
-         access_generic_table => access_page_table);
-
-      FUNCTION Table_Pointer IS NEW To_Address
-               (generic_table =>        page_table,
-         access_generic_table => access_page_table);
-
-      -- TODO: As of now, the paging functionality relies upon dynamic memory
-      -- that is managed by the kernel's heap, which is tied to the "NEW"
-      -- keyword. It returns identity-mapped addresses. Because of that, there
-      -- is no need to correct for the virtual-physical difference, but if the
-      -- linked `_gnat_malloc()` starts returning addresses in the higher-half
-      -- area, then this will have to be changed immediately.
-      Kernel_Virtual_Base_Offset : CONSTANT address := 0;
-         -- Kernel_Virtual_To_Physical(Kernel_Virtual_Base);
-
-      FUNCTION Encode_Table
-        (Value        : IN number;
-         Virtual_Base : IN address := Kernel_Virtual_Base_Offset)
-         RETURN number
-      IS
-        (Shift_Right(Value - number(Virtual_Base), 12) AND 2**40 - 1)
-      WITH
-         Inline => true,
-         Pre    => Virtual_Base MOD address(Page) = 0,
-         Post   => Encode_Table'result <= 2**40 - 1;
-
-      FUNCTION Decode_Table
-        (Value        : IN number;
-         Virtual_Base : IN address := Kernel_Virtual_Base_Offset)
-         RETURN number
-      IS
-        (Shift_Left(Value, 12) + number(Virtual_Base))
-      WITH
-         Inline => true,
-         Pre    => Value <= 2**40 - 1 AND THEN
-                   Virtual_Base MOD address(Page) = 0,
-         Post   => Decode_Table'result MOD Page = 0;
-
-      -- The aligned (virtual) address to be mapped.
-      Mapping   : CONSTANT number := Align(number(Virtual_Address), Page_Size);
-
       -- Bits 47 to 39. Directory map index.
-      L4_Offset : CONSTANT page_mask := Shift_Right(Mapping, 39)
-         AND page_mask'last;
+      L4_Offset : CONSTANT page_mask :=
+         number(Shift_Right(Virtual_Address, 39)) AND page_mask'last;
 
       -- Bits 38 to 30. Directory pointer table index.
-      L3_Offset : CONSTANT page_mask := Shift_Right(Mapping, 30)
-         AND page_mask'last;
+      L3_Offset : CONSTANT page_mask :=
+         number(Shift_Right(Virtual_Address, 30)) AND page_mask'last;
 
       -- Bits 29 to 21. Directory table index.
-      L2_Offset : CONSTANT page_mask := Shift_Right(Mapping, 21)
-         AND page_mask'last;
+      L2_Offset : CONSTANT page_mask :=
+         number(Shift_Right(Virtual_Address, 21)) AND page_mask'last;
 
       -- Bits 20 to 12. Page table index.
-      L1_Offset : CONSTANT page_mask := Shift_Right(Mapping, 12)
-         AND page_mask'last;
+      L1_Offset : CONSTANT page_mask :=
+         number(Shift_Right(Virtual_Address, 12)) AND page_mask'last;
 
       -- Points to a page directory pointer table on the heap. The directory
       -- pointer table will never truly null, as the page map alone cannot
       -- define physical frames of any size.
-      L3 : access_directory_pointer_table;
+      L3 : access_directory_pointer_table
+      WITH
+         Annotate => (GNATprove, Intentional,
+                      "memory leak might occur at end of scope",
+                      "This is freed manually outside of this scope.");
 
       -- Points to a page directory table on the heap.
-      L2 : access_directory_table;
-
-      PRAGMA Annotate(GNATprove, Intentional,
-         "memory leak might occur at end of scope",
-         "Freeing of page structures hasn't yet been implemented.");
+      L2 : access_directory_table
+      WITH
+         Annotate => (GNATprove, Intentional,
+                      "memory leak might occur at end of scope",
+                      "This is freed manually outside of this scope.");
 
       -- Points to a page table on the heap.
-      L1 : access_page_table;
+      L1 : access_page_table
+      WITH
+         Annotate => (GNATprove, Intentional,
+                      "memory leak might occur at end of scope",
+                      "This is freed manually outside of this scope.");
 
       -- Points to a physical frame, regardless of page frame size.
       L0 : CONSTANT number RANGE 0 .. 2**40 - 1 :=
-         Encode_Table(Align(number(Physical_Address), Page_Size),
-            Virtual_Base => address(0));
+         Encode_Table(address(Memory.Align(number(Physical_Address),
+            Page_Size)));
    BEGIN
       -- TODO: Find a way to model the CPU doing a page-walk (if that is even
       -- possible without library level static page structures).
@@ -163,15 +119,12 @@ IS
       -- This shouldn't be necessary for code in ring 0 unless something has
       -- gone truly wrong, but still.
 
-      -- Make sure nothing interrupts us while we modify the page layout.
-      Disable_Interrupts;
-
       IF
-         Object.L4(L4_Offset).Pointer = 0
+         Layout.L4(L4_Offset).Pointer = 0
       THEN
          L3 := NEW directory_pointer_table;
       ELSE
-         L3 := Table_Access(Decode_Table(Object.L4(L4_Offset).Pointer));
+         L3 := Table_Access(Decode_Table(Layout.L4(L4_Offset).Pointer));
       END IF;
 
       IF
@@ -205,6 +158,9 @@ IS
          WITH
             Source_Location & " - Heap has been exhausted; can't create a " &
             "page directory table for a 2-MiB or 4-KiB page mapping.";
+         PRAGMA Annotate(GNATprove, False_Positive,
+            "exception might be raised",
+            "The pointer arithmetic is fine. Heap issues crash externally.");
       END IF;
 
       IF
@@ -226,13 +182,16 @@ IS
          WITH
             Source_Location & " - Heap has been exhausted; can't create a " &
             "page table for a 4-KiB page mapping.";
+         PRAGMA Annotate(GNATprove, False_Positive,
+            "exception might be raised",
+            "The pointer arithmetic is fine. Heap issues crash externally.");
       END IF;
 
-      Object.L4(L4_Offset).Pointer      := Encode_Table(Table_Pointer(L3));
-      Object.L4(L4_Offset).Present      := true;
-      Object.L4(L4_Offset).Write_Access := true;
-      Object.L4(L4_Offset).User_Access  := true;
-      Object.L4(L4_Offset).NX           := false;
+      Layout.L4(L4_Offset).Pointer      := Encode_Table(Table_Address(L3));
+      Layout.L4(L4_Offset).Present      := true;
+      Layout.L4(L4_Offset).Write_Access := true;
+      Layout.L4(L4_Offset).User_Access  := true;
+      Layout.L4(L4_Offset).NX           := false;
 
       IF -- Handle the mapping in giant pages and return.
          Page_Size = Giant_Page
@@ -247,12 +206,10 @@ IS
          L3(L3_Offset).User_Access      := User_Access;
          L3(L3_Offset).NX               := No_Execution;
 
-         Memory_Fence;
-         Enable_Interrupts;
          RETURN;
       END IF;
 
-      L3(L3_Offset).Pointer             := Encode_Table(Table_Pointer(L2));
+      L3(L3_Offset).Pointer             := Encode_Table(Table_Address(L2));
       L3(L3_Offset).Present             := true;
       L3(L3_Offset).Huge                := false;
       L3(L3_Offset).Write_Access        := true;
@@ -271,12 +228,10 @@ IS
          L2(L2_Offset).User_Access      := User_Access;
          L2(L2_Offset).NX               := No_Execution;
 
-         Memory_Fence;
-         Enable_Interrupts;
          RETURN;
       END IF;
 
-      L2(L2_Offset).Pointer             := Encode_Table(Table_Pointer(L1));
+      L2(L2_Offset).Pointer             := Encode_Table(Table_Address(L1));
       L2(L2_Offset).Present             := true;
       L2(L2_Offset).Huge                := false;
       L2(L2_Offset).Write_Access        := true;
@@ -289,13 +244,10 @@ IS
       L1(L1_Offset).Write_Access        := Write_Access;
       L1(L1_Offset).User_Access         := User_Access;
       L1(L1_Offset).NX                  := No_Execution;
-
-      Memory_Fence;
-      Enable_Interrupts;
    END Map_Address;
 
    PROCEDURE Map_Address_Range
-     (Object           : IN OUT page_layout;
+     (Layout           : IN OUT page_layout;
       Virtual_Address  : IN address;
       Physical_Address : IN address;
       Size             : IN number;
@@ -319,8 +271,9 @@ IS
       FOR
          P IN 0 .. Pages
       LOOP
-         Object.Map_Address
-           (Virtual_Address  + address(Page_Size * P),
+         Map_Address
+           (Layout,
+            Virtual_Address  + address(Page_Size * P),
             Physical_Address + address(Page_Size * P),
             Page_Size       =>     Page_Size,
             Present         =>       Present,
@@ -329,6 +282,132 @@ IS
             No_Execution    =>  No_Execution);
       END LOOP;
    END Map_Address_Range;
+
+   PROCEDURE Kernel_Map_Address
+     (Virtual_Address  : IN address;
+      Physical_Address : IN address;
+      Page_Size        : IN page_frame_variant :=  Page;
+      Present          : IN boolean            :=  true;
+      Write_Access     : IN boolean            := false;
+      No_Execution     : IN boolean            :=  true)
+   IS
+   BEGIN
+      Map_Address
+        (Layout           => Kernel_Page_Layout,
+         Virtual_Address  =>    Virtual_Address,
+         Physical_Address =>   Physical_Address,
+         Page_Size        =>          Page_Size,
+         Present          =>            Present,
+         Write_Access     =>       Write_Access,
+         User_Access      =>              false,
+         No_Execution     =>       No_Execution);
+   END Kernel_Map_Address;
+
+   PROCEDURE Kernel_Map_Address_Range
+     (Virtual_Address  : IN address;
+      Physical_Address : IN address;
+      Size             : IN number;
+      Page_Size        : IN page_frame_variant :=  Page;
+      Present          : IN boolean            :=  true;
+      Write_Access     : IN boolean            := false;
+      No_Execution     : IN boolean            :=  true)
+   IS
+   BEGIN
+      Map_Address_Range
+        (Layout           => Kernel_Page_Layout,
+         Virtual_Address  =>    Virtual_Address,
+         Physical_Address =>   Physical_Address,
+         Size             =>               Size,
+         Page_Size        =>          Page_Size,
+         Present          =>            Present,
+         Write_Access     =>       Write_Access,
+         User_Access      =>              false,
+         No_Execution     =>       No_Execution);
+   END Kernel_Map_Address_Range;
+
+   PROCEDURE Deallocate_Mappings -- TODO: Maybe split this up.
+     (Layout : IN OUT page_layout)
+   WITH
+      Refined_Post => (FOR ALL L4_Entry OF Layout.L4 =>
+                          NOT L4_Entry.Present  AND THEN
+                          NOT L4_Entry.Accessed AND THEN
+                          L4_Entry.Pointer = 0)
+   IS
+      -- The L4 is part of the main record. It must be freed separately. The L1
+      -- points to physical frames i.e. RAM, so it should not be iterated over.
+      Current_L3 : access_directory_pointer_table;
+      Current_L2 : access_directory_table
+      WITH
+         Annotate => (GNATprove, False_Positive, "memory leak *",
+                      "This is not possible, as it's decoded and freed.");
+      Current_L1 : access_page_table
+      WITH
+         Annotate => (GNATprove, False_Positive, "memory leak *",
+                      "This is not possible, as it's decoded and freed.");
+   BEGIN
+      FOR
+         L4_Entry OF Layout.L4
+      LOOP
+         Current_L3 := Table_Access(Decode_Table(L4_Entry.Pointer));
+         PRAGMA Annotate(GNATprove, False_Positive, "memory leak *",
+            "This is not possible, as it's decoded and freed.");
+
+         IF -- If there's a directory pointer table.
+            Current_L3 /= NULL
+         THEN
+            FOR
+               L3_Entry OF Current_L3.ALL
+            LOOP
+               Current_L2 := Table_Access(Decode_Table(L3_Entry.Pointer));
+               PRAGMA Annotate(GNATprove, False_Positive, "memory leak *",
+                  "This is not possible, as it's decoded and freed.");
+
+               IF -- If there's a directory table.
+                  Current_L2 /= NULL
+               THEN
+                  FOR
+                     L2_Entry OF Current_L2.ALL
+                  LOOP
+                     Current_L1 :=
+                        Table_Access(Decode_Table(L2_Entry.Pointer));
+                     PRAGMA Annotate(GNATprove, False_Positive,
+                        "memory leak might occur",
+                        "This is not possible, as it's decoded and freed.");
+
+                     IF -- If there's a page table.
+                        Current_L1 /= NULL
+                     THEN
+                        -- Free the page table.
+                        Free(Current_L1);
+                     END IF;
+                  END LOOP;
+
+                  -- Free the directory table.
+                  Free(Current_L2);
+               END IF;
+            END LOOP;
+
+            -- Free the directory pointer table.
+            Free(Current_L3);
+         END IF;
+      END LOOP;
+
+      WHILE -- The check below is just for `gnatprove` and the "Refined_Post".
+        (FOR SOME L4_Entry OF Layout.L4 =>
+            L4_Entry.Present  OR ELSE
+            L4_Entry.Accessed OR ELSE
+            L4_Entry.Pointer /= 0)
+      LOOP
+         FOR -- Clear out all the PML4 entries.
+            L4_Entry OF Layout.L4
+         LOOP
+            -- The other fields will be reset by the mapping procedure.
+            L4_Entry.Present  := false;
+            L4_Entry.Accessed := false;
+            L4_Entry.Pointer  := 0;
+         END LOOP;
+      END LOOP;
+   END Deallocate_Mappings;
 
    FUNCTION Size_To_Pages
      (Size         : IN number;
@@ -345,79 +424,32 @@ IS
    END Size_To_Pages;
 
    PROCEDURE Load
-     (Object : IN page_layout)
+     (Layout : IN page_layout)
    WITH
-      SPARK_Mode => off -- Address attributes are used.
+      SPARK_Mode => off -- Address attributes are used to load the layout.
    IS
-      PROCEDURE Write_CR3
-        (L4_Address : IN address)
-      WITH
-         Global        => (In_Out => MMU_State),
-         Import        => true,
-         Convention    => Assembler,
-         External_Name => "assembly__load_page_structure";
    BEGIN
-      IF
-         Object.L4'address >= Kernel_Virtual_Base
-      THEN
-         Write_CR3(Kernel_Virtual_To_Physical(Object.L4'address));
-      ELSE
-         Write_CR3(Object.L4'address);
-      END IF;
+      Write_CR3(Layout.L4'address);
    END Load;
 
-   PROCEDURE Page_Fault_Handler
-     (Error_Code    : IN number)
+   PROCEDURE Load_Kernel_Page_Layout
+   WITH
+      -- Address attributes are used to load the layout and alias the page map
+      -- object so they don't need to keep calling this procedure.
+      SPARK_Mode => off
    IS
-      FUNCTION Read_CR2
-         RETURN address
-      WITH
-         Global            => NULL,
-         Volatile_Function => true,
-         Import            => true,
-         Convention        => Assembler,
-         External_Name     => "assembly__get_page_fault_address";
-
-      -- The fault address is always in the CR2 register, which we presume is
-      -- loaded already, as this should be called from ISR 14's handler.
-      Fault_Address : CONSTANT address := Read_CR2;
-
-      -- The below conditionals describe why the page fault was raised.
-      -- READ: https://wiki.osdev.org/Exceptions#Page_Fault
-
-      Present_Field : CONSTANT string :=
-      (
-         IF
-            Bit_Test(Error_Code, 0)
-         THEN
-            "Page-protection violation, "
-         ELSE
-            "Page not present, "
-      );
-
-      Write_Field   : CONSTANT string :=
-      (
-         IF
-            Bit_Test(Error_Code, 1)
-         THEN
-            "occurred during write."
-         ELSE
-            "occurred during read."
-      );
-
-      -- TODO: Add more to describe the page fault. I've only covered 2 fields.
    BEGIN
-      Log("ISR 14: Page fault triggered - Error code:"     &
-         Image(Error_Code, Base => 16) & " - Fault address: 0x" &
-         Image(Fault_Address) & " - " & Present_Field  &
-         Write_Field, Warn => true);
+      Memory.Kernel_Page_Map :=
+         Memory.Kernel_Virtual_To_Physical(Kernel_Page_Layout.L4'address);
+      Write_CR3(Memory.Kernel_Page_Map);
+   END Load_Kernel_Page_Layout;
 
-      RAISE Panic
-      WITH
-         Source_Location &
-         " - Unexpected page fault as of this stage in development.";
-      PRAGMA Annotate(GNATprove, Intentional,
-         "exception might be raised",
-         "We don't handle page faults as of now. We will later.");
-   END Page_Fault_Handler;
+   FUNCTION Get_Page_Map_Address
+     (Layout : IN page_layout)
+      RETURN address
+   IS
+     (Layout.L4'address)
+   WITH
+      SPARK_Mode => off; -- This is for low-level usage.
+
 END HAVK_Kernel.Paging;

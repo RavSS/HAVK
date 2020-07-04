@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
 -- Program         -- HAVK                                                   --
--- Filename        -- havk_phase-drive-fat.ads                               --
+-- Filename        -- havk_kernel-drive-fat.ads                              --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -24,8 +24,6 @@ WITH
 -- itself are unlikely to happen.
 -- TODO: Make a virtual file system to abstract from FAT's specific details.
 PACKAGE HAVK_Kernel.Drive.FAT
-WITH
-   Preelaborate => true
 IS
    -- A context/state type. What's inside should be hidden from the rest of the
    -- operating system to avoid modifications by mistake, as it's not relevant
@@ -45,8 +43,8 @@ IS
 
    -- A restructured version of the DOS 8.3 file format for convenience.
    TYPE file IS RECORD
-      -- The DOS 8.3 file name.
-      Name : string(1 .. 11);
+      -- The DOS 8.3 file name (also including the extension dot).
+      Name : string(1 .. 12);
       -- The size of the entire file.
       Size : number;
       -- Add more fields here as necessary.

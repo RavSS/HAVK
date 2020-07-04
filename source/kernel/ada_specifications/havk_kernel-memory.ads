@@ -10,6 +10,8 @@ WITH
 
 -- This package contains logic for memory operations and everything else to do
 -- with memory, like the kernel's memory layout.
+-- TODO: Create more address subtypes with dynamic predicates for virtual
+-- and physical memory.
 PACKAGE HAVK_Kernel.Memory
 WITH
    Preelaborate   => true,
@@ -37,20 +39,6 @@ IS
       Pre    => Alignment /= 0 AND THEN (Alignment AND -Alignment) = Alignment,
       Post   => Align'result MOD Alignment = 0;
 
-   -- Allocates a valid stack on the kernel heap that can go inside the RSP
-   -- register and then returns a pointer to the start/base of it. The size is
-   -- one-based and the returned address is 16-byte aligned, with the end
-   -- of the stack (the lowest possible address) being aligned to a page.
-   FUNCTION Allocate_System_Stack
-     (Size : IN number)
-      RETURN address
-   WITH
-      Volatile_Function => true,
-      Pre               => Size /= 0 AND THEN Size MOD Paging.Page = 0,
-      Post              => Allocate_System_Stack'result MOD 16 = 0 AND THEN
-                          (number(Allocate_System_Stack'result) - Size)
-                              MOD Paging.Page = 0;
-
    -- Converts a virtual address inside kernel space (higher-half virtual
    -- memory) to a physical one. This is needed as the physical base address of
    -- the kernel is calculated during my bootloader's ELF loading sequence.
@@ -60,23 +48,41 @@ IS
    WITH
       Inline => true;
 
-   -- An x86-64 stack according to the System V ABI. 16-byte alignment is
-   -- required for the ABI, but we'll additionally demand that it's aligned to
-   -- a 4 KiB page boundary as well, as we often need to map it.
-   TYPE x86_stack IS NEW bytes
+   -- This is for a 48-bit address space, which is the current size for x86 in
+   -- 64-bit mode. This will surely change in the future with Intel's new
+   -- 5-level paging that's already present in newer processors.
+   SUBTYPE canonical_address IS address
    WITH
-      Alignment => Paging.Page;
+      Dynamic_Predicate => canonical_address IN
+         address'first .. 2**47 - 1 | -(2**47) .. address'last;
 
-   -- A access to an x86-64 stack.
-   TYPE access_x86_stack IS ACCESS x86_stack;
-
-   -- For accessing the raw address of the stack.
-   FUNCTION To_Address
-     (Stack : IN access_x86_stack)
-      RETURN address
+   -- An address guaranteed/proven to be 4 KiB aligned.
+   SUBTYPE page_address IS address
+      RANGE address'first .. address'last - address(Paging.Page - 1)
    WITH
-      Import     => true,
-      Convention => Intrinsic;
+      Dynamic_Predicate => page_address MOD address(Paging.Page) = 0 AND THEN
+         page_address IN address'first .. 2**47 - 1 |
+            -(2**47) .. address'last - address(Paging.Page - 1);
+
+   -- This controls the heap size for the kernel. It's only static for now.
+   -- This must be a multiple of 4 KiB.
+   Kernel_Heap_Size     : CONSTANT := 100 * MiB;
+
+   -- The dynamic frame address for the beginning of the kernel heap space.
+   Kernel_Heap_Base     : page_address := 0
+   WITH
+      Export        => true,
+      Convention    => Assembler,
+      External_Name => "global__kernel_heap_base";
+
+   -- The end address of the heap. A reminder that this is a boundary, the
+   -- address value itself is not a part of the heap, but the address before it
+   -- is.
+   Kernel_Heap_End      : page_address := 0
+   WITH
+      Export        => true,
+      Convention    => Assembler,
+      External_Name => "global__kernel_heap_end";
 
    -- The alignment of the returned value by the memory manager (`malloc()`).
    -- This is often just 16 for x86-64 and it can also be retrieved via
@@ -86,20 +92,13 @@ IS
    -- Utilising the latter is a SPARK violation, so we'll manually define it.
    Allocation_Alignment : CONSTANT := 16;
 
-   -- This controls the heap size for the kernel. It's only static for now.
-   Kernel_Heap_Size     : CONSTANT := 100 * MiB;
-
-   -- The dynamic value for the consecutive kernel heap memory.
-   -- Must be initialised by the memory manager.
-   Kernel_Heap_Base     : address  := 0;
-
    -- Contains the kernel layout's L4 address. See the assembly declaration for
    -- more information.
    Kernel_Page_Map      : address
    WITH
       Import         => true,
       Convention     => Assembler,
-      External_Name  => "var__kernel_page_map_base_address",
+      External_Name  => "global__kernel_page_map_base_address",
       Linker_Section => ".isolated_bss";
 
    -- What follows below are useful symbol pointer values. Note that some of
@@ -120,159 +119,159 @@ IS
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_virtual_base_address";
+      External_Name => "global__kernel_virtual_base_address";
 
    Kernel_Virtual_End        : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_virtual_end_address";
+      External_Name => "global__kernel_virtual_end_address";
 
    Kernel_Text_Base          : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_text_base_address";
+      External_Name => "global__kernel_text_base_address";
 
    Kernel_Text_End           : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_text_end_address";
+      External_Name => "global__kernel_text_end_address";
 
    Kernel_RO_Data_Base       : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_rodata_base_address";
+      External_Name => "global__kernel_rodata_base_address";
 
    Kernel_RO_Data_End        : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_rodata_end_address";
+      External_Name => "global__kernel_rodata_end_address";
 
    Kernel_Data_Base          : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_data_base_address";
+      External_Name => "global__kernel_data_base_address";
 
    Kernel_Data_End           : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_data_end_address";
+      External_Name => "global__kernel_data_end_address";
 
    Kernel_BSS_Base           : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_bss_base_address";
+      External_Name => "global__kernel_bss_base_address";
 
    Kernel_BSS_End            : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_bss_end_address";
+      External_Name => "global__kernel_bss_end_address";
 
    Kernel_Isolated_Text_Base : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_isolated_text_base_address";
+      External_Name => "global__kernel_isolated_text_base_address";
 
    Kernel_Isolated_Text_End  : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_isolated_text_end_address";
+      External_Name => "global__kernel_isolated_text_end_address";
 
    Kernel_Isolated_Data_Base : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_isolated_data_base_address";
+      External_Name => "global__kernel_isolated_data_base_address";
 
    Kernel_Isolated_Data_End  : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_isolated_data_end_address";
+      External_Name => "global__kernel_isolated_data_end_address";
 
    Kernel_Isolated_BSS_Base  : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_isolated_bss_base_address";
+      External_Name => "global__kernel_isolated_bss_base_address";
 
    Kernel_Isolated_BSS_End   : CONSTANT address
       RANGE Kernel_Virtual_Base .. address'last
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_isolated_bss_end_address";
+      External_Name => "global__kernel_isolated_bss_end_address";
 
    Kernel_Size               : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_size_address";
+      External_Name => "global__kernel_size_address";
 
    Kernel_Text_Size          : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_text_size_address";
+      External_Name => "global__kernel_text_size_address";
 
    Kernel_RO_Data_Size       : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_rodata_size_address";
+      External_Name => "global__kernel_rodata_size_address";
 
    Kernel_Data_Size          : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_data_size_address";
+      External_Name => "global__kernel_data_size_address";
 
    Kernel_BSS_Size           : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_bss_size_address";
+      External_Name => "global__kernel_bss_size_address";
 
    Kernel_Isolated_Text_Size : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_isolated_text_size_address";
+      External_Name => "global__kernel_isolated_text_size_address";
 
    Kernel_Isolated_Data_Size : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_isolated_data_size_address";
+      External_Name => "global__kernel_isolated_data_size_address";
 
    Kernel_Isolated_BSS_Size : CONSTANT number
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "var__kernel_isolated_bss_size_address";
+      External_Name => "global__kernel_isolated_bss_size_address";
 
 END HAVK_Kernel.Memory;

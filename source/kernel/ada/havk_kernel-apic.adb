@@ -191,9 +191,9 @@ IS
    END Switch_IO_APIC_Register;
 
    PROCEDURE Enumerate_MADT
-     (Paging_Structure : IN OUT Paging.page_layout)
    WITH
-      Refined_Global => (In_Out => (IO_APICs, IRQ_Remaps, CPU_Cores),
+      Refined_Global => (In_Out => (IO_APICs, IRQ_Remaps, CPU_Cores,
+                                    Paging.Kernel_Page_Layout_State),
                          Input  => (SPARK.Heap.Dynamic_Memory,
                                     ACPI.ACPI_State))
    IS
@@ -258,8 +258,8 @@ IS
                         New_IO_APIC.IO_APIC_Address /= 0
                      THEN
                         -- All of the I/O APICs could fit inside a single page
-                        -- frame of 4-KiB, but repeat this just to be sure.
-                        Paging_Structure.Map_Address
+                        -- frame of 4 KiB, but repeat this just to be sure.
+                        Paging.Kernel_Map_Address
                           (New_IO_APIC.IO_APIC_Address,
                            New_IO_APIC.IO_APIC_Address,
                            Write_Access => true);

@@ -6,25 +6,24 @@
 -------------------------------------------------------------------------------
 
 WITH
+   Ada.Unchecked_Deallocation,
    HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Tasking
 WITH
-   Refined_State => (Tasking_State => (Tasks, Active_Task, Enabled))
+   Refined_State => (Tasking_State => (Tasks, Active_Task, Enabled, Countdown))
 IS
-   -- TODO: Does not replace dead/finished tasks or catch them.
-   -- TODO: Does not go very fast or very safely.
+   -- TODO: Does not go very fast.
    PROCEDURE Create
-     (Task_Name  : IN string;
-      Code_Size  : IN number;
-      Heap_Size  : IN number;
-      Stack_Size : IN number := 16 * KiB)
+     (Task_Name      : IN string;
+      Initial_Frames : IN number;
+      Error_Status   : OUT error)
    WITH
       Refined_Global => (In_Out => (Tasks, Descriptors.TSS,
-                                    Paging.Kernel_Paging_Layout,
-                                    Memory.Manager.Frame_Allocator_State),
-                         Input  => (SPARK.Heap.Dynamic_Memory,
-                                    Memory.Memory_State, Enabled,
+                                    Paging.Kernel_Page_Layout_State,
+                                    SPARK.Heap.Dynamic_Memory,
+                                    Memory.Frames.Frame_Allocator_State),
+                         Input  => (Enabled, Active_Task,
                                     Memory.Kernel_Virtual_Base,
                                     Memory.Kernel_Isolated_Text_Base,
                                     Memory.Kernel_Isolated_Text_Size,
@@ -34,265 +33,525 @@ IS
                                     Memory.Kernel_Isolated_BSS_Size,
                                     UEFI.Bootloader_Arguments))
    IS
-      TYPE pointer IS ACCESS void; -- Need a generic pointer type for now.
+      PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+        (object => task_control_block, name => access_task_control_block);
 
-      PROCEDURE Allocate IS NEW Memory.Manager.Allocator
-        (generic_data    => void,
-         generic_pointer => pointer);
-
-      PROCEDURE Allocate IS NEW Memory.Manager.Allocator
-        (generic_data    => Memory.x86_stack,
-         generic_pointer => Memory.access_x86_stack);
-
-      FUNCTION To_Address
-        (Entry_Access : IN pointer)
-         RETURN address
-      WITH
-         Import     => true,
-         Convention => Intrinsic;
-
-      Total_Size     : CONSTANT number := Code_Size + (Stack_Size + Heap_Size);
-      Error_Check    : error;
-      Padded_Name    : string(1 .. 64) := (OTHERS => character'val(0));
-      New_Stack      : Memory.access_x86_stack
-      WITH
-         Annotate => (GNATprove, Intentional,
-                      "memory leak might occur at end of scope",
-                      "Task cleanup not yet implemented.");
-      Physical_Entry : pointer
-      WITH
-         Annotate => (GNATprove, Intentional,
-                      "memory leak might occur at end of scope",
-                      "Task cleanup not yet implemented.");
+      Error_Check : error;
    BEGIN
-      Padded_Name(Task_Name'range) := Task_Name;
-      Intrinsics.Disable_Interrupts;
-
       FOR
          Task_Index IN Tasks'range
       LOOP
          IF
             Tasks(Task_Index) = NULL
          THEN
-            Tasks(Task_Index) := NEW task_control_block'
-              (Name           => Padded_Name,
-               Physical_Space => Memory.Manager.New_Space,
-               State          => (SS => Descriptors.DS_Ring_3, OTHERS => 0),
-               OTHERS         => <>);
+            -- TODO: The below code increases the stack usage of this
+            -- subprogram from roughly under ~1 KiB to ~26.6 KiB. I have no
+            -- idea why, but expectedly, that can cause a (primary) stack
+            -- overflow. The solution is to not specify the other fields to be
+            -- their default values explicitly, but implicitly. I caught this
+            -- issue via GCC's "-fstack-usage" parameter and the "*.su" file
+            -- for this package. Note that this did not occur when I had the
+            -- threads array's components be access types instead of record
+            -- types, but SPARK disallows that.
+            ---- Tasks(Task_Index) := NEW task_control_block'
+            ----   (Name      => Padded_Name,
+            ----    Code_Size => Code_Size,
+            ----    OTHERS    => <>);
 
-            -- Create a memory space for the task.
-            Memory.Manager.Initialise_Space(Tasks(Task_Index).Physical_Space,
-               Total_Size, Error_Check);
+            Tasks(Task_Index)                       := NEW task_control_block;
+            Tasks(Task_Index).Name(Task_Name'range) := Task_Name;
+            Tasks(Task_Index).Initial_Frames        := Initial_Frames;
+
+            -- Get enough free frames to hold the task's code (i.e. all
+            -- loadable segments of an executable ELF object).
+            Memory.Frames.Allocate(Tasks(Task_Index).Physical_Base,
+               Task_Index, Frame_Count => Initial_Frames);
+
+            IF
+               Tasks(Task_Index).Physical_Base =
+                  Memory.Frames.Null_Frame_Address
+            THEN
+               Free(Tasks(Task_Index));
+               Error_Status := memory_error;
+               RETURN;
+            END IF;
+
+            -- Now we create the first thread using the default virtual entry
+            -- address and let the subprograms handle a random value for the
+            -- user stack (which is their responsibility).
+            Create_Thread(Task_Index, Virtual_Entry, Error_Check);
 
             IF
                Error_Check /= no_error
             THEN
+               Remove(Task_Index, Error_Check);
+
+               IF
+                  Error_Check /= no_error
+               THEN
+                  RAISE Panic
+                  WITH
+                     Source_Location & " - Failed to recover from bad task " &
+                     "creation.";
+                  PRAGMA Annotate(GNATprove, Intentional,
+                     "exception might be raised",
+                     "Avoid a non-removable task ""leak"" no matter what.");
+               END IF;
+
+               Error_Status := memory_error;
                RETURN;
             END IF;
-
-            Paging.Kernel_Paging_Layout.Map_Address_Range
-              (Memory.Manager.Get_Base(Tasks(Task_Index).Physical_Space),
-               Memory.Manager.Get_Base(Tasks(Task_Index).Physical_Space),
-               number(Memory.Manager.Get_Base
-                 (Tasks(Task_Index).Physical_Space)) + Total_Size,
-               Write_Access => true);
-
-            -- All (ring 3) tasks need a kernel stack for ISR functionality.
-            Tasks(Task_Index).Kernel_Stack :=
-               Memory.Allocate_System_Stack(Default_Kernel_Stack_Size);
-            Tasks(Task_Index).Kernel_Stack_Size := Default_Kernel_Stack_Size;
-
-            -- The kernel needs to be able to access and write to it.
-            Paging.Kernel_Paging_Layout.Map_Address_Range
-              (Tasks(Task_Index).Kernel_Stack -
-                  address(Default_Kernel_Stack_Size),
-               Tasks(Task_Index).Kernel_Stack -
-                  address(Default_Kernel_Stack_Size),
-               Default_Kernel_Stack_Size,
-               Write_Access => true);
-
-            -- Adjust the task stack now that we have a memory space for it.
-            -- Allocate it first. It's allocated on a physical page boundary.
-            Allocate(Tasks(Task_Index).Physical_Space, New_Stack, Stack_Size,
-               Alignment => Paging.Page);
-            PRAGMA Annotate(GNATprove, Intentional, "memory leak might occur",
-               "Task cleanup not yet implemented.");
-
-            -- Modify the stack from the allocated block's end due to how x86
-            -- stacks progress in usage and then prepare it.
-            Prepare_Task_Stack(Task_Index, Memory.To_Address(New_Stack) +
-               address(Stack_Size));
-            Tasks(Task_Index).Stack_Size := Stack_Size;
 
             -- TODO: Move this elsewhere when performance can matter.
             IF -- If this is the first task, then set the TSS's ring 0 RSP.
                NOT Enabled AND THEN
                Descriptors.TSS.RSP_Ring_0 = 0
             THEN
-               Descriptors.TSS.RSP_Ring_0 := Tasks(Task_Index).Kernel_Stack;
+               Descriptors.TSS.RSP_Ring_0 := Tasks(Task_Index)
+                 .Threads(Tasks(Task_Index).Active_Thread).Kernel_Stack;
             END IF;
-
-            -- Prepare to create a special region of memory that is executable.
-            -- We can modify the NX properties of inner regions later on, but
-            -- for now, pretend that it's all a static region with no data
-            -- section and does everything on the predefined task stack.
-            Allocate(Tasks(Task_Index).Physical_Space, Physical_Entry,
-               Code_Size, Alignment => Paging.Page);
-            PRAGMA Annotate(GNATprove, Intentional, "memory leak might occur",
-               "Task cleanup not yet implemented.");
-
-            IF
-               To_Address(Physical_Entry) =
-                  Memory.Manager.Null_Allocation_Address
-            THEN
-               RETURN; -- TODO: Add better error handling.
-            END IF;
-
-            Tasks(Task_Index).Physical_Entry := To_Address(Physical_Entry);
-
-            -- Each task needs its own virtual memory layout.
-            Tasks(Task_Index).Virtual_Space := NEW Paging.page_layout;
-            PRAGMA Annotate(GNATprove, Intentional, "memory leak might occur",
-               "Task cleanup not yet implemented.");
-
-            -- Map the given code size itself. User executable code.
-            Tasks(Task_Index).Virtual_Space.Map_Address_Range
-              (Virtual_Entry,
-               Tasks(Task_Index).Physical_Entry,
-               Code_Size,
-               User_Access  => true,
-               No_Execution => false);
-
-            -- Map its stack by making the physical stack space match the
-            -- virtual stack space. Non-executable stack, of course.
-            Tasks(Task_Index).Virtual_Space.Map_Address_Range
-              (address(Memory.Align(number(Virtual_Stack_Base) -
-                  Tasks(Task_Index).Stack_Size, Paging.Page,
-                  Round_Up => true)),
-               address(Memory.Align
-                 (number(Tasks(Task_Index).Physical_Stack_Base) -
-                  Tasks(Task_Index).Stack_Size, Paging.Page,
-                  Round_Up => true)),
-               Tasks(Task_Index).Stack_Size,
-               Write_Access => true,
-               User_Access  => true);
-
-            -- Map the kernel stack. Must not have ring 3 access.
-            Tasks(Task_Index).Virtual_Space.Map_Address_Range
-              (address(Memory.Align(number(Tasks(Task_Index).Kernel_Stack) -
-                  Tasks(Task_Index).Kernel_Stack_Size, Paging.Page,
-                  Round_Up => true)),
-               address(Memory.Align(number(Tasks(Task_Index).Kernel_Stack) -
-                  Tasks(Task_Index).Kernel_Stack_Size, Paging.Page,
-                  Round_Up => true)),
-               Tasks(Task_Index).Kernel_Stack_Size,
-               Write_Access => true);
 
             -- Finally, map all the isolated sections that need to be present
             -- in the page layout for e.g. interrupt handlers and the system
             -- call entry. These do not need actual ring 3 access.
             -- This is a very cheap attempt at implementing what Linux calls
             -- KPTI or KAISER, just without KASLR.
-            Tasks(Task_Index).Virtual_Space.Map_Address_Range
-              (Memory.Kernel_Isolated_Text_Base,
+            Paging.Map_Address_Range
+              (Tasks(Task_Index).Virtual_Space,
+               Memory.Kernel_Isolated_Text_Base,
                Memory.Kernel_Virtual_To_Physical
                  (Memory.Kernel_Isolated_Text_Base),
                Memory.Kernel_Isolated_Text_Size,
                Write_Access => false,
                No_Execution => false);
 
-            Tasks(Task_Index).Virtual_Space.Map_Address_Range
-              (Memory.Kernel_Isolated_Data_Base,
+            Paging.Map_Address_Range
+              (Tasks(Task_Index).Virtual_Space,
+               Memory.Kernel_Isolated_Data_Base,
                Memory.Kernel_Virtual_To_Physical
                  (Memory.Kernel_Isolated_Data_Base),
                Memory.Kernel_Isolated_Data_Size,
                Write_Access => true,
                No_Execution => true);
 
-            Tasks(Task_Index).Virtual_Space.Map_Address_Range
-              (Memory.Kernel_Isolated_BSS_Base,
+            Paging.Map_Address_Range
+              (Tasks(Task_Index).Virtual_Space,
+               Memory.Kernel_Isolated_BSS_Base,
                Memory.Kernel_Virtual_To_Physical
                  (Memory.Kernel_Isolated_BSS_Base),
                Memory.Kernel_Isolated_BSS_Size,
                Write_Access => true,
                No_Execution => true);
 
+            Error_Status := no_error;
+            RETURN;
+         END IF;
+      END LOOP;
+
+      Error_Status := attempt_error; -- Scheduler is full.
+   END Create;
+
+   PROCEDURE Create_Thread
+     (Task_Index   : IN number;
+      Thread_Entry : IN Memory.canonical_address;
+      Error_Status : OUT error;
+      Thread_Stack : IN Memory.canonical_address := address'last;
+      Living       : IN boolean                  := false)
+   WITH
+      Refined_Global => (In_Out => (Tasks, Paging.Kernel_Page_Layout_State,
+                                    Memory.Frames.Frame_Allocator_State),
+                         Input  => (UEFI.Bootloader_Arguments, Active_Task,
+                                    SPARK.Heap.Dynamic_Memory)),
+      Refined_Post   => Error_Status IN no_error | attempt_error | memory_error
+                           AND THEN
+                       (IF Error_Status = no_error THEN
+                           Tasks(Task_Index) /= NULL)
+   IS
+      Found_Thread_Slot : boolean := false;
+      Thread_Index      : thread_limit := thread_limit'first;
+      New_Stack         : Memory.page_address;
+      Error_Check       : error;
+   BEGIN
+      IF -- Task needs to be present and have a page layout ready for mapping.
+         Task_Index NOT IN Tasks'range OR ELSE
+         Tasks(Task_Index) = NULL
+      THEN
+         Error_Status := attempt_error;
+         RETURN;
+      END IF;
+
+      FOR
+         Potential_Thread_Index IN Tasks(Task_Index).Threads'range
+      LOOP
+         PRAGMA Loop_Invariant(Tasks(Task_Index) /= NULL);
+
+         IF
+            NOT Tasks(Task_Index).Threads(Potential_Thread_Index).Alive
+         THEN
+            IF
+               Tasks(Task_Index).Threads(Potential_Thread_Index).Allocated
+            THEN
+               Remove_Thread(Task_Index, Potential_Thread_Index, Error_Check);
+
+               IF
+                  Error_Check /= no_error
+               THEN
+                  RAISE Panic
+                  WITH
+                     Source_Location & " - Failed to remove dead thread.";
+                  PRAGMA Annotate(GNATprove, Intentional,
+                     "exception might be raised",
+                     "Can't continue if we can't remove a dead thread.");
+               END IF;
+            END IF;
+
+            Thread_Index      := Potential_Thread_Index;
+            Found_Thread_Slot := true;
             EXIT WHEN true;
          END IF;
       END LOOP;
 
-      Intrinsics.Enable_Interrupts;
-   END Create;
+      IF -- Return if we didn't find any open thread slots.
+         NOT Found_Thread_Slot
+      THEN
+         Error_Status := attempt_error;
+         RETURN;
+      END IF;
 
-   PROCEDURE Prepare_Task_Stack
-     (Task_Index : IN task_limit;
-      Stack_Base : IN address)
-   IS
-      -- We're simulating an interrupt here which is needed if we're switching
-      -- into different privilege rings. See the below resource.
-      -- READ: https://wiki.osdev.org/Getting_to_Ring_3#Entering_Ring_3
+      Tasks(Task_Index).Threads(Thread_Index) := (OTHERS => <>);
 
-      -- I'm not using the "interrupted_state" record type found in
-      -- "HAVK_Kernel.Interrupts", just so we have more freedom in placing
-      -- things on the stack here. We're storing 8-byte addresses on it. First
-      -- index represents the last/newest value placed on the stack.
-      Task_Stack : quadwords(1 .. 5)
-      WITH
-         Import   => true, -- This is overlayed from low to high address-wise.
-         Address  => Stack_Base - ((address'size / 8) * 5),
-         Annotate => (GNATprove, False_Positive,
-                      "object with constraints on bit representation *",
-                      "It's manually checked due to its low-level purpose.");
-   BEGIN
-      PRAGMA Warnings(GNATprove, off, "unused assignment",
-         Reason => "It will be used later during a context switch.");
+      -- Get enough free frames to hold the task's kernel stack for the first
+      -- thread. This is needed to make ISR's functional.
+      Memory.Frames.Allocate(New_Stack, Task_Index,
+         Frame_Count => Default_Kernel_Stack_Size / Paging.Page);
 
-      -- First, we push the DS index depending on the task's privilege ring.
-      Task_Stack(5) := Descriptors.DS_Ring_3;
+      IF -- We've run out of frames if true.
+         New_Stack = Memory.Frames.Null_Frame_Address
+      THEN
+         Error_Status := memory_error;
+         RETURN;
+      END IF;
 
-      -- Now we push the value of the stack pointer that the task will begin
-      -- with, which is the standard virtual address that we define elsewhere.
-      Task_Stack(4) := number(Virtual_Stack_Base);
+      -- The kernel needs to be able to access and write to the stack.
+      Paging.Kernel_Map_Address_Range
+        (New_Stack,
+         New_Stack,
+         Default_Kernel_Stack_Size,
+         Write_Access => true);
 
-      -- Push a custom FLAGS value in the size of RFLAGS.
-      -- Bit 1 (always set), bit 2 (even parity), and bit 9 (interrupt flag).
-      Task_Stack(3) := 2#0010_0000_0110#;
+      -- Now place the actual base/bottom of the kernel stack inside the
+      -- task control block. The mask is for an extreme edge case.
+      Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack := New_Stack +
+         Memory.page_address(Default_Kernel_Stack_Size) AND 2**47 - 1;
+      Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Size :=
+         Default_Kernel_Stack_Size;
 
-      -- Now we "push" the CS index like we did for the DS index.
-      Task_Stack(2) := Descriptors.CS_Ring_3;
+      -- TODO: Right now, the kernel stacks are identity-mapped to their
+      -- physical location. I will change this later on.
+      Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Physical :=
+         Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack;
 
-      -- Finally, we push the RIP. This will be our standard entry address.
-      Task_Stack(1) := number(Virtual_Entry);
+      -- Map the kernel stack. Must not have ring 3 access.
+      Paging.Map_Address_Range
+        (Tasks(Task_Index).Virtual_Space,
+         Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack -
+            address(Tasks(Task_Index)
+              .Threads(Thread_Index).Kernel_Stack_Size),
+         Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Physical -
+            address(Tasks(Task_Index)
+              .Threads(Thread_Index).Kernel_Stack_Size),
+         Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Size,
+         Write_Access => true);
 
-      -- Now store the virtual stack pointer with the appropriate subtraction
-      -- so we're ready to `REX.W IRET` with it in the RSP register.
-      Tasks(Task_Index).Stack := -- 8-byte addresses and values.
-         (Virtual_Stack_Base - (Task_Stack'length * 8)) + 1;
-      Tasks(Task_Index).Physical_Stack_Base := Stack_Base;
-   END Prepare_Task_Stack;
+      -- Put an interrupt frame on the new thread's kernel stack, which will be
+      -- used to enter it. The RSP value upon entry will be an invalid value by
+      -- default, so the user must set up their own ring 3 stack (unless this
+      -- is part of a system call, in which we will be helpful and set their
+      -- chosen stack for them). If the interrupt frame will cause an
+      -- exception, then it should be because of the RIP or RSP, not the
+      -- segment indices.
+      DECLARE
+         -- We're simulating an interrupt here which is needed if we're
+         -- switching into different privilege rings. See the below resource.
+         -- READ: https://wiki.osdev.org/Getting_to_Ring_3#Entering_Ring_3
+         Task_Kernel_Stack : ALIASED Interrupts.interrupted_state
+         WITH
+            Import  => true, -- This is overlayed from low to high.
+            Address => Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack -
+                          40; -- Not using the size attribute (`gnatprove`).
+      BEGIN
+         PRAGMA Warnings(GNATprove, off, "unused assignment",
+            Reason => "We're directly modifying memory here.");
 
-   PROCEDURE Schedule
+         -- I've used a record for this, but pretend that this is an assembly
+         -- routine instead so the interrupt frame logic makes more sense.
+
+         -- First, we "push" the DS index depending on the task's privilege
+         -- ring. This will always be (0x20 | 3).
+         Task_Kernel_Stack.SS     := Descriptors.DS_Ring_3;
+
+         -- Now we "push" the value of the stack pointer. Since the task's ring
+         -- 3 stack is controlled by the task itself, we don't have to set
+         -- anything here.
+         Task_Kernel_Stack.RSP    := Thread_Stack;
+
+         -- "Push" a custom FLAGS value in the size of RFLAGS. Bit 1 (always
+         -- set), bit 2 (even parity), and bit 9 (interrupt flag).
+         Task_Kernel_Stack.RFLAGS := 2#0010_0000_0110#;
+
+         -- Now we "push" the CS index like we did for the DS index.
+         Task_Kernel_Stack.CS     := Descriptors.CS_Ring_3;
+
+         -- Finally, we "push" the RIP. This will be our standard entry
+         -- address.
+         Task_Kernel_Stack.RIP    := Thread_Entry;
+
+         -- Now that we're done with configuring the interrupt frame state,
+         -- store the task's calculated kernel RSP in its state record, so it
+         -- can `REX.W IRET` to the user's code. Like above with the address
+         -- aspect, the size attribute is not used due to `gnatprove` needing
+         -- help with the implementation dependent calculation.
+         Tasks(Task_Index).Threads(Thread_Index).State.RSP :=
+            Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack - 40;
+      END;
+
+      Tasks(Task_Index).Threads(Thread_Index).Allocated := true;
+      Tasks(Task_Index).Threads(Thread_Index).Alive     := Living;
+      Error_Status := no_error;
+   END Create_Thread;
+
+   PROCEDURE Remove_Thread
+     (Task_Index   : IN number;
+      Thread_Index : IN number;
+      Error_Status : OUT error)
    WITH
-      Refined_Global => (In_Out => (Tasks, Active_Task, Descriptors.TSS),
-                         Input  => (Enabled, APIC.Timer.Ticks))
+      Refined_Global => (In_Out => (Tasks, Paging.Kernel_Page_Layout_State),
+                         Input  => (Active_Task, SPARK.Heap.Dynamic_Memory)),
+      Refined_Post   => Error_Status IN no_error | index_error | attempt_error
+                           AND THEN
+                       (IF Error_Status = no_error THEN
+                           Tasks(Task_Index) /= NULL AND THEN
+                           NOT Tasks(Task_Index)
+                             .Threads(Thread_Index).Allocated)
    IS
    BEGIN
       IF
-         Enabled
+         Task_Index NOT IN Tasks'range
       THEN
+         Error_Status := index_error;
+         RETURN;
+      ELSIF
+         Tasks(Task_Index) = NULL
+      THEN
+         Error_Status := attempt_error;
+         RETURN;
+      ELSIF
+         Thread_Index NOT IN Tasks(Task_Index).Threads'range
+      THEN
+         Error_Status := index_error;
+         RETURN;
+      ELSIF
+         Active_Task = Task_Index AND THEN
+         Tasks(Active_Task).Active_Thread = Thread_Index
+      THEN
+         Error_Status := attempt_error;
+         RETURN;
+      END IF;
+
+      -- Remove the virtual address mappings from both the kernel and the task.
+      Paging.Kernel_Map_Address_Range
+        (Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack -
+            address(Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Size),
+         Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Physical -
+            address(Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Size),
+         Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Size,
+         Present => false);
+
+      Paging.Map_Address_Range
+        (Tasks(Task_Index).Virtual_Space,
+         Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack -
+            address(Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Size),
+         Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Physical -
+            address(Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Size),
+         Tasks(Task_Index).Threads(Thread_Index).Kernel_Stack_Size,
+         Present => false);
+
+      Tasks(Task_Index).Threads(Thread_Index) := (OTHERS => <>);
+      Error_Status := no_error;
+   END Remove_Thread;
+
+   PROCEDURE Remove
+     (Task_Index   : IN number;
+      Error_Status : OUT error)
+   IS
+      PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
+        (object => task_control_block, name => access_task_control_block);
+
+      Error_Check : error;
+   BEGIN
+      IF
+         Task_Index NOT IN Tasks'range OR ELSE
+         Tasks(Task_Index) = NULL
+      THEN
+         Error_Status := index_error;
+         RETURN;
+      ELSIF
+         Task_Index = Active_Task
+      THEN
+         Error_Status := attempt_error;
+         RETURN;
+      END IF;
+
+      -- First, deallocate the physical frames and deallocate the allocations
+      -- made for the paging mechanisms.
+      Memory.Frames.Deallocate_All_Owner_Frames(Task_Index);
+      Paging.Deallocate_Mappings(Tasks(Task_Index).Virtual_Space);
+
+      FOR -- Free all the thread accesses/pointers and unmap the kernel stacks.
+         Thread_Index IN Tasks(Task_Index).Threads'range
+      LOOP
+         PRAGMA Loop_Invariant(Tasks(Task_Index) /= NULL);
+
          IF
-            Tasks(Active_Task) = NULL
+            NOT Tasks(Task_Index).Threads(Thread_Index).Alive AND THEN
+            Tasks(Task_Index).Threads(Thread_Index).Allocated
          THEN
-            RAISE Panic
-            WITH
-               Source_Location & " - The task scheduler has lost track of " &
-                  "the active task.";
-            PRAGMA Annotate(GNATprove, False_Positive,
-               "exception might be raised",
-               "Cannot happen without external corruption.");
-         ELSE
-            Round_Robin;
+            Remove_Thread(Task_Index, Thread_Index, Error_Check);
+
+            IF
+               Error_Check /= no_error
+            THEN
+               RAISE Panic
+               WITH
+                  Source_Location & " - Failed to free all threads of a task.";
+               PRAGMA Annotate(GNATprove, Intentional, -- TODO: False positive?
+                  "exception might be raised", "A leak occurs otherwise.");
+            END IF;
          END IF;
+      END LOOP;
+
+      -- Now free the accesses/pointers to the record.
+      Free(Tasks(Task_Index));
+
+      Error_Status := no_error;
+   END Remove;
+
+   PROCEDURE Kill_Active_Task
+   IS
+   BEGIN
+      IF
+         Tasks(Active_Task) = NULL
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - Active task does not actually exist.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "This should be called more carefully.");
+      END IF;
+
+      FOR
+         Thread OF Tasks(Active_Task).Threads
+      LOOP
+         PRAGMA Loop_Invariant(Tasks(Active_Task) /= NULL);
+         Thread.Alive := false;
+      END LOOP;
+
+      Tasks(Active_Task).Alive := false;
+
+      IF
+        (FOR ALL Tasked OF Tasks => Tasked = NULL OR ELSE NOT Tasked.Alive)
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - There are zero active tasks remaining.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "We cannot continue if all the user tasks failed.");
+      END IF;
+
+      Switch;
+   END Kill_Active_Task;
+
+   PROCEDURE Page_Fault_Handler
+     (Error_Code : IN number)
+   IS
+      FUNCTION Read_CR2
+         RETURN address
+      WITH
+         Global            => NULL,
+         Volatile_Function => true,
+         Import            => true,
+         Convention        => Assembler,
+         External_Name     => "assembly__get_page_fault_address";
+
+      -- The fault address is always in the CR2 register, which we presume is
+      -- loaded already, as this should be called from ISR 14's handler.
+      Fault_Address : CONSTANT address := Read_CR2;
+
+      -- The below conditionals describe why the page fault was raised.
+      -- READ: https://wiki.osdev.org/Exceptions#Page_Fault
+
+      Present_Field : CONSTANT string :=
+      (
+         IF
+            Intrinsics.Bit_Test(Error_Code, 0)
+         THEN
+            "Page-protection violation, "
+         ELSE
+            "Page not present, "
+      );
+
+      Write_Field   : CONSTANT string :=
+      (
+         IF
+            Intrinsics.Bit_Test(Error_Code, 1)
+         THEN
+            "occurred during write."
+         ELSE
+            "occurred during read."
+      );
+
+      -- TODO: Add more to describe the page fault. I've only covered 2 fields.
+   BEGIN
+      IF -- Let the active task killer handle the panic.
+         Tasks(Active_Task) = NULL
+      THEN
+         Tasking.Kill_Active_Task;
+         RETURN;
+      END IF;
+
+      Log("Task page fault - Error code: 0x" & Image(Error_Code, Base => 16) &
+         " - Fault address: 0x" & Image(Fault_Address) & " - " &
+         Present_Field & Write_Field, Tag => Tasking_Tag, Warn => true);
+
+      Log("Page fault was triggered; now killing """ &
+         Tasks(Active_Task).Name & """.", Tag => Tasking_Tag, Warn => true);
+
+      Tasking.Kill_Active_Task;
+   END Page_Fault_Handler;
+
+   PROCEDURE Schedule
+   WITH
+      Refined_Global => (In_Out => (Tasks, Active_Task, Countdown,
+                                    Descriptors.TSS),
+                         Input  => Enabled)
+   IS
+   BEGIN
+      IF
+         NOT Enabled
+      THEN
+         RETURN;
+      ELSIF
+         Tasks(Active_Task) = NULL
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - The task scheduler has lost track of " &
+            "the active task.";
+         PRAGMA Annotate(GNATprove, False_Positive,
+            "exception might be raised",
+            "Cannot happen without external corruption.");
+      ELSE
+         Round_Robin;
       END IF;
    END Schedule;
 
@@ -301,57 +560,187 @@ IS
    IS
    BEGIN
       IF -- A true state-of-the-art scheduler.
-         Yield OR ELSE APIC.Timer.Ticks MOD Tasks(Active_Task).Max_Ticks = 0
+         Yield                        OR ELSE
+         NOT Tasks(Active_Task).Alive OR ELSE
+         Countdown = 0
       THEN
          Switch;
+      ELSE
+         Countdown := Countdown - 1;
       END IF;
    END Round_Robin;
 
-   PROCEDURE Store_Task
-     (Task_Stack : IN address)
+   PROCEDURE Round_Robin_Cycle
    IS
+      Old_Task   : CONSTANT task_limit   := Active_Task;
+      Old_Thread : CONSTANT thread_limit := Tasks(Old_Task).Active_Thread;
    BEGIN
-      Tasks(Active_Task).Stack := Task_Stack; -- Store the task's stack.
-
-      IF -- Increment the task counter to the next task or loop back around.
-         Active_Task + 1 IN Tasks'range AND THEN
-         Tasks(Active_Task + 1) /= NULL
-      THEN
-         Active_Task := Active_Task + 1;
-      ELSE
-         Active_Task := Tasks'first;
-
-         WHILE -- In case the first task is null, but others somewhere aren't.
-            Tasks(Active_Task) = NULL
-         LOOP
-            Active_Task := (IF Active_Task + 1 IN Tasks'range THEN
-               Active_Task + 1 ELSE Tasks'first);
-         END LOOP;
-      END IF;
-
-      -- Set the new kernel stack.
-      Descriptors.TSS.RSP_Ring_0 := Tasks(Active_Task).Kernel_Stack;
-   END Store_Task;
-
-   FUNCTION Get_Task_Physical_Entry
-     (Task_Name : IN string)
-      RETURN address
-   WITH
-      Refined_Global => (Input => Tasks)
-   IS
-   BEGIN
-      FOR
-         Tasked OF Tasks
+      FOR -- Check if there's any living threads up ahead.
+         Thread_Index IN Old_Thread .. Tasks(Active_Task).Threads'last
       LOOP
          IF
-            Tasked /= NULL AND THEN Tasked.Name(Task_Name'range) = Task_Name
+            Tasks(Active_Task).Threads(Thread_Index).Alive
          THEN
-            RETURN Tasked.Physical_Entry;
+            Tasks(Active_Task).Active_Thread := Thread_Index;
+            EXIT WHEN Thread_Index /= Old_Thread;
          END IF;
       END LOOP;
 
-      RETURN address'first;
-   END Get_Task_Physical_Entry;
+      IF -- If we're at the last living thread already, then go to the start.
+         Tasks(Active_Task).Active_Thread = Old_Thread
+      THEN
+         FOR
+            Thread_Index IN Tasks(Active_Task).Threads'range
+         LOOP
+            IF
+               Tasks(Active_Task).Threads(Thread_Index).Alive
+            THEN
+               Tasks(Active_Task).Active_Thread := Thread_Index;
+               EXIT WHEN Thread_Index /= Old_Thread;
+            END IF;
+         END LOOP;
+      END IF;
+
+      FOR -- Now cycle the task too, similar to how the thread was done.
+         Task_Index IN Active_Task .. Tasks'last
+      LOOP
+         IF
+            Tasks(Task_Index) /= NULL AND THEN
+            Tasks(Task_Index).Alive
+         THEN
+            Active_Task := Task_Index;
+            EXIT WHEN Task_Index /= Old_Task;
+         END IF;
+      END LOOP;
+
+      IF -- If we're at the last living task, then go back to the start.
+         Active_Task = Old_Task
+      THEN
+         FOR
+            Task_Index IN Tasks'range
+         LOOP
+            IF
+               Tasks(Task_Index) /= NULL AND THEN
+               Tasks(Task_Index).Alive
+            THEN
+               Active_Task := Task_Index;
+               EXIT WHEN true;
+            END IF;
+         END LOOP;
+      END IF;
+
+      -- Run the task cleaner.
+      -- TODO: May not want to run this for every single context switch.
+      Task_Cleaner;
+
+      IF -- Handle a case where all tasks are dead.
+         Tasks(Active_Task) = NULL    OR ELSE
+         NOT Tasks(Active_Task).Alive OR ELSE
+         NOT Tasks(Active_Task).Threads(Tasks(Active_Task).Active_Thread).Alive
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - Cannot switch tasks; no tasks remaining.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "We should always have at least one remaining system task left.");
+      END IF;
+
+      -- Set the new kernel stack.
+      Descriptors.TSS.RSP_Ring_0 := Tasks(Active_Task)
+        .Threads(Tasks(Active_Task).Active_Thread).Kernel_Stack;
+
+      -- Reset the countdown.
+      Countdown := Tasks(Active_Task)
+        .Threads(Tasks(Active_Task).Active_Thread).Max_Ticks;
+
+   END Round_Robin_Cycle;
+
+   PROCEDURE Task_Cleaner
+   IS
+      Error_Check : error;
+   BEGIN
+      FOR
+         Task_Index IN Tasks'range
+      LOOP
+         IF
+            Tasks(Task_Index) /= NULL
+         THEN
+            IF
+               NOT Tasks(Task_Index).Alive
+            THEN
+               Remove(Task_Index, Error_Check);
+
+               IF
+                  Error_Check /= no_error
+               THEN
+                  RAISE Panic
+                  WITH
+                     Source_Location & " - Could not remove dead task " &
+                     Image(Task_Index) & '.';
+                  PRAGMA Annotate(GNATprove, Intentional,
+                     "exception might be raised",
+                     "We need to be able to remove all dead tasks for now.");
+               END IF;
+            ELSE
+               FOR
+                  Thread_Index IN Tasks(Task_Index).Threads'range
+               LOOP
+                  PRAGMA Loop_Invariant(Tasks(Task_Index) /= NULL);
+
+                  IF
+                     NOT Tasks(Task_Index).Threads(Thread_Index).Alive AND THEN
+                     Tasks(Task_Index).Threads(Thread_Index).Allocated
+                  THEN
+                     Remove_Thread(Task_Index, Thread_Index, Error_Check);
+
+                     IF
+                        Error_Check /= no_error
+                     THEN
+                        RAISE Panic
+                        WITH
+                           Source_Location &
+                           " - Could not remove dead thread " &
+                           Image(Thread_Index) & " for task " &
+                           Image(Task_Index) & '.';
+                        PRAGMA Annotate(GNATprove, Intentional,
+                           "exception might be raised", -- False positive?
+                           "The thread should be removed properly.");
+                     END IF;
+                  END IF;
+               END LOOP;
+            END IF;
+         END IF;
+      END LOOP;
+   END Task_Cleaner;
+
+   PROCEDURE Get_Task_Index
+     (Task_Name    : IN string;
+      Task_Index   : OUT number;
+      Error_Status : OUT error)
+   WITH
+      Refined_Global => (Input => Tasks),
+      Refined_Post   => (IF Error_Status = no_error THEN
+                            Task_Index IN task_limit'range) AND THEN
+                        (IF Error_Status = attempt_error THEN
+                            Task_Index = number'first)
+   IS
+   BEGIN
+      FOR
+         Index IN Tasks'range
+      LOOP
+         IF
+            Tasks(Index) /= NULL AND THEN
+            Tasks(Index).Name(Task_Name'range) = Task_Name
+         THEN
+            Task_Index   := Index;
+            Error_Status := no_error;
+            RETURN;
+         END IF;
+      END LOOP;
+
+      Task_Index   := number'first;
+      Error_Status := attempt_error;
+   END Get_Task_Index;
 
    FUNCTION Get_Active_Task_Name
       RETURN string
@@ -367,23 +756,50 @@ IS
    WITH
       Refined_Global => (Input => (Enabled, Tasks, Active_Task));
 
-   FUNCTION Get_Task_Stack
-      RETURN address
+   FUNCTION Get_Active_Task_Index
+      RETURN number
    IS
-     (Tasks(Active_Task).Stack);
+     (Active_Task);
 
-   FUNCTION Get_Task_State
-      RETURN address
+   FUNCTION Get_Active_Thread_Index
+      RETURN number
    IS
-     (Tasks(Active_Task).State'address)
+   BEGIN
+      IF
+         Tasks(Active_Task) = NULL
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - The active task has been lost.";
+         PRAGMA Annotate(GNATprove, False_Positive,
+            "exception might be raised", "Make sure that this won't happen.");
+      END IF;
+
+      RETURN Tasks(Active_Task).Active_Thread;
+   END Get_Active_Thread_Index;
+
+   FUNCTION Get_Active_Thread_State
+      RETURN Memory.canonical_address
+   IS
+     (Tasks(Active_Task)
+        .Threads(Tasks(Active_Task).Active_Thread).State'address)
    WITH
       SPARK_Mode => off; -- Address attribute used.
 
-   FUNCTION Get_Task_CR3
-      RETURN address
+   FUNCTION Get_Active_Task_CR3
+      RETURN Memory.page_address
    IS
-     (Tasks(Active_Task).Virtual_Space.ALL.L4'address)
-   WITH
-      SPARK_Mode => off; -- Address attribute used.
+      CR3_Value : CONSTANT address :=
+         Paging.Get_Page_Map_Address(Tasks(Active_Task).Virtual_Space);
+   BEGIN
+      -- The address of the PML4 must be a physical address. I've
+      -- identity-mapped the kernel's heap (no physical-virtual difference), so
+      -- this assumption holds until that changes for whatever reason, as the
+      -- task control blocks are allocated on the kernel's heap.
+      PRAGMA Assume(CR3_Value <= address(128 * GiB),
+         "The page map's base address must be a physical address.");
+
+      RETURN CR3_Value;
+   END Get_Active_Task_CR3;
 
 END HAVK_Kernel.Tasking;

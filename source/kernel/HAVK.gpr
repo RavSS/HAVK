@@ -13,7 +13,8 @@ IS
      ("./ada/",
       "./ada_specifications/",
       "./assembly/",
-      "./c");
+      "./c",
+      "./spark_runtime/");
    FOR Object_Dir          USE "./../../build/";
    FOR Exec_Dir            USE "./";
    FOR Create_Missing_Dirs USE "true";
@@ -34,6 +35,18 @@ IS
       -- to the compiler/driver.
       FOR Body_Suffix("ASM") USE ".S";
    END Naming;
+
+   PACKAGE Metrics
+   IS -- `gnatmetric`
+      Metrics_Switches :=
+        ("--contract-all",
+         "--complexity-all",
+         "--lines-all", "--lines-spark",
+         "--syntax-all");
+
+      FOR Default_Switches("Ada") USE
+         Metrics_Switches;
+   END Metrics;
 
    PACKAGE Prove
    IS -- `gnatprove`
@@ -193,6 +206,10 @@ IS
          -- Useful for checking if a function exceeds the stack space
          -- I've allocated in the entry assembly file.
          "-fstack-usage",
+         -- Issue any warnings for potential stack overflows. This should be
+         -- kept consistent with the stack size set in the "entry.S" file.
+         -- TODO: Revisit this when (if) removing the secondary stack.
+         ---- "-Wstack-usage=32768",
          -- TODO: The x86-64 red zone is a problem when handling interrupts as
          -- the stack is shared with the ISR and whatever was executing before
          -- in ring 0, but we can remove this once we have set up the IST and
@@ -289,13 +306,13 @@ IS
          "-s", "-E",
          -- The stack size is controlled inside "entry.S", but I've also
          -- specified it here just in case it changes anything.
-         "-d31248",
+         "-d32768",
          -- Default secondary stack size is set to 32 KiB as well. I find that
          -- it benefits from more space than the primary stack itself, as
          -- returning large arrays and strings on the secondary stack can
          -- cause an exception if they're too big. I do not have access to
          -- `gnatstack`, but this should be enough.
-         "-D31248");
+         "-D32768");
    END Binder;
 
    PACKAGE Linker

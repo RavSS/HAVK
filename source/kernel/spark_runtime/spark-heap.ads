@@ -33,7 +33,6 @@
 --  variants).
 
 package SPARK.Heap with
-   Preelaborate, -- RavSS: This is my addition.
    SPARK_Mode,
    Abstract_State => (Dynamic_Memory with External => Async_Writers)
 is

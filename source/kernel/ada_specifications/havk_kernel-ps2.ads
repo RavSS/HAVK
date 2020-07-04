@@ -16,7 +16,14 @@ WITH
 -- READ: https://wiki.osdev.org/PS/2_Mouse
 PACKAGE HAVK_Kernel.PS2
 WITH
-   Preelaborate => true
+   Preelaborate   => true,
+   Abstract_State =>
+   (
+      Controller_State
+      WITH
+         External => (Async_Readers, Async_Writers,
+                      Effective_Reads, Effective_Writes)
+   )
 IS
    -- A type that indicates the condition of the PS/2 controller.
    TYPE controller_condition IS
@@ -35,13 +42,15 @@ IS
    FUNCTION Check_Condition
       RETURN controller_condition
    WITH
-      Inline => true;
+      Volatile_Function => true,
+      Inline            => true;
 
    -- Returns true if a mouse is enabled.
    FUNCTION Mouse_Exists
       RETURN boolean
    WITH
-      Inline => true;
+      Volatile_Function => true,
+      Inline            => true;
 
 PRIVATE
    PS2_Tag : CONSTANT string := "PS/2";
@@ -341,10 +350,14 @@ PRIVATE
 
    -- The default set is set 2, as it is the only one implemented as of now
    -- and it is the most common scancode set.
-   Current_Scancode_Set  : scancode_set := set_2;
+   Current_Scancode_Set  : scancode_set := set_2
+   WITH
+      Part_Of => Controller_State;
 
    -- The current condition of the controller is unknown at the start.
-   Current_Condition     : controller_condition := unknown;
+   Current_Condition     : controller_condition := unknown
+   WITH
+      Part_Of => Controller_State;
 
    -- The default configuration is safe and does not assume there
    -- is a mouse or a port 2 available.
@@ -356,25 +369,39 @@ PRIVATE
       Port_1_Clock       =>   true,
       Port_2_Clock       =>  false,  -- Again, disable port 2 for now.
       Port_1_Translation =>  false,  -- Do not translate all sets to set 1.
-      Zeroed_2           => 000000);
+      Zeroed_2           => 000000)
+   WITH
+      Part_Of => Controller_State;
 
    -- The default typematic settings are slow as possible.
    Current_Typematics    : typematics :=
      (Repeat_Rate => 16#1F#, -- Slowest repeat rate.
       Delay_Rate  => 000003, -- Largest delay between repeats.
-      Zeroed      => 000000);
+      Zeroed      => 000000)
+   WITH
+      Part_Of => Controller_State;
 
    -- Indicates whether or not the PS/2 controller is dual-channel capable.
    -- This does not mean there is a mouse available or if the second device
    -- is a mouse at all.
-   Port_2_Support        : boolean := false;
+   Port_2_Support        : boolean := false
+   WITH
+      Part_Of => Controller_State;
 
    -- Indicates whether or not there is a PS/2 mouse connected to the system
    -- that is completely usable.
-   Mouse_Support         : boolean := false;
+   Mouse_Support         : boolean := false
+   WITH
+      Part_Of => Controller_State;
 
-   -- A keyboard is presumed to be at port 1. Port 2 takes no guesses.
-   Port_1_Device         : device  := standard_keyboard;
-   Port_2_Device         : device  := unrecognised;
+   -- A keyboard is presumed to be at port 1.
+   Port_1_Device         : device  := standard_keyboard
+   WITH
+      Part_Of => Controller_State;
+
+   -- Port 2 takes no guesses.
+   Port_2_Device         : device  := unrecognised
+   WITH
+      Part_Of => Controller_State;
 
 END HAVK_Kernel.PS2;

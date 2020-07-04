@@ -26,5 +26,18 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+-- RavSS: This is here and included with the kernel's sources (not the RTS)
+-- because there seems to be some sort of bug with `gprbuild` where it keeps
+-- recompiling unchanged files if they mention the SPARK package ("spark.ads").
+-- The below methods for using this package are described with their issues...
+-- If part of the RTS's sources ("HAVK_RTS.gpr"): all kernel packages which
+--    mention this package are always recompiled.
+-- If included via "spark_heap" for "HAVK.gpr" with a non-absolute path for
+--    "SPARK_HEAP_OBJECT_DIR": no recompilation, but the project builds in the
+--    directory where "spark_heap.gpr" is found.
+-- If included via "spark_heap" for "HAVK.gpr" with an absolute path for
+--    "SPARK_HEAP_OBJECT_DIR": breaks AdaCore's LSP server (VSCode). Perhaps
+--    something to do with the "GPR_PROJECT_PATH" variable?
+
 package SPARK with SPARK_Mode, Pure is
 end SPARK;

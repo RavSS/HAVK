@@ -1,5 +1,5 @@
 # Tasklist for the HAVK operating system
-### Last Updated: 2020-06-17
+### Last Updated: 2020-06-26
 #### High priority
 - The kernel crashes on AMD systems (but not Intel systems) during
   some point in which my descriptor tables are prepared and loaded, which
@@ -17,6 +17,8 @@
   IPC is particularly needed so we can take things out of ring 0.
 - Create a virtual filesystem for the purpose of abstracting the kernel from
   the current FAT16 driver.
+- Either remove all secondary stack support or implement allocatable secondary
+  stacks, as this is going to become a bigger issue later on.
 
 #### Low priority
 - Begin to create a solution for PS/2 mouse capabilities.

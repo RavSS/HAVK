@@ -7,8 +7,6 @@
 
 -- This package and its sub-packages contain the interrupt handler stubs.
 PACKAGE HAVK_Kernel.Interrupts
-WITH
-   Preelaborate => true
 IS
    -- This is the data structure put on the handler's stack after an interrupt,
    -- in which `REX.W IRET` uses to return to the interrupted location. The

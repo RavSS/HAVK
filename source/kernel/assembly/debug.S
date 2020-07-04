@@ -11,5 +11,5 @@
 # ()
 assembly__breakpoint:
 	XCHG BX, BX # For the Bochs magic break.
-	INT 0x3 # Breakpoint trap. Goes to ISR handler 3.
+	INT3 # Breakpoint trap. Goes to ISR handler 3.
 	RET

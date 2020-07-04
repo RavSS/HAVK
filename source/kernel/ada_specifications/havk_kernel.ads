@@ -74,6 +74,7 @@ IS
       memory_error,     -- An error to do with memory i.e. allocation.
       permission_error, -- Invalid permissions to do something.
       size_error,       -- An incorrect size or length was specified.
+      index_error,      -- A wrong index was specified.
       format_error,     -- The format of a piece of data is incorrect.
       hardware_error,   -- Used for when there's any hardware issues.
       path_error)       -- A path is invalid or the file/directory is missing.
@@ -94,6 +95,13 @@ IS
    MiB : CONSTANT := KiB**2;
    GiB : CONSTANT := KiB**3;
    TiB : CONSTANT := KiB**4;
+
+   -- I don't want to use the old ASCII package or drag in the Latin-1 package,
+   -- so I've just included the most relevant characters to save time typing.
+   NUL : CONSTANT character := character'val(00);
+   HT  : CONSTANT character := character'val(09);
+   LF  : CONSTANT character := character'val(10);
+   CR  : CONSTANT character := character'val(13);
 
    -- Imaging function for numeric values. An improvement over the image
    -- attribute is the ability to set a base and that this is also not reliant

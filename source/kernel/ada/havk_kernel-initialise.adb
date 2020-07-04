@@ -13,6 +13,7 @@ WITH
    HAVK_Kernel.Intrinsics.CPUID,
    HAVK_Kernel.Exceptions,
    HAVK_Kernel.Tasking,
+   HAVK_Kernel.Tasking.ELF,
    HAVK_Kernel.Paging,
    HAVK_Kernel.Debug,
    HAVK_Kernel.Drive.GPT,
@@ -35,7 +36,7 @@ IS
 
       -- See what's in the ACPI MADT's APIC structure area.
       Log("Enumerating the ACPI MADT.", Tag => Initialise_Tag);
-      APIC.Enumerate_MADT(Paging.Kernel_Paging_Layout);
+      APIC.Enumerate_MADT;
       Log("ACPI MADT enumerated.", Tag => Initialise_Tag);
 
       -- TODO: Check for the x2APIC bit in CPUID's output before enabling it.
@@ -49,7 +50,7 @@ IS
       Log("I/O APIC configured.", Tag => Initialise_Tag);
 
       Log("Interrupt controllers have been set up.", Tag => Initialise_Tag);
-      Log("Detected " & Image(APIC.CPU_Cores) & " CPU cores.",
+      Log("Detected " & Image(APIC.CPU_Cores) & " logical CPU cores.",
          Tag => Initialise_Tag);
 
       Enable_Interrupts;
@@ -74,32 +75,18 @@ IS
       USE TYPE
          HAVK_Kernel.UEFI.memory_type;
 
-      -- Gives the value that is placed inside the CR3 register whenever full
-      -- memory visibility of the kernel is required.
-      PROCEDURE Set_Kernel_CR3_Value
+      Map : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map
       WITH
-         Inline => true;
-
-      PROCEDURE Set_Kernel_CR3_Value
-      WITH
-         SPARK_Mode => off -- Need the raw address of the level 4 structure.
-      IS
-      BEGIN
-         Kernel_Page_Map :=
-            Kernel_Virtual_To_Physical(Paging.Kernel_Paging_Layout.L4'address);
-      END Set_Kernel_CR3_Value;
-
-      Map : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map;
+         Annotate => (GNATprove, False_Positive, "memory leak *",
+                      "No memory is being allocated to begin with.");
    BEGIN
-      Set_Kernel_CR3_Value;
-
       -- Map the virtual null address to the physical null address.
-      Paging.Kernel_Paging_Layout.Map_Address
+      Paging.Kernel_Map_Address
         (address(0),
          address(0));
 
       -- Mark the text section as read-only, but executable.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
+      Paging.Kernel_Map_Address_Range
         (Kernel_Text_Base,
          Kernel_Virtual_To_Physical(Kernel_Text_Base),
          Kernel_Text_Size,
@@ -107,7 +94,7 @@ IS
          No_Execution => false);
 
       -- Mark the read-only data section as read-only... obviously.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
+      Paging.Kernel_Map_Address_Range
         (Kernel_RO_Data_Base,
          Kernel_Virtual_To_Physical(Kernel_RO_Data_Base),
          Kernel_RO_Data_Size,
@@ -115,7 +102,7 @@ IS
          No_Execution =>  true);
 
       -- Mark the data section as modifiable, but also not executable.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
+      Paging.Kernel_Map_Address_Range
         (Kernel_Data_Base,
          Kernel_Virtual_To_Physical(Kernel_Data_Base),
          Kernel_Data_Size,
@@ -123,7 +110,7 @@ IS
          No_Execution => true);
 
       -- Mark the BSS section as modifiable, but also not executable.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
+      Paging.Kernel_Map_Address_Range
         (Kernel_BSS_Base,
          Kernel_Virtual_To_Physical(Kernel_BSS_Base),
          Kernel_BSS_Size,
@@ -131,34 +118,31 @@ IS
          No_Execution => true);
 
       -- The same as the text section, but shared with other page layouts.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
+      Paging.Kernel_Map_Address_Range
         (Kernel_Isolated_Text_Base,
          Kernel_Virtual_To_Physical(Kernel_Isolated_Text_Base),
          Kernel_Isolated_Text_Size,
          Write_Access => false,
-         No_Execution => false,
-         User_Access  => true);
+         No_Execution => false);
 
       -- The same as the data section, but shared with other page layouts.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
+      Paging.Kernel_Map_Address_Range
         (Kernel_Isolated_Data_Base,
          Kernel_Virtual_To_Physical(Kernel_Isolated_Data_Base),
          Kernel_Isolated_Data_Size,
          Write_Access => true,
-         No_Execution => true,
-         User_Access  => true);
+         No_Execution => true);
 
       -- The same as the BSS section, but shared with other page layouts.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
+      Paging.Kernel_Map_Address_Range
         (Kernel_Isolated_BSS_Base,
          Kernel_Virtual_To_Physical(Kernel_Isolated_BSS_Base),
          Kernel_Isolated_BSS_Size,
          Write_Access => true,
-         No_Execution => true,
-         User_Access  => true);
+         No_Execution => true);
 
       -- Identity-map the framebuffer address space.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
+      Paging.Kernel_Map_Address_Range
         (UEFI.Bootloader_Arguments.Framebuffer_Address,
          UEFI.Bootloader_Arguments.Framebuffer_Address,
          UEFI.Bootloader_Arguments.Framebuffer_Size,
@@ -166,7 +150,7 @@ IS
          No_Execution => true);
 
       -- Identity-map the system heap. Don't put it in the higher-half space.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
+      Paging.Kernel_Map_Address_Range
         (Kernel_Heap_Base,
          Kernel_Heap_Base,
          Kernel_Heap_Size,
@@ -185,7 +169,7 @@ IS
             Region.Memory_Region_Type = UEFI.loader_data OR ELSE
             Region.Memory_Region_Type = UEFI.ACPI_table_data
          THEN
-            Paging.Kernel_Paging_Layout.Map_Address_Range
+            Paging.Kernel_Map_Address_Range
               (Region.Start_Address_Physical,
                Region.Start_Address_Physical,
                Region.Number_Of_Pages * Paging.Page,
@@ -195,9 +179,9 @@ IS
       END LOOP;
 
       -- Finally, load the CR3 register with the highest level directory.
-      Log("Switching to default page layout.", Tag => Initialise_Tag);
-      Paging.Kernel_Paging_Layout.Load;
-      Log("Self-described page directories loaded.", Tag => Initialise_Tag);
+      Log("Switching to the kernel's page layout.", Tag => Initialise_Tag);
+      Paging.Load_Kernel_Page_Layout;
+      Log("Kernel page layout has been loaded.", Tag => Initialise_Tag);
    END Default_Page_Layout;
 
    PROCEDURE Grid_Test
@@ -243,7 +227,7 @@ IS
       WITH
          Import     => true,
          Convention => C,
-         Link_Name  => "var__bootloader_magic";
+         Link_Name  => "global__bootloader_magic";
    BEGIN
       IF -- Inform if the magic number is wrong or corrupted.
          Magic = 16#55_45_46_49#
@@ -307,14 +291,17 @@ IS
 
    PROCEDURE PS2_Input
    IS
-      USE
-         HAVK_Kernel.PS2;
+      USE TYPE
+         HAVK_Kernel.PS2.controller_condition;
+
+      Condition : PS2.controller_condition;
    BEGIN
       Log("Attempting to initialise PS/2 controller.", Tag => Initialise_Tag);
-      Setup;
+      PS2.Setup;
+      Condition := PS2.Check_Condition;
 
       IF
-         Check_Condition /= functional
+         Condition /= PS2.functional
       THEN
          RAISE Panic
          WITH
@@ -507,87 +494,35 @@ IS
    -- more worthwhile system calls and create something to handle IPC.
    PROCEDURE Begin_Tasking
    IS
-      Error_Check              : error;
-      EFI_File_System          : Drive.FAT.file_system;
-      SYSCALL_Tester_File      : Drive.FAT.file;
-      SYSCALL_Tester_Code_Size : number;
-      SYSCALL_Tester_Base      : address;
-      SYSCALL_Tester_Path      : CONSTANT string :=
+      Error_Check         : error;
+      EFI_File_System     : Drive.FAT.file_system;
+      SYSCALL_Tester_Path : CONSTANT string :=
          Drive.FAT.Separator & "HAVK" &
          Drive.FAT.Separator & "system" &
-         Drive.FAT.Separator & "SYSCAL~1.BIN";
+         Drive.FAT.Separator & "SYSCAL~1.ELF";
    BEGIN
       Boot_Partition_Check(EFI_File_System);
 
-      Drive.FAT.Check_File(EFI_File_System, SYSCALL_Tester_Path, Error_Check,
-         SYSCALL_Tester_File);
+      FOR -- Just to show tasking off for now.
+         Instance IN 1 .. 2
+      LOOP
+         Tasking.ELF.Load(EFI_File_System, SYSCALL_Tester_Path,
+            "SYSCALL Test" & Instance'image, Error_Check);
 
-      IF
-         Error_Check /= no_error
-      THEN
-         RAISE Panic
-         WITH
-            Source_Location & " - Missing system file """ &
-            SYSCALL_Tester_Path & """.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "We cannot continue if we don't have the system files intact.");
-      END IF;
-
-      SYSCALL_Tester_Code_Size := Memory.Align(SYSCALL_Tester_File.Size,
-         Paging.Page, Round_Up => true);
-      IF
-         SYSCALL_Tester_Code_Size < Paging.Page
-      THEN
-         SYSCALL_Tester_Code_Size := Paging.Page;
-      ELSIF
-         SYSCALL_Tester_Code_Size NOT IN Paging.Page .. 2 * GiB
-      THEN
-         RAISE Panic
-         WITH
-            Source_Location & " - ""SYSCALL_Tester.bin"" is too large.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "The flat binary should be kept small externally.");
-      END IF;
-
-      Tasking.Create("SYSCALL Test", SYSCALL_Tester_Code_Size, 10 * MiB);
-
-      SYSCALL_Tester_Base := Tasking.Get_Task_Physical_Entry("SYSCALL Test");
-
-      IF
-         SYSCALL_Tester_Base = 0
-      THEN
-         RAISE Panic
-         WITH
-            Source_Location & " - Task for ""SYSCALL Test"" not created.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "The task must have failed to create, so we stop here.");
-      END IF;
-
-      -- Map it so we can edit the task's code.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
-        (SYSCALL_Tester_Base,
-         SYSCALL_Tester_Base,
-         SYSCALL_Tester_Code_Size,
-         Write_Access => true);
-
-      -- Load the file into the physical entry address we obtained.
-      Drive.FAT.Read_File(EFI_File_System, SYSCALL_Tester_Path,
-         SYSCALL_Tester_Base, Error_Check);
-
-      -- Now we unmap it, as it's contained in the task's virtual space anyway.
-      Paging.Kernel_Paging_Layout.Map_Address_Range
-        (SYSCALL_Tester_Base,
-         SYSCALL_Tester_Base,
-         SYSCALL_Tester_Code_Size,
-         Present      => false,
-         Write_Access => true);
+         IF
+            Error_Check /= no_error
+         THEN
+            RAISE Panic
+            WITH
+               Source_Location & " - Failed to load the SYSCALL test program.";
+            PRAGMA Annotate(GNATprove, Intentional,
+               "exception might be raised",
+               "We cannot continue if it fails to load. External error.");
+         END IF;
+      END LOOP;
 
       Log("Now beginning multi-tasking environment.", Tag => Initialise_Tag);
-      Tasking.Start; -- If this somehow returns, then something is wrong.
-
-      RAISE Panic
-      WITH
-         Source_Location & " - Failed to start tasking.";
+      Tasking.Start;
    END Begin_Tasking;
 
 END HAVK_Kernel.Initialise;

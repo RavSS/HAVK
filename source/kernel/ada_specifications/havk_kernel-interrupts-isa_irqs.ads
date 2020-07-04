@@ -9,8 +9,6 @@
 -- interrupt vector has been remapped to the appropriate values.
 -- READ: https://en.wikipedia.org/wiki/Interrupt_request_(PC_architecture)
 PACKAGE HAVK_Kernel.Interrupts.ISA_IRQs
-WITH
-   Preelaborate => true
 IS
    PRAGMA Warnings(GNATprove, off,
       "subprogram ""ISR_*_Handler"" has no effect",

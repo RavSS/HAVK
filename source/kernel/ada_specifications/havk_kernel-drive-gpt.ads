@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
 -- Program         -- HAVK                                                   --
--- Filename        -- havk_phase-drive-gpt.ads                               --
+-- Filename        -- havk_kernel-drive-gpt.ads                              --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -14,8 +14,6 @@ WITH
 -- READ: https://en.wikipedia.org/wiki/GUID_Partition_Table
 -- READ: https://wiki.osdev.org/GPT
 PACKAGE HAVK_Kernel.Drive.GPT
-WITH
-   Preelaborate => true
 IS
    -- The amount of partitions GPT supports (as of now) is 128.
    SUBTYPE partition_index IS number RANGE 0 .. 127;

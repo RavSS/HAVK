@@ -19,7 +19,6 @@ USE TYPE
 -- That includes the I/O APIC and the LAPIC (only plan x2APIC support for now).
 PACKAGE HAVK_Kernel.APIC
 WITH
-   Preelaborate   => true,
    Abstract_State => Interrupt_Controller_State
 IS
    -- Each LAPIC (not I/O APIC) belongs to a logical core. Initialised to
@@ -29,9 +28,9 @@ IS
    -- Enumerates the ACPI table that contains APIC information. Also takes
    -- in a page layout so it can map any APICs if MMIO is required.
    PROCEDURE Enumerate_MADT
-     (Paging_Structure : IN OUT Paging.page_layout)
    WITH
-      Global => (In_Out => (Interrupt_Controller_State, CPU_Cores),
+      Global => (In_Out => (Interrupt_Controller_State, CPU_Cores,
+                            Paging.Kernel_Page_Layout_State),
                  Input  => (SPARK.Heap.Dynamic_Memory, ACPI.ACPI_State)),
       Post   => CPU_Cores /= 0;
 

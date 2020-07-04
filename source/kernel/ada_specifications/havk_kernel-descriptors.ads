@@ -16,7 +16,6 @@ WITH
 -- things, such as privilege level shifts and processor interrupts.
 PACKAGE HAVK_Kernel.Descriptors
 WITH
-   Preelaborate   => true,
    Abstract_State =>
    (
       Descriptors_State

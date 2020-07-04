@@ -8,8 +8,6 @@
 -- A package that is home to CPU exception handlers.
 -- READ: https://wiki.osdev.org/Exceptions
 PACKAGE HAVK_Kernel.Interrupts.Exceptions
-WITH
-   Preelaborate => true
 IS
    -- Format: <exception name> - <mnemonic code> - <exception type>.
 
@@ -250,18 +248,18 @@ IS
      (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state;
       Error_Code      : IN number)
    WITH
-      No_Return     => true,
       Import        => true,
       Convention    => Assembler,
-      External_Name => "assembly__interrupt_handler_stub_014";
+      External_Name => "assembly__interrupt_handler_stub_014",
+      Annotate      => (GNATprove, Might_Not_Return);
    PROCEDURE ISR_014_Handler
      (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state;
       Error_Code      : IN number)
    WITH
-      No_Return     => true,
       Export        => true,
       Convention    => Assembler,
-      External_Name => "ada__interrupt_handler_014";
+      External_Name => "ada__interrupt_handler_014",
+      Annotate      => (GNATprove, Might_Not_Return);
 
    -- Reserved - no mnemonic - no type. Never raised.
    PROCEDURE ISR_015_Stub
@@ -538,5 +536,8 @@ IS
       Export        => true,
       Convention    => Assembler,
       External_Name => "ada__interrupt_handler_031";
+
+PRIVATE
+   Exceptions_Tag : CONSTANT string := "CPUEXCPT";
 
 END HAVK_Kernel.Interrupts.Exceptions;

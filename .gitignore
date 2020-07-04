@@ -20,6 +20,8 @@ source/kernel/*
 !source/kernel/assembly/*
 !source/kernel/c
 !source/kernel/c/*.[ch]
+!source/kernel/spark_runtime
+!source/kernel/spark_runtime/*.ad?
 
 !source/bootloader
 !source/bootloader/*

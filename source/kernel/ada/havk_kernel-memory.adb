@@ -28,38 +28,6 @@ IS
          Value + (-Value AND (Alignment - 1))
    );
 
-   FUNCTION Allocate_System_Stack
-     (Size : IN number)
-      RETURN address
-   IS
-      -- Creates the new stack for handling interrupts in ring 0.
-      New_Stack_End  : CONSTANT access_x86_stack := NEW x86_stack(1 .. Size)
-      WITH
-         Annotate => (GNATprove, False_Positive,
-                      "memory leak might occur at end of scope",
-                      "This is not freed here.");
-
-      -- While the alignment is guaranteed and can be assumed, it's probably
-      -- safer to just check for alignment anyway instead of using the pragma.
-      -- Remember that x86 stacks grow downwards.
-      New_Stack_Base : CONSTANT address :=
-         address(Align(number(To_Address(New_Stack_End)) + Size, 16));
-   BEGIN
-      IF
-         To_Address(New_Stack_End) MOD address(Paging.Page) = 0
-      THEN
-         RETURN New_Stack_Base;
-      ELSE
-         RAISE Panic
-         WITH
-            Source_Location &
-            " - The memory manager didn't align the stack's end to a page.";
-         PRAGMA Annotate(GNATprove, False_Positive,
-            "exception might be raised",
-            "This is not possible to reach with a working memory manager.");
-      END IF;
-   END Allocate_System_Stack;
-
    FUNCTION System_Limit
       RETURN number
    IS

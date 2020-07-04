@@ -11,7 +11,6 @@
 // that loads an ELF file to memory, then create a random freestanding
 // program via e.g. C and change the "HAVK_LOCATION" to point towards your
 // program. There is no guarantee it will work, as I may have parsed it wrong.
-// You will also need to provide some additional symbols for virtual addresses.
 #include <efi.h>
 #include <efilib.h>
 
@@ -29,6 +28,14 @@
 	#define HAVK_LOCATION u"\\HAVK\\HAVK.elf"
 #endif
 
+// These are not required to be present, but they're just for sanity checking.
+#ifndef VIRTUAL_BASE_SYMBOL // Should be placed at the virtual address base.
+	#define VIRTUAL_BASE_SYMBOL "global__kernel_virtual_base"
+#endif
+#ifndef KERNEL_SIZE_SYMBOL // Total aligned size of all allocated sections.
+	#define KERNEL_SIZE_SYMBOL "global__kernel_size"
+#endif
+
 // Global variables.
 #define BUFFER_SIZE (sizeof(CHAR16) * 16) // Temporary input buffer size.
 CHAR16 buffer[BUFFER_SIZE + sizeof(CHAR16)] = {0}; // Temporary input buffer.
@@ -36,6 +43,7 @@ EFI_STATUS status = EFI_SUCCESS; // Return status from UEFI functions.
 EFI_STATUS attempt = EFI_SUCCESS; // Secondary return status variable.
 EFI_LOADED_IMAGE *image = NULL; // Also must be retrieved before utilisation.
 EFI_PHYSICAL_ADDRESS havk_physical_base = 0; // A to-be-determined address.
+EFI_VIRTUAL_ADDRESS havk_virtual_base = UINTPTR_MAX; // Higher-half expected.
 UINT64 havk_memory_size = 0; // Used for mapping the entire kernel.
 BOOLEAN have_uefi_boot_services = TRUE; // False after the boot services end.
 
@@ -570,7 +578,7 @@ VOID read_symbols(struct elf64_file *havk_elf)
 }
 
 EFI_VIRTUAL_ADDRESS symbol_address(struct elf64_file *havk_elf,
-	CHAR8 *symbol_name)
+	CHAR8 *symbol_name, BOOLEAN required)
 {
 	for (UINT64 i = 0; i < havk_elf->symbol_entries; ++i)
 	{
@@ -588,8 +596,12 @@ EFI_VIRTUAL_ADDRESS symbol_address(struct elf64_file *havk_elf,
 		}
 	}
 
-	CRITICAL_FAILURE(u"UNKNOWN SYMBOL REQUESTED: %s\r\n",
-		ansi_to_wide(symbol_name));
+	if (required)
+	{
+		CRITICAL_FAILURE(u"UNKNOWN SYMBOL REQUESTED: %s\r\n",
+			ansi_to_wide(symbol_name));
+	}
+
 	return 0;
 }
 
@@ -631,6 +643,16 @@ VOID load_havk(struct elf64_file *havk_elf)
 		{
 			allocated[i] = FALSE;
 			continue;
+		}
+
+		// The first "LOAD" segment usually has the virtual base
+		// address as the place where it's supposed to be loaded, but
+		// I'll be a bit more careful.
+		if (havk_elf->program_headers[i].virtual_address <
+			havk_virtual_base)
+		{
+			havk_virtual_base
+				= havk_elf->program_headers[i].virtual_address;
 		}
 
 		#define SEGMENT_PHYSICAL_ADDRESS \
@@ -1170,13 +1192,24 @@ VOID map_address_range(VOLATILE struct uefi_page_structure *structure,
 VOID default_mappings(struct elf64_file *havk_elf,
 	VOLATILE struct uefi_page_structure *structure)
 {
-	CONST EFI_VIRTUAL_ADDRESS havk_virtual_base
+	CONST EFI_VIRTUAL_ADDRESS havk_virtual_base_check
 		= symbol_address(havk_elf,
-		(CHAR8 *)"var__kernel_virtual_base");
+		(CHAR8 *)VIRTUAL_BASE_SYMBOL, FALSE);
+	#undef VIRTUAL_BASE_SYMBOL
 
 	CONST UINT64 havk_size // Will almost never be aligned to 2-MiB.
 		= HUGE_PAGE_ALIGN(symbol_address(havk_elf,
-		(CHAR8 *)"var__kernel_size")) + HUGE_PAGE_SIZE;
+		(CHAR8 *)KERNEL_SIZE_SYMBOL, FALSE)) + HUGE_PAGE_SIZE;
+	#undef KERNEL_SIZE_SYMBOl
+
+	// The symbol value is zero if it's not found; however, that's
+	// acceptable. Check the size later.
+	if (havk_virtual_base_check
+		&& havk_virtual_base_check != havk_virtual_base)
+	{
+		Print(u"VIRTUAL BASE IS AMBIGIOUS (%llX)\r\n",
+			havk_virtual_base_check);
+	}
 
 	// I've given up trying to map every important thing one by one, so
 	// I've just mapped 0 GiB to 4 GiB entirely. OVMF does this anyway, but

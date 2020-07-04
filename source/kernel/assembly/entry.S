@@ -12,17 +12,17 @@
 
 # System V ABI for x86-64 dictates that stacks grow downwards.
 .ALIGN 16 # 16-byte alignment required by the ABI for the stack.
-.GLOBAL var__stack_base # 32 KiB stack size. It is only temporary.
-var__stack_end:
+.GLOBAL global__stack_base # 32 KiB stack size. It is only temporary.
+global__stack_end:
 	.SPACE 32768 # Check alignment if you're going to change this.
-var__stack_base:
+global__stack_base:
 
 # Space for bootloader information.
-.GLOBAL var__bootloader_arguments
-.GLOBAL var__bootloader_magic
-var__bootloader_arguments:
+.GLOBAL global__bootloader_arguments
+.GLOBAL global__bootloader_magic
+global__bootloader_arguments:
 	.SPACE 8 # Store the bootloader's argument pointer here.
-var__bootloader_magic:
+global__bootloader_magic:
 	.SPACE 8 # Store the bootloader's magic number here.
 
 .SECTION .text
@@ -34,16 +34,16 @@ assembly__entry:
 	# To avoid any clobbering, I'm saving the UEFI application's passed
 	# arguments/parameters pointer to a specific location in memory.
 	# The pointer was passed in the way of the x86-64 System V ABI.
-	MOV [var__bootloader_arguments], RDI
-	MOV [var__bootloader_magic], RSI
+	MOV [RIP + global__bootloader_arguments], RDI
+	MOV [RIP + global__bootloader_magic], RSI
 
 	# Something interesting to consider for GAS as opposed to NASM is that
 	# NASM assembles e.g. `MOV RAX, symbol` as a MOVABS instruction whereas
-	# that doesn't work with GAS in a -2-GiB setup. The size efficient way
+	# that doesn't work with GAS in a -2 GiB setup. The size efficient way
 	# to load a symbol is to use a LEA instruction with an address relative
 	# to RIP. I think it's also possible to accomplish this via sign
 	# extension, but this is easier.
-	LEA RSP, [RIP + var__stack_base]
+	LEA RSP, [RIP + global__stack_base]
 	MOV RBP, RSP
 
 	# This is more reliable here than in the bootloader. Should adhere to
@@ -85,14 +85,5 @@ assembly__entry:
 	MOV WORD PTR [RSP], 0x6 # Bits 1 (reserved) and 2 (PF/even parity) set.
 	POPFQ # Clean 8-bytes off the stack and into the RFLAGS register.
 
-	# Begin to enter HAVK.
-	CALL havk
-
-	# HAVK should not exit like this in a version at or above V00-01-00.
-	# It should handle a shutdown properly instead.
-	MOV AL, 0xFE # Command byte for the PS/2 controller to reset the CPU.
-	.shutdown_spin: # Endless loop. Reset the CPU twice if required.
-		OUT 0x64, AL # 8042 PS/2 controller's CPU reset line pulsed.
-		HLT
-		CLI # The next halt will be forever (unless an NMI is raised).
-		JMP .shutdown_spin
+	# Begin to enter HAVK. It's proven to not return.
+	JMP havk

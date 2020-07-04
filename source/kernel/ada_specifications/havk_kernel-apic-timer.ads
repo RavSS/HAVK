@@ -7,8 +7,6 @@
 
 -- This package is for controlling the local APIC timer.
 PACKAGE HAVK_Kernel.APIC.Timer
-WITH
-   Preelaborate => true
 IS
    -- Simply sets up the LAPIC timer with a given divisor.
    PROCEDURE Setup;
