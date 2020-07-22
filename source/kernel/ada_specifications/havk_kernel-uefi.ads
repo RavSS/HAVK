@@ -96,34 +96,37 @@ IS
    -- READ: https://narkive.com/BMqVNNak
    TYPE memory_descriptor IS RECORD
       -- Describes the type of region the memory descriptor is for.
-      Memory_Region_Type            : memory_type;
+      Memory_Region_Type       : memory_type;
       -- See the representation clause for information about this component.
-      Padding_1                     : number RANGE 0 .. 2**32 - 1;
+      Padding_1                : number RANGE 0 .. 2**32 - 1;
       -- The physical address of where the region starts.
-      Start_Address_Physical        : address;
+      Start_Address_Physical   : address;
       -- The virtual address of where the region starts. This is essentially
       -- useless for the operating system and is truly for UEFI applications.
-      Start_Address_Virtual         : address;
+      Start_Address_Virtual    : address;
       -- Each descriptor has at least one page. Each one is 4 KiB.
       -- The maximum number of pages cannot represent memory over the limit
       -- of 0xFFFFFFFFFFFFF000. If this is zero, then there's a massive error.
-      Number_Of_Pages               : number RANGE 1 .. number'last;
+      Number_Of_Pages          : number;
       -- Attributes of the memory region that are OR'd together to
       -- create a bitmask. See the "memory_attributes" record for more.
-      Memory_Attribute_Bitmask      : number;
+      Memory_Attribute_Bitmask : number;
    END RECORD
    WITH
-      Convention => C;
+      Convention        => C,
+      Dynamic_Predicate => Start_Address_Physical MOD 4096 = 0 AND THEN
+                           Start_Address_Virtual  MOD 4096 = 0 AND THEN
+                           Number_Of_Pages IN 1 .. number(address'last / 4096);
    FOR memory_descriptor USE RECORD
-      Memory_Region_Type               AT 00 RANGE 0 .. 31;
+      Memory_Region_Type          AT 00 RANGE 0 .. 31;
       -- There's 32 bits of padding right here. This is foolishly unexplained
       -- in the UEFI specification (2.8), but it's for architectural purposes.
       -- You can check it out via debugging the UEFI application with GDB.
-      Padding_1                        AT 04 RANGE 0 .. 31;
-      Start_Address_Physical           AT 08 RANGE 0 .. 63;
-      Start_Address_Virtual            AT 16 RANGE 0 .. 63;
-      Number_Of_Pages                  AT 24 RANGE 0 .. 63;
-      Memory_Attribute_Bitmask         AT 32 RANGE 0 .. 63;
+      Padding_1                   AT 04 RANGE 0 .. 31;
+      Start_Address_Physical      AT 08 RANGE 0 .. 63;
+      Start_Address_Virtual       AT 16 RANGE 0 .. 63;
+      Number_Of_Pages             AT 24 RANGE 0 .. 63;
+      Memory_Attribute_Bitmask    AT 32 RANGE 0 .. 63;
    END RECORD;
 
    -- The layout of the arguments structure that my bootloader passes to the
@@ -185,15 +188,13 @@ IS
 
    -- An array of memory descriptors - a memory map. It contains accesses to
    -- the descriptors to account for the dynamic descriptor size.
-   TYPE memory_map IS ARRAY(number RANGE <>) OF access_memory_descriptor
-   WITH
-      Pack => true;
+   Memory_Map : ARRAY(number RANGE 1 .. 512) OF access_memory_descriptor;
 
-   -- Returns a UEFI-style memory map.
-   FUNCTION Get_Memory_Map
-      RETURN memory_map
+   -- This parses and fills in the memory map array. It should be called before
+   -- the memory map is utilised.
+   PROCEDURE Parse_Memory_Map
    WITH
-      Post => (FOR ALL Region OF Get_Memory_Map'result => Region /= NULL);
+      Post => (FOR SOME Region OF Memory_Map => Region /= NULL);
 
    -- Takes in a memory descriptor and then returns a record of booleans
    -- indicating the status of all possible UEFI memory attributes.

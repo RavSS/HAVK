@@ -22,7 +22,8 @@ IS
    -- except for memory addresses.
    TYPE number IS MOD 2**64
    WITH
-      Size => 64;
+      Size     => 64,
+      Annotate => (GNATprove, No_Wrap_Around);
 
    -- GNAT provides its own intrinsics, which can be optimised slightly so
    -- better than the ones defined by me via inline assembly.
@@ -54,6 +55,10 @@ IS
       Component_Size          => 32,
       Default_Component_Value => 00;
    TYPE quadwords   IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**64 - 1
+   WITH
+      Component_Size          => 64,
+      Default_Component_Value => 00;
+   TYPE addresses   IS ARRAY(number RANGE <>) OF ALIASED address
    WITH
       Component_Size          => 64,
       Default_Component_Value => 00;
@@ -103,32 +108,34 @@ IS
    LF  : CONSTANT character := character'val(10);
    CR  : CONSTANT character := character'val(13);
 
+   -- Since there's no secondary stack (anymore), the string returned is padded
+   -- with null characters which should be ignored by I/O utilities.
+   SUBTYPE image_string IS string(1 .. 64);
+
    -- Imaging function for numeric values. An improvement over the image
    -- attribute is the ability to set a base and that this is also not reliant
-   -- on the runtime image functions which the attribute makes a call to.
+   -- on the runtime image functions which the attribute makes a call to. There
+   -- is also no secondarys stack involved. Note that the "Padding" parameter
+   -- indicates a minimum number of (visible) characters in the return string.
    -- TODO: Add binary and integer/negative number imaging.
    FUNCTION Image
      (Value   : IN number;
-      Base    : IN number := 10;
-      Padding : IN number := 0)
-      RETURN string
+      Base    : IN number   := 10;
+      Padding : IN positive := 01)
+      RETURN image_string
    WITH
-      Pre  => Base IN 10 | 16 AND THEN Padding < 64,
-      Post => Image'result'first = 1 AND THEN
-             (IF Padding = 0 THEN Image'result'last IN 1 .. 64
-                 ELSE Image'result'last IN positive(Padding) .. 64);
+      Pre => Base IN 10 | 16 AND THEN
+             Padding <= image_string'last;
 
    -- By default, image addresses in base 16.
    FUNCTION Image
      (Value   : IN address;
-      Base    : IN number := 16;
-      Padding : IN number := 0)
-      RETURN string
+      Base    : IN number   := 16;
+      Padding : IN positive := 01)
+      RETURN image_string
    WITH
-      Pre  => Base IN 10 | 16 AND THEN Padding < 64,
-      Post => Image'result'first = 1 AND THEN
-             (IF Padding = 0 THEN Image'result'last IN 1 .. 64
-                 ELSE Image'result'last IN positive(Padding) .. 64);
+      Pre => Base IN 10 | 16 AND THEN
+             Padding <= image_string'last;
 
    -- Stores a log in the main kernel log collection variable.
    PROCEDURE Log
@@ -151,14 +158,14 @@ PRIVATE
    SUBTYPE log_tag_limit IS positive RANGE 1 .. 8;
 
    -- The maximum length of a log.
-   SUBTYPE log_string_limit IS positive RANGE 1 .. 300;
+   SUBTYPE log_string_limit IS positive RANGE 1 .. 1000;
 
    -- A record of a log containing its specific details.
    TYPE log_information IS RECORD
       -- String description of the log's meaning.
-      Information : string(log_string_limit) := (OTHERS => character'val(0));
+      Information : string(log_string_limit) := (OTHERS => NUL);
       -- The tag of the log.
-      Tag         : string(log_tag_limit) := (OTHERS => character'val(0));
+      Tag         : string(log_tag_limit) := (OTHERS => NUL);
       -- When true, the log is a warning.
       Warned      : boolean := false;
       -- When true, the log is critical information.

@@ -1,20 +1,15 @@
 -------------------------------------------------------------------------------
 -- Program         -- HAVK                                                   --
--- Filename        -- havk_phase_i.adb                                       --
+-- Filename        -- havk.adb                                               --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 WITH
    HAVK_Kernel,
-   HAVK_Kernel.UEFI,
-   HAVK_Kernel.Graphics,
-   HAVK_Kernel.Graphics.Text,
    HAVK_Kernel.Initialise;
 USE
-   HAVK_Kernel,
-   HAVK_Kernel.Graphics,
-   HAVK_Kernel.Graphics.Text;
+   HAVK_Kernel;
 
 -- This is the first phase and it is the main procedure. Information critical
 -- to the system should be parsed in mono-tasking mode first.
@@ -22,54 +17,24 @@ PROCEDURE HAVK
 WITH
    No_Return => true
 IS
-   -- Get an object which describes the system display.
-   Display        : CONSTANT view :=
-      Get_Display(UEFI.Bootloader_Arguments.ALL);
-
-   -- The main terminal or virtual console used to display text to the user.
-   Terminal       : ALIASED textbox -- Font width and font height are 8 pixels.
-     (Display.Screen_Width  / 14 + 2,  -- (Font width  - 1) * 2 + 2. Wider.
-      Display.Screen_Height / 14 - 2); -- (Font height - 1) * 2 - 2. Shorter.
-
-   -- The index on the framebuffer as to where the terminal begins.
-   Terminal_Start : CONSTANT number := Display.Calculate_Pixel
-     (Display.Screen_Width  / 8,
-      Display.Screen_Height / 8);
-
-   Date_Of_Build  : CONSTANT string := Initialise.HAVK_Build_Datetime;
-   Entry_Tag      : CONSTANT string := "ENTRY";
+   Entry_Tag : CONSTANT string := "ENTRY";
 BEGIN
-   -- Send log information to the terminal (if specified) and to a serial port.
-   Initialise.Debugger(Terminal, Printing => false);
+   -- Set up any serial port functionality etc.
+   Initialise.Debugger;
 
    Log("Entered HAVK successfully.", Tag => Entry_Tag);
+   Log("Date of build: " & Initialise.HAVK_Build_Datetime & '.',
+      Tag => Entry_Tag);
+
+   -- See what the bootloader passed as the magic number and anything else.
+   Initialise.Check_Entry;
 
    -- Allow kernel heap allocations and deallocations after this returns.
+   -- Also parses the UEFI memory map.
    Initialise.Dynamic_Memory;
 
-   -- Set up the terminal.
-   Terminal.Start_Position    := Terminal_Start;
-   Terminal.Background_Colour := Display.Create_Pixel(  0,  0, 0);
-   Terminal.Foreground_Colour := Display.Create_Pixel(200, 55, 0);
-
-   -- Print the welcome message and date of the current build's compilation.
-   Terminal.Print("Welcome to HAVK", Centre => true);
-   Terminal.Print("Compiled at " & Date_Of_Build, Centre => true);
-   Terminal.Print("Compiler was " & Standard'compiler_version, Centre => true);
-   Terminal.Newline;
-
-   -- Show the magic number value.
-   Initialise.See_Magic(Terminal);
-
-   -- Show a basic graphical shape on screen.
-   Initialise.Grid_Test(Display, Display.Create_Pixel(70, 10, 10));
-   Log("Grid test drawn to the main framebuffer.", Tag => Entry_Tag);
-
-   -- Print the font test.
-   Initialise.Font_Test(Terminal);
-
    -- See what the processor can do and then output some text about it.
-   Initialise.CPU_Feature_Check(Terminal);
+   Initialise.CPU_Feature_Check;
 
    -- Create new descriptor tables and make interrupts possible.
    Initialise.Descriptor_Tables;
@@ -77,11 +42,8 @@ BEGIN
    -- Use a new page structure and map the kernel, UEFI/ACPI data, etc.
    Initialise.Default_Page_Layout;
 
-   -- Check the memory map.
-   Initialise.Memory_Map_Info(Terminal);
-
-   Terminal.Draw_On(Display);
-   Log("First terminal draw done.", Tag => Entry_Tag);
+   -- Check the memory map and log any information.
+   Initialise.Memory_Map_Info;
 
    -- Verify the ACPI implementation and set up the APICs if we can.
    Initialise.Interrupt_Controllers;
@@ -94,14 +56,6 @@ BEGIN
 
    -- Prepare primitive forms of input via PS/2.
    Initialise.PS2_Input;
-
-   -- Do a variety of tests if the user wishes to do so.
-   Initialise.Tests(Terminal, Display);
-
-   Terminal.Print("Start-up was successful.");
-   Terminal.Newline;
-   Terminal.Print("Beginning multi-tasking.", Centre => true);
-   Terminal.Draw_On(Display);
 
    -- Begin multi-tasking and leave this phase.
    Initialise.Begin_Tasking;

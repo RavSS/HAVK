@@ -45,7 +45,8 @@ IS
       local_x2APIC_NMI_entry,
       ARM_interrupt_controller_entry) -- Ignore all below this enumeration.
    WITH
-      Size => 8;
+      Size        => 8,
+      Object_Size => number'size;
    FOR interrupt_controller USE
      (local_APIC_entry                  => 00,
       IO_APIC_entry                     => 01,
@@ -254,8 +255,9 @@ PRIVATE
       ACCESS system_description_table;
 
    -- The XSDT contains an array of pointers to other tables. This is used
-   -- to retrieve the SDT header of the tables.
-   TYPE system_description_tables IS ARRAY(number RANGE <>) OF
+   -- to retrieve the SDT header of the tables. 128 should be enough, even if
+   -- all possible ACPI tables are present. Anymore tables will be ignored.
+   TYPE system_description_tables IS ARRAY(number RANGE 1 .. 128) OF
       ALIASED access_system_description_table
    WITH
       Pack => true;
@@ -319,7 +321,8 @@ PRIVATE
       Reserved           : number  RANGE 0 .. 2**24 - 1;
    END RECORD
    WITH
-      Convention => C;
+      Convention  => C,
+      Object_Size => (33 * 8) + 23 + 1;
    FOR root_system_description_pointer USE RECORD
       Signature              AT 00 RANGE 0 .. 63;
       Checksum               AT 08 RANGE 0 .. 07;
@@ -331,7 +334,6 @@ PRIVATE
       Extra_Checksum         AT 32 RANGE 0 .. 07;
       Reserved               AT 33 RANGE 0 .. 23;
    END RECORD;
-   FOR root_system_description_pointer'object_size USE (33 * 8) + 23 + 1;
 
    TYPE address_space_identity IS
      (system_memory_space,

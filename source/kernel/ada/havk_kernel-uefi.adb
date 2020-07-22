@@ -56,8 +56,7 @@ IS
             THEN false)
    );
 
-   FUNCTION Get_Memory_Map
-      RETURN memory_map
+   PROCEDURE Parse_Memory_Map
    IS
       FUNCTION To_Pointer
         (Memory_Map_Descriptor_Address : IN address)
@@ -73,13 +72,19 @@ IS
       Offset : address
          RANGE Bootloader_Arguments.Memory_Map_Address .. Limit :=
             Bootloader_Arguments.Memory_Map_Address;
-      Map    : memory_map(1 .. Bootloader_Arguments.Memory_Map_Size /
-         Bootloader_Arguments.Memory_Map_Descriptor_Size);
    BEGIN
       FOR
-         Region OF Map
+         Region_Index IN
+            Memory_Map'first .. Bootloader_Arguments.Memory_Map_Size /
+               Bootloader_Arguments.Memory_Map_Descriptor_Size
       LOOP
-         Region := To_Pointer(Offset);
+         -- We should never get as many memory descriptors as the maximum limit
+         -- I've defined. In any case, raise it if required.
+         EXIT WHEN Region_Index NOT IN Memory_Map'range;
+
+         Memory_Map(Region_Index) := To_Pointer(Offset);
+         PRAGMA Annotate(GNATprove, False_Positive, "memory leak might occur",
+            "No memory is being modified, we're just creating pointers.");
 
          IF
             Offset +
@@ -90,10 +95,15 @@ IS
          END IF;
       END LOOP;
 
-      -- Can't figure out how to prove this properly (if that's even possible).
-      PRAGMA Assume(FOR ALL Region IN Map'range => Map(Region) /= NULL);
-
-      RETURN Map;
-   END Get_Memory_Map;
+      IF
+        (FOR ALL Region OF Memory_Map => Region = NULL)
+      THEN
+         RAISE Panic
+         WITH
+            "The UEFI bootloader passed an empty memory map.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "The bootloader shouldn't do this, but we need to handle it.");
+      END IF;
+   END Parse_Memory_Map;
 
 END HAVK_Kernel.UEFI;

@@ -11,13 +11,8 @@ WITH
    HAVK_Kernel.System_Call.Handler,
    HAVK_Kernel.Memory,
    HAVK_Kernel.Memory.Frames,
-   HAVK_Kernel.Graphics,
-   HAVK_Kernel.Graphics.Text,
    HAVK_Kernel.Drive,
    HAVK_Kernel.Drive.FAT;
-USE
-   HAVK_Kernel.Graphics,
-   HAVK_Kernel.Graphics.Text;
 USE TYPE
    HAVK_Kernel.Drive.FAT.version;
 
@@ -40,32 +35,11 @@ IS
    -- Identity maps the kernel's address space to the default page layout.
    PROCEDURE Default_Page_Layout;
 
-   -- Draws a grid to the screen as an initial test.
-   PROCEDURE Grid_Test
-     (Display  : IN view;
-      Colour   : IN pixel);
+   -- Verify what the bootloader passed to us.
+   PROCEDURE Check_Entry;
 
-   -- Prints the magic number to the textbox.
-   PROCEDURE See_Magic
-     (Terminal : IN OUT textbox);
-
-   -- Prints the nearly all of the current font's characters.
-   PROCEDURE Font_Test
-     (Terminal : IN OUT textbox);
-
-   -- Outputs the character from the input handler to the textbox.
-   PROCEDURE Input_Key_Test
-     (Terminal : IN OUT textbox;
-      Display  : IN view);
-
-   -- Prints the amount of seconds passed (since call) to a textbox endlessly.
-   PROCEDURE Seconds_Count
-     (Terminal : IN OUT textbox;
-      Display  : IN view);
-
-   -- Show arbitrary information about the memory map and its descriptors.
-   PROCEDURE Memory_Map_Info
-     (Terminal : IN OUT textbox);
+   -- Logs arbitrary information about the memory map and its descriptors.
+   PROCEDURE Memory_Map_Info;
 
    -- Initialises the PS/2 controller for keyboard input purposes (as of now).
    PROCEDURE PS2_Input;
@@ -75,31 +49,21 @@ IS
    RENAMES System_Call.Handler.Set_MSRs;
 
    -- Retrieves the date and time in ISO 8601 format of when the current
-   -- running version of the kernel was compiled and built.
+   -- running version of the kernel was compiled and built. The format returned
+   -- in the string is "YYYY-MM-DDTHH:MM:SS".
+   SUBTYPE datetime_string IS string(1 .. 19);
    FUNCTION HAVK_Build_Datetime
-      RETURN string
-   WITH
-      Post => HAVK_Build_Datetime'result'first = 01 AND THEN
-              HAVK_Build_Datetime'result'last  = 19; -- "YYYY-MM-DDTHH:MM:SS"
+      RETURN datetime_string;
 
    -- Initialises any debug utilities. The "Printing" parameter controls
    -- whether or not logs are sent to the terminal/textbox.
    PROCEDURE Debugger
-     (Terminal : IN OUT textbox;
-      Printing : IN boolean)
    WITH
       Inline => true;
 
-   -- Does the PS/2 input and IRQ 0 count tests for now, but it can be expanded
-   -- to anything else as well.
-   PROCEDURE Tests
-     (Terminal : IN OUT textbox;
-      Display  : IN view);
-
    -- This executes the `CPUID` instruction and outputs a few bits of
    -- interesting information.
-   PROCEDURE CPU_Feature_Check
-     (Terminal : IN OUT textbox);
+   PROCEDURE CPU_Feature_Check;
 
    -- Finds the boot partition and returns it in the first parameter.
    PROCEDURE Boot_Partition_Check
@@ -121,5 +85,22 @@ IS
 
 PRIVATE
    Initialise_Tag : CONSTANT string := "INIT";
+
+   -- The directory of the initialisation files for the operating system.
+   Operating_System_Folder : CONSTANT string :=
+      Drive.FAT.Separator & "HAVK" &
+      Drive.FAT.Separator & "system" & Drive.FAT.Separator;
+
+   -- A thread testing program.
+   Thread_Tester_Name      : CONSTANT string :=
+      "Thread Tester";
+   Thread_Tester_Path      : CONSTANT string :=
+      Operating_System_Folder & "THREAD~1.ELF";
+
+   -- A framebuffer testing program.
+   Framebuffer_Tester_Name : CONSTANT string :=
+      "Framebuffer Tester";
+   Framebuffer_Tester_Path : CONSTANT string :=
+      Operating_System_Folder & "FRAMEB~1.ELF";
 
 END HAVK_Kernel.Initialise;

@@ -5,11 +5,9 @@ formal verification techniques to help achieve program correctness.
 It is influenced by Unix, but it is not necessarily a Unix clone.
 
 ### What can it do right now?
-You can type to test your keyboard and count seconds inaccurately.
-
-It currently has a primitive task scheduler, a custom text renderer, and a
-technically functional user mode. What remains is to create more system calls
-and expand what tasks can do so they can be meaningful.
+It currently has a primitive task scheduler and a functional user mode where
+you can load your own x86-64 programs. What remains is to create more system
+calls and expand what tasks can do so they can be meaningful.
 
 Expect it to do nothing until I decide to release the first major version, as
 it is still under heavy development.

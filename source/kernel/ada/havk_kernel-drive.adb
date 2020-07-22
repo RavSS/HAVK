@@ -16,13 +16,6 @@ IS
      (Data          : OUT generic_format;
       Secondary_Bus : IN boolean := false)
    IS
-      -- TODO: Replace this when Ada 202X is available.
-      FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
-        (source => ATA_port, target => number);
-      PRAGMA Annotate(GNATprove, False_Positive,
-         "type with constraints on bit representation *",
-         "This is an alternative to the ""enum_rep"" attribute.");
-
       FUNCTION Value_To_Format IS NEW Ada.Unchecked_Conversion
         (Source => number, Target => generic_format);
       PRAGMA Annotate(GNATprove, False_Positive,
@@ -36,11 +29,11 @@ IS
             Port <= command_status_port
          THEN
            (IF Secondary_Bus THEN Disk_IO_Base_2 ELSE Disk_IO_Base_1) +
-               Enum_Rep(Port)
+               Port'enum_rep
          ELSE -- "control_status_port"/"select_port" offset correction.
            (IF Secondary_Bus THEN Control_Base_2 ELSE Control_Base_1) +
-              (Enum_Rep(Port) - 8)
-      ) AND 16#FFFF#;
+              (Port'enum_rep - 8)
+      );
 
       -- No masking is necessary as the I/O instruction wrappers/intrinsics
       -- will zero out everything higher than the byte or word.
@@ -61,13 +54,6 @@ IS
      (Data          : IN generic_format;
       Secondary_Bus : IN boolean := false)
    IS
-      -- TODO: Replace this when Ada 202X is available.
-      FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
-        (source => ATA_port, target => number);
-      PRAGMA Annotate(GNATprove, False_Positive,
-         "type with constraints on bit representation *",
-         "This is an alternative to the ""enum_rep"" attribute.");
-
       FUNCTION Format_To_Value IS NEW Ada.Unchecked_Conversion
         (Source => generic_format, Target => number);
       PRAGMA Annotate(GNATprove, False_Positive,
@@ -88,11 +74,11 @@ IS
             Port <= command_status_port
          THEN
            (IF Secondary_Bus THEN Disk_IO_Base_2 ELSE Disk_IO_Base_1) +
-               Enum_Rep(Port)
+               Port'enum_rep
          ELSE -- "control_status_port"/"select_port" offset correction.
            (IF Secondary_Bus THEN Control_Base_2 ELSE Control_Base_1) +
-              (Enum_Rep(Port) - 8)
-      ) AND 16#FFFF#;
+              (Port'enum_rep - 8)
+      );
    BEGIN
       IF
          NOT Word_Length

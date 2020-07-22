@@ -77,8 +77,8 @@ IS
       Header.Virtual_Address = Header.Physical_Address                AND THEN
       -- Now check if the alignment is the proper value. It must be a power of
       -- two and the virtual address must be aligned.
-     (IF Header.Alignment > 1 THEN -- A value below two means no alignment.
-        (Header.Alignment AND -(Header.Alignment)) = Header.Alignment AND THEN
+     (IF Header.Alignment >= 2 THEN -- A value below two means no alignment.
+        (Header.Alignment AND (Header.Alignment - 1)) = 0 AND THEN
          Header.Virtual_Address MOD address(Header.Alignment) = 0)
    );
 

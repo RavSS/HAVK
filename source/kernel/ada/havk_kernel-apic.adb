@@ -192,10 +192,11 @@ IS
 
    PROCEDURE Enumerate_MADT
    WITH
-      Refined_Global => (In_Out => (IO_APICs, IRQ_Remaps, CPU_Cores,
+      Refined_Global => (In_Out => (IO_APICs, IRQ_Remaps,
                                     Paging.Kernel_Page_Layout_State),
                          Input  => (SPARK.Heap.Dynamic_Memory,
-                                    ACPI.ACPI_State))
+                                    ACPI.ACPI_State),
+                         Output => CPU_Cores)
    IS
       FUNCTION Get_IO_APIC_Version IS NEW Read_IO_APIC
         (generic_register => IO_APIC_version_register);
@@ -204,13 +205,14 @@ IS
       APICs        : interrupt_controller_descriptors;
    BEGIN
       IF
-         MADT_Address /= 0
-      THEN
-         APICs := ACPI.Get_APICs(MADT_Address);
-      ELSE -- Occurs if the ACPI implementation is damaged.
+         MADT_Address = 0
+      THEN -- Occurs if the ACPI implementation is damaged.
          CPU_Cores := 1; -- A single APIC will always exist.
          RETURN;
       END IF;
+
+      CPU_Cores := 0; -- Reset it to begin the CPU count.
+      APICs := ACPI.Get_APICs(MADT_Address);
 
       FOR
          APIC_Entry OF APICs
@@ -221,12 +223,13 @@ IS
             APIC_Entry.Enumeration_Value
          IS
             WHEN local_APIC_entry | local_x2APIC_entry =>
-               CPU_Cores := CPU_Cores + 1;
+               CPU_Cores := (IF CPU_Cores < APICs'last THEN
+                  CPU_Cores + 1 ELSE CPU_Cores);
             WHEN IO_APIC_entry =>
                DECLARE
                   FUNCTION To_Pointer
                     (IO_APIC_Address : IN address)
-                    RETURN access_IO_APIC_MMIO
+                     RETURN access_IO_APIC_MMIO
                   WITH
                      Import     => true,
                      Convention => Intrinsic,
@@ -377,7 +380,7 @@ IS
       -- accepted from the I/O APIC, just in case.
       Set_Task_Priority_Register(0);
 
-      Log("BSP local APIC enabled in x2APIC mode.", Tag => APIC_Tag);
+      Log("Local APIC enabled in x2APIC mode.", Tag => APIC_Tag);
    END x2APIC_Mode;
 
    PROCEDURE Set_IO_APIC_Redirects

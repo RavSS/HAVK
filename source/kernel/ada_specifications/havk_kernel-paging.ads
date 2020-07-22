@@ -67,7 +67,8 @@ IS
    WITH
       Inline => true,
       Pre    => Alignment IN Page | Huge_Page | Giant_Page,
-      Post   => Size_To_Pages'result IN 0 .. number'last / Alignment;
+      Post   => Size_To_Pages'result <=
+                   number(address'last / address(Alignment));
 
    -- Maps a virtual address to a physical address. Handles all page sizes.
    -- While it does align pages for the caller just to be sure, it rounds

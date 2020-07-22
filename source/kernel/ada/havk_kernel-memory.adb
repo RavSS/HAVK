@@ -18,43 +18,54 @@ IS
       Round_Up  : IN boolean := false)
       RETURN number
    IS
-   (  -- This only works with power-of-two alignments and two's complement.
+      Temporary : number;
+   BEGIN
+      -- This only works with power-of-two alignments and two's complement.
       -- It is much easier to prove it than with a modulus involved instead.
       IF
          NOT Round_Up
       THEN
-         Value - (Value AND (Alignment - 1))
+         RETURN Value - (Value AND (Alignment - 1));
+      END IF;
+
+      IF
+         Value < number'last - Alignment -- First of the two overflow checks.
+      THEN -- Rounding up uses a modulus to avoid a bit flip (overflow check).
+         Temporary := -- It alone isn't enough for the postcondition to hold.
+            Value + ((Alignment - (Value MOD Alignment)) MOD Alignment);
+         RETURN Temporary - (Temporary AND (Alignment - 1));
       ELSE
-         Value + (-Value AND (Alignment - 1))
-   );
+         RETURN Value - (Value AND (Alignment - 1)); -- Can't round up.
+      END IF;
+   END Align;
 
    FUNCTION System_Limit
       RETURN number
    IS
-      USE
-         HAVK_Kernel.UEFI;
+      USE TYPE
+         UEFI.access_memory_descriptor,
+         UEFI.memory_type;
 
-      Map        : CONSTANT memory_map := Get_Memory_Map
-      WITH
-         Annotate => (GNATprove, False_Positive,
-                      "memory leak might occur at end of scope",
-                      "There is no allocations made to obtain it.");
-      Attributes : memory_attributes;
+      Attributes : UEFI.memory_attributes;
       Limit      : number := 0;
    BEGIN
       FOR
-         Region OF Map
+         Region OF UEFI.Memory_Map
       LOOP
-         Attributes := Get_Memory_Attributes(Region);
+         EXIT WHEN Region = NULL;
+         Attributes := UEFI.Get_Memory_Attributes(Region);
 
          IF -- Check if the region is usable.
-            Region.Memory_Region_Type = conventional_data AND THEN
-            NOT Attributes.Read_Only                      AND THEN
-            NOT Attributes.Write_Protected                AND THEN
+            Region.Memory_Region_Type = UEFI.conventional_data AND THEN
+            NOT Attributes.Read_Only                           AND THEN
+            NOT Attributes.Write_Protected                     AND THEN
             NOT Attributes.Read_Protected
-         THEN
-            -- Count the conventional memory only. Ignore reserved memory.
-            Limit := Limit + Paging.Page * Region.Number_Of_Pages;
+         THEN -- Count the conventional memory only. Ignore reserved memory.
+            IF -- Overflow check. I'd rather not use an assumption.
+               Limit <= number'last - Paging.Page * Region.Number_Of_Pages
+            THEN
+               Limit := Limit + Paging.Page * Region.Number_Of_Pages;
+            END IF;
          END IF;
       END LOOP;
 

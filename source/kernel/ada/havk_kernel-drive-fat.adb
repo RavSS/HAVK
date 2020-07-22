@@ -131,21 +131,14 @@ IS
          Root_Directory_Sectors;
 
       New_FAT_Context :=
-        (FAT_Version                 => unknown, -- TODO: See below.
+        (FAT_Version                 => FAT_Version,
          Drive_Partition             => FAT_Partition,
-         BPB                         => <>, -- TODO: See below.
-         EBPB_16                     => <>, -- TODO: See below.
+         BPB                         => FAT_Boot_Record.BPB,
+         EBPB_16                     => FAT_Boot_Record.EBPB_16,
          Data_Sectors                => Data_Sectors,
          Root_Directory_Sectors      => Root_Directory_Sectors,
          First_Data_Sector           => First_Data_Sector,
          First_Root_Directory_Sector => First_Root_Directory_Sector);
-
-      -- TODO: These are done separately, as `gnatprove` complains with this:
-      -- 'cannot untangle node N_ "EXPLICIT"_ "DEREFERENCE"'
-      -- I think that's a bug. Anyway, this below resolves it.
-      New_FAT_Context.BPB         := FAT_Boot_Record.BPB;
-      New_FAT_Context.EBPB_16     := FAT_Boot_Record.EBPB_16;
-      New_FAT_Context.FAT_Version := FAT16; -- Change the predicate logic.
 
       Free(FAT_Boot_Record);
    END Get_File_System;
@@ -261,19 +254,18 @@ IS
       Dictionary_End : IN boolean := false)
       RETURN path
    IS
-      -- Unfortunately, SPARK doesn't allow me to depend on the "Entries"
-      -- variable for the array length, so I just have to return a gigantic
-      -- array of 128 (?) potential entry names, as it assumes a maximum string
-      -- of 256 characters with 128 single character path entries and 128 path
-      -- separators.
-      SUBTYPE max_entries IS number RANGE 1 .. 128;
       Entries : number := 0; -- Counts the amount of entries in the path.
       Index   : positive; -- Stores the current character index for a name.
    BEGIN
       FOR
          Letter OF Path_Name
       LOOP
-         Entries := (IF Letter = Separator THEN Entries + 1 ELSE Entries);
+         IF
+            Letter = Separator AND THEN
+            Entries /= number'last -- For `gnatprove` (overflow check).
+         THEN
+            Entries := Entries + 1;
+         END IF;
       END LOOP;
 
       IF -- TODO: Not sure if the below range check is the correct length.
@@ -281,11 +273,11 @@ IS
          Path_Name'length NOT IN 1 .. 256        OR ELSE
          Entries NOT IN 1 .. 128
       THEN
-         RETURN (1 => (OTHERS => <>));
+         RETURN (OTHERS => (OTHERS => <>));
       END IF;
 
       RETURN -- Remember that 8.3 path names are padded with spaces.
-         Parsed_Path : path(max_entries'range)
+         Parsed_Path : path
       DO
          Entries := 0; -- Reused as an entry index variable.
          Index   := Parsed_Path(Parsed_Path'first).Name'first;
@@ -304,8 +296,9 @@ IS
                Index := (IF Index + 1 IN Parsed_Path(Entries).Name'range
                   THEN Index + 1 ELSE Parsed_Path(Entries).Name'last);
             ELSE -- Move onto the next entry if the separator was encountered.
-               Entries := (IF Entries + 1 IN Parsed_Path'range
-                  THEN Entries + 1 ELSE Parsed_Path'last);
+               Entries := (IF Entries /= number'last AND THEN
+                  Entries + 1 IN Parsed_Path'range THEN
+                  Entries + 1 ELSE Parsed_Path'last);
                Parsed_Path(Entries).Present := true;
                Index := Parsed_Path(Entries).Name'first;
             END IF;
@@ -353,9 +346,16 @@ IS
          RETURN Name'last;
       END Last_Space;
 
-      Uppercase_Entry_Name : CONSTANT string := Case_Util.To_Upper
-        (Entry_Name(Entry_Name'first .. Last_Space(Entry_Name)));
+      Uppercase_Entry_Name : -- The 8.3 format stores names in all uppercase.
+         string(Entry_Name'first .. Last_Space(Entry_Name));
    BEGIN
+      FOR
+         Character_Index IN Uppercase_Entry_Name'range
+      LOOP
+         Uppercase_Entry_Name(Character_Index) :=
+            Case_Util.To_Upper(Entry_Name(Character_Index));
+      END LOOP;
+
       FOR
          File OF Entries.ALL
       LOOP
@@ -431,6 +431,7 @@ IS
       LOOP
          PRAGMA Loop_Invariant(Cluster /= NULL);
 
+         EXIT WHEN Temporary_Cluster < 2; -- Overflow check for the below exit.
          EXIT WHEN FAT_Context.Drive_Partition.LBA_First +
            (FAT_Context.First_Data_Sector + ((Temporary_Cluster - 2) *
             FAT_Context.BPB.Sectors_Per_Cluster)) NOT IN
@@ -523,6 +524,7 @@ IS
       LOOP
          PRAGMA Loop_Invariant(Cluster /= NULL);
 
+         EXIT WHEN Data_Cluster < 2; -- Overflow check for the below exit.
          EXIT WHEN FAT_Context.Drive_Partition.LBA_First +
            (FAT_Context.First_Data_Sector + ((Data_Cluster - 2) *
             FAT_Context.BPB.Sectors_Per_Cluster)) NOT IN
@@ -544,8 +546,7 @@ IS
                PRAGMA Assert(Memory_Area(Byte_Index) = Data_Byte);
             END IF;
 
-            EXIT Transfer_Bytes WHEN
-               Byte_Index + 1 > Memory_Area'last;
+            EXIT Transfer_Bytes WHEN Byte_Index = Memory_Area'last;
             Byte_Index := Byte_Index + 1;
          END LOOP;
 

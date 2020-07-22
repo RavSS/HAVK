@@ -113,6 +113,14 @@ assembly__switch_task:
 
 	.L_ring_0_return:
 
+	# This is costly, but invalidating the L1 instruction cache is a
+	# countermeasure against cache attacks; however, that might not
+	# actually be effective. I can't find any x86(-64) instructions which
+	# only flush the L1 cache and leave other caches alone. I'll just leave
+	# this instruction here purely for the sake of interest alone.
+	# READ: https://arxiv.org/abs/2005.13853
+	WBINVD
+
 	REX.W IRET
 
 .GLOBAL assembly__switch_to_task_cr3

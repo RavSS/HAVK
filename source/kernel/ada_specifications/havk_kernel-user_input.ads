@@ -54,11 +54,9 @@ IS
    -- Remember that the string returned is padded to 32 characters, so an
    -- array slice is required if you wish to test for a specific key.
    FUNCTION Get_Key_Name
-      RETURN string
+      RETURN key_string
    WITH
-      Inline => true,
-      Post   => Get_Key_Name'result'first = key_string'first AND THEN
-                Get_Key_Name'result'last  = key_string'last;
+      Inline => true;
 
    -- Returns true if the last key pressed is printable/visible.
    FUNCTION Key_Is_Visible

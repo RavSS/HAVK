@@ -9,10 +9,11 @@ WITH
    SPARK.Heap,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.Descriptors,
-   HAVK_Kernel.Interrupts,
    HAVK_Kernel.Paging,
    HAVK_Kernel.Memory,
    HAVK_Kernel.Memory.Frames;
+USE TYPE
+   HAVK_Kernel.UEFI.access_memory_descriptor;
 
 -- This package details multi-tasking logic. I know that Ada has tasking
 -- functionality, but for now, it will probably be much simpler to implement it
@@ -39,6 +40,9 @@ WITH
                       Effective_Reads, Effective_Writes)
    )
 IS
+   -- The limits of a task's name.
+   SUBTYPE task_name_string IS string(1 .. 64);
+
    -- Creates a new task. Interrupts are disabled during its call until return.
    -- TODO: Needs better error checking.
    PROCEDURE Create
@@ -57,10 +61,12 @@ IS
                             Memory.Kernel_Isolated_Data_Size,
                             Memory.Kernel_Isolated_BSS_Base,
                             Memory.Kernel_Isolated_BSS_Size,
-                            UEFI.Bootloader_Arguments)),
+                            UEFI.Bootloader_Arguments,
+                            UEFI.Memory_Map)),
       Pre    => Initial_Frames IN 1 .. (2 * GiB) / Paging.Page AND THEN
-                Task_Name'first = 1                            AND THEN
-                Task_Name'last IN Task_Name'first .. 64;
+                Task_Name'first = task_name_string'first       AND THEN
+                Task_Name'last IN task_name_string'range       AND THEN
+               (FOR SOME Region OF UEFI.Memory_Map => Region /= NULL);
 
    -- Creates a thread for the indicated task. By default the thread is not
    -- alive by default for the purposes of a new task's first thread being
@@ -76,8 +82,7 @@ IS
    WITH
       Global => (In_Out => (Tasking_State, Memory.Frames.Frame_Allocator_State,
                             Paging.Kernel_Page_Layout_State),
-                 Input  => (UEFI.Bootloader_Arguments,
-                            SPARK.Heap.Dynamic_Memory));
+                 Input  => (UEFI.Memory_Map, SPARK.Heap.Dynamic_Memory));
 
    -- This removes the task at the specified index.
    PROCEDURE Remove
@@ -100,15 +105,38 @@ IS
                  Input  => SPARK.Heap.Dynamic_Memory),
       Post   => Error_Status IN no_error | index_error | attempt_error;
 
-   -- TODO: An early attempt at task cleanup. It also switches the task so that
-   -- the active task (most notably its stack) is no longer in current use.
+   -- TODO: An early attempt at task cleanup. It marks the active task as dead.
    PROCEDURE Kill_Active_Task;
+
+   -- TODO: Similar to `Kill_Active_Task()`, but kills the active thread
+   -- instead. This will kill the active task if no living threads remain. The
+   -- passed value or code is currently not defined and is just an arbitary
+   -- number for now.
+   PROCEDURE Kill_Active_Thread
+     (Kill_Code : IN number);
 
    -- Handles page faults caused by tasks.
    PROCEDURE Page_Fault_Handler
-     (Error_Code : IN number) -- The error code should be 32 bits.
+     (Error_Location : IN address;
+      Error_Code     : IN number) -- The error code should be 32 bits.
    WITH
       Inline => true;
+
+   -- Does the same as the various address mapping procedures in the paging
+   -- package, but for a task instead. A small wrapper.
+   PROCEDURE Map_Address_Range
+     (Task_Index       : IN number;
+      Virtual_Address  : IN address;
+      Physical_Address : IN address;
+      Size             : IN number;
+      Page_Size        : IN Paging.page_frame_variant := Paging.Page;
+      Present          : IN boolean :=  true;
+      Write_Access     : IN boolean := false;
+      User_Access      : IN boolean := false;
+      No_Execution     : IN boolean :=  true)
+   WITH
+      Inline => true, -- See `Paging.Map_Address()` for info on W^X.
+      Pre    => (IF Write_Access THEN No_Execution);
 
    -- Obtains the index of a task by name. Returns an attempt error if the task
    -- name did not match a task, with the task index then being out of range.
@@ -118,20 +146,17 @@ IS
       Error_Status : OUT error)
    WITH
       Global => (Input => Tasking_State),
-      Pre    => Task_Name'first = 1 AND THEN
-                Task_Name'last IN Task_Name'first .. 64,
+      Pre    => Task_Name'first = task_name_string'first AND THEN
+                Task_Name'last IN task_name_string'range,
       Post   => (IF Error_Status = attempt_error THEN
                     Task_Index = number'first);
 
    -- Just returns the active task's name.
    FUNCTION Get_Active_Task_Name
-      RETURN string
+      RETURN task_name_string
    WITH
       Volatile_Function => true,
-      Global            => (Input => Tasking_State),
-      Post              => Get_Active_Task_Name'result'first = 1 AND THEN
-                           Get_Active_Task_Name'result'last IN
-                              Get_Active_Task_Name'result'first .. 64;
+      Global            => (Input => Tasking_State);
 
    FUNCTION Get_Active_Task_Index
       RETURN number
@@ -228,6 +253,9 @@ PRIVATE
       -- When true, this thread should be treated like it was allocated, even
       -- if it's currently dead i.e. not alive.
       Allocated             : boolean := false;
+      -- TODO: This is just a random value passed by the thread as of now.
+      -- A value of anything other than zero indicates an error of some sort.
+      Exit_Code             : number := 0;
       -- Right now, I am just using round robin without a meaningful priority
       -- algorithm, so this value is how many LAPIC timer interrupts the thread
       -- is supposed to receive.
@@ -236,7 +264,9 @@ PRIVATE
    END RECORD
    WITH
       Dynamic_Predicate => Kernel_Stack_Size MOD Paging.Page = 0 AND THEN
-                          (IF Alive THEN Allocated)              AND THEN
+                          (IF Alive THEN
+                              Allocated      AND THEN
+                              Exit_Code = 0) AND THEN
                           (IF NOT Allocated THEN NOT Alive);
 
    -- A flat array of records (not accesses) is needed, or else it violates
@@ -247,7 +277,7 @@ PRIVATE
    -- itself is considered to be the task identity.
    TYPE task_control_block IS LIMITED RECORD
       -- The name of the task. Only the task has a name, not the threads.
-      Name           : string(1 .. 64) := (OTHERS => character'val(0));
+      Name           : task_name_string := (OTHERS => character'val(0));
       -- Indicates the frame count of the task's initial code/data which is
       -- given to it in `Create()`.
       Initial_Frames : number := 0;
@@ -301,9 +331,12 @@ PRIVATE
    -- address.
    Virtual_Entry             : CONSTANT Memory.canonical_address := 16#1000#;
 
-   -- This is just 16 KiB for the TSS's ring 0 RSP. I don't see a need in
+   -- This is just 32 KiB for the TSS's ring 0 RSP. I don't see a need in
    -- making it a dynamic size yet. Perhaps I could use stacks from the IST.
-   Default_Kernel_Stack_Size : CONSTANT := 16 * KiB;
+   -- Be sure to keep checking the "*.su" files generated by GCC in the build
+   -- directory, as I have encountered stack overflows before that halt the
+   -- entire kernel/system.
+   Default_Kernel_Stack_Size : CONSTANT := 32 * KiB;
 
    -- Indicates whether or not tasking is enabled. This is mainly for usage
    -- within the scheduler and the appropriate page layout switchers.
@@ -330,7 +363,6 @@ PRIVATE
    -- placed in the isolated text section to maintain mappings between the
    -- kernel and all tasks.
    PROCEDURE Round_Robin
-     (Yield : IN boolean := false)
    WITH
       Global         => (In_Out   => (Tasks, Active_Task, Countdown,
                                       Descriptors.TSS),
@@ -366,10 +398,7 @@ PRIVATE
    -- It changes exactly what the `Get_*()` functions below return.
    PROCEDURE Round_Robin_Cycle
    WITH
-      Global        => (In_Out   => (Tasks, Active_Task, Descriptors.TSS,
-                                     SPARK.Heap.Dynamic_Memory,
-                                     Memory.Frames.Frame_Allocator_State,
-                                     Paging.Kernel_Page_Layout_State),
+      Global        => (In_Out   => (Tasks, Active_Task, Descriptors.TSS),
                         Output   => Countdown,
                         Proof_In => Enabled),
       Export        => true,
@@ -405,10 +434,7 @@ PRIVATE
       Export        => true,
       Convention    => Assembler,
       External_Name => "ada__get_active_task_cr3",
-      Pre           => Enabled                    AND THEN
-                       Tasks(Active_Task) /= NULL AND THEN
-                       Tasks(Active_Task).Alive   AND THEN
-                       Tasks(Active_Task)
-                         .Threads(Tasks(Active_Task).Active_Thread).Alive;
+      Pre           => Enabled AND THEN
+                       Tasks(Active_Task) /= NULL;
 
 END HAVK_Kernel.Tasking;

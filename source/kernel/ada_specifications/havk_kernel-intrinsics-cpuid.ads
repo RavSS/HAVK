@@ -5,9 +5,6 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   Ada.Unchecked_Conversion;
-
 -- This package details CPU support for features using the `CPUID` instruction.
 -- There's a package called "intel_cpu.ads" that is detailed in an old version
 -- of GCC's documentation, but it seems very out-of-date and limited. This
@@ -53,8 +50,7 @@ IS
       APM_information_leaf,
       address_sizes_leaf)
    WITH
-      Size        => 32,
-      Object_Size => number'size;
+      Size => 32;
    FOR leaf USE
      (highest_function_parameter_leaf          => 16#00000000#,
       processor_information_leaf               => 16#00000001#,
@@ -95,13 +91,6 @@ IS
    -- The range we will support for the extended leaves.
    SUBTYPE extended_leaf IS leaf RANGE
       highest_extended_function_parameter_leaf .. address_sizes_leaf;
-
-   -- TODO: Remove the below when the "enum_rep" attribute is fully supported.
-   FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
-     (Source => leaf, Target => number);
-   PRAGMA Annotate(GNATprove, False_Positive,
-      "type with constraints on bit representation *",
-      "This is an alternative to the ""enum_rep"" attribute.");
 
    -- This is how my `CPUID` function in assembly will return the value. It is
    -- a 24-byte record/structure. All records that attempt to describe this

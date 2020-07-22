@@ -108,7 +108,7 @@ IS
    END RECORD;
 
    -- An serial port object that contains the port address and more.
-   TYPE serial_connection IS TAGGED RECORD
+   TYPE connection IS RECORD
       -- 16-bit IO address for the COM port.
       Port               : number RANGE 16#2E8# .. 16#3F8#;
       -- The baud rate used by the connection upon initialisation.
@@ -158,32 +158,31 @@ IS
    END RECORD;
 
    -- Sets up the serial port debugging functionality.
-   PROCEDURE Interface_Initialise
-     (Object : IN serial_connection)
+   PROCEDURE Prepare_Connection
+     (Context : IN connection)
    WITH
       Global => (In_Out => UART_State, Output => CPU_Port_State);
 
-   -- Prints a string to the serial connection object's port. Ignores
-   -- everything in the string after a null byte.
+   -- Prints a string to the serial connection port. Ignores everything in the
+   -- string after a null byte.
    PROCEDURE Print
-     (Object : IN serial_connection;
-      Data   : IN string)
+     (Context : IN connection;
+      Data    : IN string)
    WITH
       Global => (In_Out => (CPU_Port_State, UART_State)),
       Inline => true;
 
-   -- Writes a character to the serial connection object's port.
+   -- Writes a character to the serial connection port.
    PROCEDURE Write
-     (Object : IN serial_connection;
-      Data   : IN character)
+     (Context : IN connection;
+      Data    : IN character)
    WITH
-      Global => (In_Out => (CPU_Port_State, UART_State));
+      Global => (In_Out => (CPU_Port_State, UART_State)),
+      Inline => true;
 
    -- Get the current line status register.
-   PRAGMA Warnings(GNATprove, off, "unused variable ""Object""",
-      Reason => "Only the port is required for the type conversion.");
    FUNCTION Get_Status
-     (Object : IN serial_connection)
+     (Context : IN connection)
       RETURN line_status_register
    WITH
       Volatile_Function => true,

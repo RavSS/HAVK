@@ -52,9 +52,6 @@ PACKAGE System.Case_Util IS
 
    PROCEDURE To_Upper
       (A : IN OUT string);
-   FUNCTION To_Upper
-      (A : string)
-      RETURN string;
       --  Folds all characters of string A to upper case
 
    FUNCTION To_Lower
@@ -65,16 +62,10 @@ PACKAGE System.Case_Util IS
 
    PROCEDURE To_Lower
       (A : IN OUT string);
-   FUNCTION To_Lower
-      (A : string)
-      RETURN string;
       --  Folds all characters of string A to lower case
 
    PROCEDURE To_Mixed
       (A : IN OUT string);
-   FUNCTION To_Mixed
-      (A : string)
-      RETURN string;
       --  Converts A to mixed case (i.e. lower case, except for initial
       --  character and any character after an underscore, which are
       --  converted to upper case.

@@ -199,7 +199,7 @@ IS
          Interrupt_Frame.CS = Descriptors.CS_Ring_3 AND THEN
          Interrupt_Frame.SS = Descriptors.DS_Ring_3
       THEN
-         Tasking.Page_Fault_Handler(Error_Code);
+         Tasking.Page_Fault_Handler(Interrupt_Frame.RIP, Error_Code);
       ELSE
          RAISE Panic
          WITH

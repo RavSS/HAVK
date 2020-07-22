@@ -6,33 +6,33 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Serial,
-   HAVK_Kernel.Graphics.Text;
-USE
+   HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Serial;
 
--- This package will do for now before I get GDB working over
--- a serial connection via a stub.
+-- This package will do for now before I get GDB working over a serial
+-- connection via a stub.
 PACKAGE HAVK_Kernel.Debug
 WITH
+   Preelaborate   => true,
    Abstract_State => Debugging_State,
    Initializes    => Debugging_State
 IS
-   PRAGMA Preelaborate;
-
-   -- Initializes the debugging serial port for sending debug info to.
-   PROCEDURE Initialise
-     (Terminal : IN OUT Graphics.Text.textbox;
-      Printing : IN boolean)
+   -- Activates the serial port that is used for the debugger.
+   PROCEDURE Activate
    WITH
-      Global => (In_Out => Debugging_State),
+      Global => (In_Out => Serial.UART_State,
+                 Input  => Debugging_State,
+                 Output => Intrinsics.CPU_Port_State),
       Inline => true;
 
    -- Writes a string to the serial port used for debugging.
    PROCEDURE Message
      (Information : IN string)
    WITH
-      Global => (In_Out => UART_State, Input => Debugging_State);
+      Global => (In_Out => (Intrinsics.CPU_Port_State, Serial.UART_State),
+                 Input  => Debugging_State),
+      Pre    => Information'first = 1 AND THEN -- A soft limit below.
+                Information'last IN Information'first .. positive'last / 2;
 
    -- This is for causing an emulator breakpoint, so I can inspect
    -- values with GDB etc. Not very sophisticated, but it gets the job done.
@@ -66,28 +66,14 @@ IS
       Convention => Intrinsic;
 
 PRIVATE
-   -- The on-screen printing functionality needs to hook onto a terminal
-   -- (textbox type) in order to function properly. This means an unchecked
-   -- access has to be created.
-   PRAGMA SPARK_Mode(off);
-
-   -- Indicates whether or not the package will print debug messages to the
-   -- terminal. By default, it does not.
-   Terminal_Printing : boolean := false
-   WITH
-      Part_Of => Debugging_State;
-
-   -- When a message is sent, it is also printed to a textbox. This is set via
-   -- an external package.
-   Terminal_Hook     : ACCESS Graphics.Text.textbox := NULL
-   WITH
-      Part_Of => Debugging_State;
+   USE TYPE
+      Serial.length_select,
+      Serial.parity_select;
 
    -- Variable for usage with kernel debugging. Used by two
    -- functions in the base package. For now, it exists to send messages
    -- over COM1 as a quick and easy alternative to proper debugging.
-   -- Remove the "CONSTANT" if you need to modify the settings at runtime.
-   Debugger          : CONSTANT serial_connection :=
+   Debugger : Serial.connection :=
    (
       -- Use COM1 for debugging purposes.
       Port                    => 16#3F8#, -- Port address declared statically.
@@ -98,11 +84,11 @@ PRIVATE
       Line_Ender              => (character'val(13), character'val(10)),
       Line_Settings           => -- Settings for the connection itself.
       (
-         Data_Size            => word_8_bit, -- We're only sending ASCII.
-         Extra_Stop           => false,      -- Only one stop bit required.
-         Parity               => none,       -- No parity.
-         Data_Breaking        => false,      -- Not line breaking, no need.
-         Divisor_Latch_Access => false       -- This is modified externally.
+         Data_Size            => Serial.word_8_bit, -- We're sending ASCII.
+         Extra_Stop           => false,       -- Only one stop bit required.
+         Parity               => Serial.none, -- No parity.
+         Data_Breaking        => false,       -- Not line breaking, no need.
+         Divisor_Latch_Access => false        -- This is modified externally.
       ),
       -- Entirely disable interrupts.
       Interrupt_Settings      => (Zeroed => 0, OTHERS => false)

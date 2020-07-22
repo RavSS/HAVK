@@ -6,20 +6,12 @@
 -------------------------------------------------------------------------------
 
 WITH
-  Ada.Unchecked_Conversion,
   HAVK_Kernel.PIT;
 
 PACKAGE BODY HAVK_Kernel.APIC.Timer
 IS
    PROCEDURE Setup
    IS
-      -- TODO: Replace this with its attribute when switching to Ada 202X.
-      FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
-        (Source => timer_divisor, Target => number);
-      PRAGMA Annotate(GNATprove, False_Positive,
-         "type with constraints on bit representation *",
-         "The enumeration can fit inside the number type.");
-
       PROCEDURE Set_Timer_Divisor IS NEW Write_LAPIC
         (generic_format => number,
          MSR            => timer_divisor_register);
@@ -51,7 +43,7 @@ IS
       -- are present some time later on when accuracy and precision matter.
 
       Current_Count         : number;
-      Default_Count         : CONSTANT number        := 16#FFFFFFFF#;
+      Default_Count         : CONSTANT number        := 2**32 - 1;
       Default_Divisor       : CONSTANT timer_divisor := divisor_64;
       Default_Configuration : timer_register_format  :=
         (Interrupt_Vector   => IRQ_Base + 16,
@@ -68,7 +60,7 @@ IS
       -- since my PIT code itself is not exactly optimised enough for this.
       -- Calibration using the PIT would be the worst case scenario, I think.
 
-      Set_Timer_Divisor(Enum_Rep(Default_Divisor));
+      Set_Timer_Divisor(Default_Divisor'enum_rep);
       Set_Timer_Count(Default_Count);
       Set_Timer(Default_Configuration);
 
@@ -77,7 +69,7 @@ IS
       Set_Timer(Default_Configuration);
 
       Get_Timer_Count(Current_Count);
-      Set_Timer_Count(Default_Count - Current_Count);
+      Set_Timer_Count(Default_Count - (Current_Count AND Default_Count));
 
       Default_Configuration.Interrupt_Masked := false;
       Set_Timer(Default_Configuration);

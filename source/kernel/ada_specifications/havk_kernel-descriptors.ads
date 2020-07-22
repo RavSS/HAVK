@@ -5,13 +5,6 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-PRAGMA Warnings(off, """HAVK_Kernel.Interrupts*"" * referenced",
-   Reason => "These packages must be linked regardless of direct usage.");
-WITH
-   HAVK_Kernel.Interrupts,
-   HAVK_Kernel.Interrupts.Exceptions,
-   HAVK_Kernel.Interrupts.ISA_IRQs;
-
 -- Handles the CPU's descriptor functionality, which is necessary for many
 -- things, such as privilege level shifts and processor interrupts.
 PACKAGE HAVK_Kernel.Descriptors
@@ -168,7 +161,9 @@ IS
       ISR_Address_High   : address RANGE 0 .. 2**32 - 1 := 0;
       -- 32-bits of zeroes only and nothing else.
       Zeroed             : number  RANGE 0 .. 2**32 - 1 := 0;
-   END RECORD;
+   END RECORD
+   WITH
+      Dynamic_Predicate => IST_Offset <= 2**3 - 1 AND THEN Zeroed = 0;
    FOR interrupt_descriptor_table_gate USE RECORD
       ISR_Address_Low        AT 00 RANGE 0 .. 15;
       CS_Selector            AT 02 RANGE 0 .. 15;
@@ -300,10 +295,14 @@ IS
       Linker_Section => ".isolated_data";
 
    -- The default TSS. Only need to use one when not using hardware
-   -- multi-tasking (which we cannot use in long mode).
-   TSS : ALIASED task_state_segment -- TODO: Set the ring 0 stacks (IST).
+   -- multi-tasking (which we cannot use in long mode). Modified by the tasking
+   -- package and read by the system call handler (both for the ring 0 RSP).
+   TSS : ALIASED task_state_segment
    WITH
-      Linker_Section => ".isolated_data";
+      Export         => true,
+      Convention     => Assembler,
+      Linker_Section => ".isolated_data",
+      External_Name  => "global__task_state_segment";
 
    -- Loads the descriptor table registers with the GDT and IDT specified
    -- within this package.
@@ -318,8 +317,11 @@ IS
    FUNCTION Interrupt_Entry
      (ISR_Entry : IN address;
       Gate      : IN interrupt_descriptor_table_gate_type := interrupt_gate;
-      Ring_3    : IN boolean                              := false)
-      RETURN interrupt_descriptor_table_gate;
+      Ring_3    : IN boolean := false;
+      IST       : IN number  := 0)
+      RETURN interrupt_descriptor_table_gate
+   WITH
+      Pre => IST <= 2**3 - 1;
 
 PRIVATE
    Descriptors_Tag : CONSTANT string := "DSCRPTRS";
@@ -527,7 +529,8 @@ PRIVATE
    -- Goes inside the register for the GDT. Note that the size of the table is
    -- static and declared in the type itself, but we set the address later.
    GDTR : ALIASED descriptor_table_register :=
-     (Table_Size   => (global_descriptor_table'size / 8) - 1 AND 2**16 - 1,
+     (Table_Size   => (global_descriptor_table'size / 8 OR 1) - 1
+                          AND 2**16 - 1, -- The "OR" is for `gnatprove`.
       Base_Address => 0) -- Set this later.
    WITH
       Part_Of        => Descriptors_State,
@@ -537,7 +540,8 @@ PRIVATE
 
    -- Same as the above, but for the IDT instead.
    IDTR : ALIASED descriptor_table_register :=
-     (Table_Size   => (interrupt_descriptor_table'size / 8) - 1 AND 2**16 - 1,
+     (Table_Size   => (interrupt_descriptor_table'size / 8 OR 1) - 1
+                          AND 2**16 - 1, -- The "OR" is for `gnatprove`.
       Base_Address => 0) -- Set this later.
    WITH
       Part_Of        => Descriptors_State,

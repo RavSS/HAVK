@@ -6,7 +6,6 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.User_Input,
    HAVK_Kernel.APIC,
    HAVK_Kernel.APIC.Timer,
    HAVK_Kernel.Intrinsics,
@@ -20,9 +19,6 @@ WITH
    HAVK_Kernel.UEFI,
    HAVK_Kernel.PS2,
    HAVK_Kernel.PIT;
-USE
-   HAVK_Kernel.User_Input,
-   HAVK_Kernel.Intrinsics;
 
 PACKAGE BODY HAVK_Kernel.Initialise
 IS
@@ -53,7 +49,7 @@ IS
       Log("Detected " & Image(APIC.CPU_Cores) & " logical CPU cores.",
          Tag => Initialise_Tag);
 
-      Enable_Interrupts;
+      Intrinsics.Enable_Interrupts;
       Log("Interrupts enabled (APIC).", Tag => Initialise_Tag);
    END Interrupt_Controllers;
 
@@ -71,14 +67,10 @@ IS
    PROCEDURE Default_Page_Layout
    IS
       USE
-         HAVK_Kernel.Memory;
+         Memory;
       USE TYPE
-         HAVK_Kernel.UEFI.memory_type;
-
-      Map : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map
-      WITH
-         Annotate => (GNATprove, False_Positive, "memory leak *",
-                      "No memory is being allocated to begin with.");
+         UEFI.access_memory_descriptor,
+         UEFI.memory_type;
    BEGIN
       -- Map the virtual null address to the physical null address.
       Paging.Kernel_Map_Address
@@ -163,8 +155,10 @@ IS
       -- through the modern x2APIC way (MSR and not MMIO), whereas I map the
       -- I/O APIC separately in the APIC package.
       FOR
-         Region OF Map
+         Region OF UEFI.Memory_Map
       LOOP
+         EXIT WHEN Region = NULL;
+
          IF -- TODO: Not sure if the ACPI firmware is vital to map.
             Region.Memory_Region_Type = UEFI.loader_data OR ELSE
             Region.Memory_Region_Type = UEFI.ACPI_table_data
@@ -184,64 +178,25 @@ IS
       Log("Kernel page layout has been loaded.", Tag => Initialise_Tag);
    END Default_Page_Layout;
 
-   PROCEDURE Grid_Test
-     (Display  : IN view;
-      Colour   : IN pixel)
-   IS
-      Box_Size : CONSTANT number := 20; -- Hardcoded box size.
-   BEGIN
-      -- Clear the screen before we draw anything new.
-      Display.Draw_Fill(0, Display.Framebuffer_Elements, 0);
-
-      -- Draw the boxes so a grid is shown across the screen in some shape.
-      FOR
-         Y IN number RANGE 0 .. (Display.Screen_Height / Box_Size) - 1
-      LOOP
-         FOR
-            X IN number RANGE 0 .. (Display.Screen_Width / Box_Size) - 1
-         LOOP
-            -- Range checks. Avoid drawing a square if it doesn't fit.
-            EXIT WHEN Box_Size * X > Display.Screen_Width;
-            EXIT WHEN Box_Size * Y > Display.Screen_Height;
-            EXIT WHEN Box_Size - 1 > Display.Framebuffer_Elements;
-            EXIT WHEN Display.Calculate_Pixel(Box_Size * X, Box_Size * Y) +
-               (Box_Size - 1) > Display.Framebuffer_Elements;
-            EXIT WHEN Display.Calculate_Pixel(Box_Size * X, Box_Size * Y) +
-               Display.Screen_Width * (Box_Size - 1) >
-               Display.Framebuffer_Elements;
-
-            Display.Draw_Box(
-               Display.Calculate_Pixel(Box_Size * X, Box_Size * Y),
-               Colour,
-               Box_Size - 1,
-               Box_Size - 1);
-         END LOOP;
-      END LOOP;
-   END Grid_Test;
-
-   PROCEDURE See_Magic
-     (Terminal : IN OUT textbox)
+   PROCEDURE Check_Entry
    IS
       -- The magic number passed to us by my UEFI bootloader.
       Magic : CONSTANT number
       WITH
          Import     => true,
-         Convention => C,
+         Convention => Assembler,
          Link_Name  => "global__bootloader_magic";
    BEGIN
       IF -- Inform if the magic number is wrong or corrupted.
          Magic = 16#55_45_46_49#
       THEN
-         Terminal.Print("Boot method: UEFI.");
          Log("Successful UEFI boot.", Tag => Initialise_Tag);
       ELSIF
          Magic = 16#42_49_4F_53#
       THEN
-         Terminal.Print("Boot method: BIOS."); -- If I bother with it.
          Log("Successful BIOS boot.", Tag => Initialise_Tag);
       ELSE
-         Terminal.Print("Boot method: Unknown.");
-         Log("Unsuccessful boot via unknown method.", Tag => Initialise_Tag);
+         Log("Kernel entry via unknown method.", Tag => Initialise_Tag);
 
          RAISE Panic
          WITH
@@ -249,42 +204,25 @@ IS
          PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
             "If the bootloader's magic number is incorrect, then panic.");
       END IF;
-   END See_Magic;
-
-   PROCEDURE Font_Test
-     (Terminal       : IN OUT textbox)
-   IS
-      Uppercase      : CONSTANT string := "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-      Lowercase      : CONSTANT string := "abcdefghijklmnopqrstuvwxyz";
-      Numeric_Digits : CONSTANT string := "0123456789";
-      Common_Symbols : CONSTANT string := "!@#$%^&*()_-+=[]{}\|;:`~'"",<.>/?";
-   BEGIN
-      Terminal.Print("Font test:");
-      Terminal.Print("   Uppercase: " & Uppercase);
-      Terminal.Print("   Lowercase: ", Next_Line => false);
-      Terminal.Print(Lowercase, Uppercase => false); -- TODO: No support yet.
-      Terminal.Print("   Numbers:   " & Numeric_Digits);
-      Terminal.Print("   Symbols:   " & Common_Symbols);
-   END Font_Test;
+   END Check_Entry;
 
    FUNCTION HAVK_Build_Datetime
-      RETURN string
+      RETURN datetime_string
    IS
+      SUBTYPE date_string IS string(1 .. 10);
+      SUBTYPE time_string IS string(1 .. 08);
+
       FUNCTION Compilation_ISO_Date -- Format: "YYYY-MM-DD"
-         RETURN string
+         RETURN date_string
       WITH
          Import     => true,
-         Convention => Intrinsic,
-         Post       => Compilation_ISO_Date'result'first =  1 AND THEN
-                       Compilation_ISO_Date'result'last  = 10;
+         Convention => Intrinsic;
 
       FUNCTION Compilation_Time     -- Format:   "HH:MM:SS"
-         RETURN string
+         RETURN time_string
       WITH
          Import     => true,
-         Convention => Intrinsic,
-         Post       => Compilation_Time'result'first = 1 AND THEN
-                       Compilation_Time'result'last  = 8;
+         Convention => Intrinsic;
    BEGIN
       RETURN (Compilation_ISO_Date & 'T' & Compilation_Time); -- 19 characters.
    END HAVK_Build_Datetime;
@@ -313,145 +251,35 @@ IS
       END IF;
    END PS2_Input;
 
-   PROCEDURE Input_Key_Test
-     (Terminal : IN OUT textbox;
-      Display  : IN view)
-   IS
-      Formatted_Key_Name : key_string;
-   BEGIN
-      User_Input.Invalidate_Key_State;
-      Terminal.Print("PS/2 input test, press enter to exit:");
-      Log("PS/2 key test has started.", Tag => Initialise_Tag);
-
-      WHILE
-         Get_Key /= character'val(10)
-      LOOP
-         Terminal.Current_X_Index := Terminal.Data'first(2);
-         Terminal.Clear_Line(Terminal.Current_Y_Index);
-
-         -- Avoid a race condition of the key state changing during print.
-         Disable_Interrupts;
-         Formatted_Key_Name := Get_Key_Name;
-
-         FOR -- Change all nulls to spaces so it draws over previous text.
-            ASCII OF Formatted_Key_Name
-         LOOP
-            ASCII := (IF ASCII = character'val(0) THEN ' ' ELSE ASCII);
-         END LOOP;
-
-         PRAGMA Warnings(GNATprove, off,
-            "attribute ""Image"" has an implementation-defined length",
-            Reason => "The textbox object can handle whatever string length.");
-
-         Terminal.Print("   " & character'image(Get_Key) & " - " &
-            Formatted_Key_Name, Next_Line => false);
-
-         -- Enable interrupts again for the next iteration or exit.
-         Enable_Interrupts;
-         Halt; -- Slow down the processor to limit heat and power just in case.
-
-         Terminal.Draw_On(Display);
-      END LOOP;
-
-      Terminal.Current_X_Index := Terminal.Data'first(2);
-      Terminal.Print("   Enter key successfully pressed.");
-      Terminal.Newline;
-      Terminal.Draw_On(Display);
-
-      Log("PS/2 key test ended.", Tag => Initialise_Tag);
-   END Input_Key_Test;
-
-   PROCEDURE Seconds_Count
-     (Terminal      : IN OUT textbox;
-      Display       : IN view)
-   IS
-      Previous_Line : number;
-   BEGIN
-      User_Input.Invalidate_Key_State;
-      Log("Seconds count beginning.", Tag => Initialise_Tag);
-      Terminal.Print("Inaccurate seconds count, press enter to exit:");
-
-      Previous_Line := Terminal.Current_Y_Index;
-
-      WHILE
-         Get_Key /= character'val(10)
-      LOOP
-         Halt; -- Don't burn the CPU.
-         Terminal.Current_X_Index := Terminal.Data'first(2);
-
-         Terminal.Print("LAPIC timer: " & -- TODO: Presume the tick rate.
-            Image(APIC.Timer.Ticks / 100));
-
-         Terminal.Print("PIT        : " & Image(PIT.Ticks / PIT.Tick_Rate),
-            Next_Line => false);
-
-         Terminal.Current_Y_Index := Previous_Line;
-
-         Terminal.Draw_On(Display);
-      END LOOP;
-
-      Terminal.Newline(2);
-   END Seconds_Count;
-
    PROCEDURE Memory_Map_Info
-     (Terminal : IN OUT textbox)
    IS
    BEGIN
-      Terminal.Print("Total usable system memory: " &
-         Image(Memory.System_Limit / MiB) & " mebibytes.");
+      Log("Total usable system memory: " & Image(Memory.System_Limit / MiB) &
+         " mebibytes.", Tag => Initialise_Tag);
    END Memory_Map_Info;
 
    PROCEDURE Debugger
-     (Terminal : IN OUT textbox;
-      Printing : IN boolean)
    IS
    BEGIN
       Exceptions.Elaborated := true; -- Should silence an "unused" warning.
-      Debug.Initialise(Terminal, Printing);
+      Debug.Activate;
    END Debugger;
 
-   PROCEDURE Tests
-     (Terminal : IN OUT textbox;
-      Display  : IN view)
-   IS
-   BEGIN
-      Terminal.Newline;
-      Terminal.Print("Press space to initialise all tests.");
-      Terminal.Print("Press escape to skip all tests.");
-      Terminal.Newline;
-      Terminal.Draw_On(Display);
-      User_Input.Invalidate_Key_State;
-
-      LOOP
-         IF
-            User_Input.Get_Key_Name(1 .. 5) = "SPACE"
-         THEN
-            -- Test the PS/2 input.
-            Initialise.Input_Key_Test(Terminal, Display);
-            -- Count seconds until the user exits it.
-            Initialise.Seconds_Count(Terminal,  Display);
-            EXIT WHEN true;
-         ELSIF
-            User_Input.Get_Key_Name(1 .. 6) = "ESCAPE"
-         THEN
-            Terminal.Print("Tests have been skipped.");
-            Terminal.Draw_On(Display);
-            EXIT WHEN true;
-         END IF;
-      END LOOP;
-   END Tests;
-
    PROCEDURE CPU_Feature_Check
-     (Terminal : IN OUT textbox)
    IS
       USE
-         HAVK_Kernel.Intrinsics.CPUID;
+         Intrinsics.CPUID;
 
-      CPU_Identity : CONSTANT highest_function_parameter_leaf_format :=
-         Get_Highest_Function_Parameter(highest_function_parameter_leaf);
+      CPU_Identity  : CONSTANT highest_function_parameter_leaf_format :=
+         Get_Highest_Function_Parameter;
+      CPU_Frequency : CONSTANT processor_frequency_leaf_format :=
+         Get_Processor_Frequency;
    BEGIN
-      Terminal.Print("CPU ID: " & CPU_Identity.CPU_Identity_1 &
-         CPU_Identity.CPU_Identity_2 & CPU_Identity.CPU_Identity_3 & '.');
+      Log("CPU ID string: """ & CPU_Identity.CPU_Identity_1 &
+         CPU_Identity.CPU_Identity_2 & CPU_Identity.CPU_Identity_3 & """.",
+         Tag => Initialise_Tag);
+      Log("CPU maximum frequency: " & Image(CPU_Frequency.Max_Frequency_MHz) &
+         " MHz.", Tag => Initialise_Tag);
    END CPU_Feature_Check;
 
    PROCEDURE Boot_Partition_Check
@@ -490,36 +318,47 @@ IS
       END IF;
    END Boot_Partition_Check;
 
-   -- TODO: For now, this just loads "SYSCALL_Tester.bin". I really need to add
-   -- more worthwhile system calls and create something to handle IPC.
+   -- TODO: For now, this just loads a few ELF files. I really need to add more
+   -- worthwhile system calls and create something to handle IPC.
    PROCEDURE Begin_Tasking
    IS
-      Error_Check         : error;
-      EFI_File_System     : Drive.FAT.file_system;
-      SYSCALL_Tester_Path : CONSTANT string :=
-         Drive.FAT.Separator & "HAVK" &
-         Drive.FAT.Separator & "system" &
-         Drive.FAT.Separator & "SYSCAL~1.ELF";
+      Error_Check     : error;
+      EFI_File_System : Drive.FAT.file_system;
    BEGIN
       Boot_Partition_Check(EFI_File_System);
 
       FOR -- Just to show tasking off for now.
          Instance IN 1 .. 2
       LOOP
-         Tasking.ELF.Load(EFI_File_System, SYSCALL_Tester_Path,
-            "SYSCALL Test" & Instance'image, Error_Check);
+         Tasking.ELF.Load(EFI_File_System, Thread_Tester_Path,
+            Thread_Tester_Name & Instance'image, Error_Check);
 
          IF
             Error_Check /= no_error
          THEN
             RAISE Panic
             WITH
-               Source_Location & " - Failed to load the SYSCALL test program.";
+               Source_Location & " - Failed to load the thread test program.";
             PRAGMA Annotate(GNATprove, Intentional,
                "exception might be raised",
                "We cannot continue if it fails to load. External error.");
          END IF;
       END LOOP;
+
+      Tasking.ELF.Load(EFI_File_System, Framebuffer_Tester_Path,
+         Framebuffer_Tester_Name, Error_Check);
+
+      IF
+         Error_Check /= no_error
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - Failed to load the framebuffer test " &
+            "program.";
+         PRAGMA Annotate(GNATprove, Intentional,
+            "exception might be raised",
+            "We cannot continue if it fails to load. External error.");
+      END IF;
 
       Log("Now beginning multi-tasking environment.", Tag => Initialise_Tag);
       Tasking.Start;

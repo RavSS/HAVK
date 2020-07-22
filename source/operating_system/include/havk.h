@@ -26,12 +26,15 @@
 #define PACKED __attribute__((packed))
 #define ALWAYS_INLINE __inline__ __attribute__((always_inline))
 
+// Helper macros.
+#define ARRAY_LENGTH(x) (sizeof((x)) / sizeof((x)[0]))
+
 typedef enum
 {
 	NULL_OPERATION,
-	WRITE_OPERATION,
-	READ_OPERATION,
-	CREATE_THREAD_OPERATION
+	EXIT_THREAD_OPERATION,
+	CREATE_THREAD_OPERATION,
+	FRAMEBUFFER_ACCESS_OPERATION
 } syscall_ht;
 
 typedef enum
@@ -49,14 +52,17 @@ typedef enum
 
 typedef struct
 {
+	syscall_ht operation;
 	uint64_t argument_1;
 	uint64_t argument_2;
 	uint64_t argument_3;
 	uint64_t argument_4;
+	uint64_t argument_5;
 } PACKED sysargs_ht;
 
 // A general system call wrapper.
-syserr_ht syscall(syscall_ht operation, sysargs_ht *arguments);
+syserr_ht syscall(sysargs_ht *arguments);
 
+void memset(void *area, int value, size_t bytes);
 
 #endif

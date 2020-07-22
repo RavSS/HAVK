@@ -6,6 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
+   Ada.Unchecked_Conversion,
    HAVK_Kernel.Intrinsics;
 USE
    HAVK_Kernel.Intrinsics;
@@ -30,7 +31,7 @@ IS
          "The PS/2 controller will return an 8-bit status in a byte.");
 
       Current_Status_Byte : CONSTANT number :=
-         Input_Byte(Enum_Rep(command_port) AND 16#FFFF#);
+         Input_Byte(command_port'enum_rep);
       Current_Status      : CONSTANT status := To_Status(Current_Status_Byte);
    BEGIN
       IF
@@ -72,12 +73,12 @@ IS
                IF
                   Port_2
                THEN
-                  -- TODO: No "enum_rep", 0xD4 is "port_2_data".
-                  Output_Byte(Enum_Rep(command_port) AND 16#FFFF#, 16#D4#);
+                  Output_Byte(command_port'enum_rep, port_2_data'enum_rep);
                END IF;
 
-               Output_Byte(Enum_Rep(Port_Type) AND 16#FFFF#,
-                  To_Byte(Data) AND 16#FF#);
+               -- Static "enum_rep" for an odd bug workaround (GNAT CE 2020).
+               Output_Byte((IF Port_Type = data_port THEN data_port'enum_rep
+                  ELSE command_port'enum_rep), To_Byte(Data) AND 16#FF#);
 
                IF
                   NOT Verify
@@ -135,11 +136,11 @@ IS
      (Message   : OUT response;
       Port_Type : IN port)
    IS
-      FUNCTION Enum_Val IS NEW Ada.Unchecked_Conversion
+      FUNCTION Enum_Val_Check IS NEW Ada.Unchecked_Conversion
         (source => number, target => response);
       PRAGMA Annotate(GNATprove, False_Positive,
          "type with constraints on bit representation *",
-         "Validity is checked after it's called.");
+         "Validity is manually checked after it's called.");
 
       Is_Ready     : boolean;
       Raw_Response : number RANGE 0 .. 2**8 - 1;
@@ -152,7 +153,9 @@ IS
          IF
             Is_Ready
          THEN
-            Raw_Response := Input_Byte(Enum_Rep(Port_Type) AND 16#FFFF#);
+            -- Static "enum_rep" for an odd bug workaround (GNAT CE 2020).
+            Raw_Response := Input_Byte(IF Port_Type = data_port THEN
+               data_port'enum_rep ELSE command_port'enum_rep);
 
             PRAGMA Warnings(GNATprove, off,
                "attribute Valid is assumed to return True",
@@ -160,8 +163,8 @@ IS
             PRAGMA Warnings(GNATprove, off,
                "unreachable branch",
                Reason => "It is reachable if the response is invalid.");
-            Message := (IF Enum_Val(Raw_Response)'valid THEN
-               Enum_Val(Raw_Response) ELSE failure);
+            Message := (IF Enum_Val_Check(Raw_Response)'valid THEN
+               Enum_Val_Check(Raw_Response) ELSE failure);
 
             RETURN;
          END IF;
@@ -179,7 +182,7 @@ IS
       LOOP
          Ready(Full_Buffer, Sending => false);
          EXIT WHEN NOT Full_Buffer;
-         Discard := Input_Byte(Enum_Rep(data_port) AND 16#FFFF#);
+         Discard := Input_Byte(data_port'enum_rep);
       END LOOP;
    END Flush;
 
@@ -214,20 +217,20 @@ IS
          Identity(1) = number'last OR ELSE -- Wait for the default to change.
          Identity(1) = 16#FA# -- On Bochs, wait for the "data_acknowledged"s.
       LOOP
-         Identity(1) := Input_Byte(Enum_Rep(data_port) AND 16#FFFF#);
+         Identity(1) := Input_Byte(data_port'enum_rep);
       END LOOP;
 
-      Identity(2) := Input_Byte(Enum_Rep(data_port) AND 16#FFFF#);
+      Identity(2) := Input_Byte(data_port'enum_rep);
       Flush;
 
       DECLARE -- Convert the "byte" (a 64-bit value) to the device type.
-         FUNCTION Enum_Val IS NEW Ada.Unchecked_Conversion
+         FUNCTION Enum_Val_Check IS NEW Ada.Unchecked_Conversion
            (source => number, target => device);
          PRAGMA Annotate(GNATprove, False_Positive,
             "type with constraints on bit representation *",
             "We check it for validity after conversion.");
 
-         Unchecked_Identity : CONSTANT device := Enum_Val(Identity(1));
+         Unchecked_Identity : CONSTANT device := Enum_Val_Check(Identity(1));
       BEGIN
          PRAGMA Warnings(GNATprove, off,
             "attribute Valid is assumed to return True",
@@ -309,8 +312,7 @@ IS
          Current_Condition := unreliable;
          RETURN;
       ELSE
-         Old_Configuration_Byte :=
-            Input_Byte(Enum_Rep(data_port) AND 16#FFFF#);
+         Old_Configuration_Byte := Input_Byte(data_port'enum_rep);
       END IF;
 
       -- Disable any scanning or reporting by the devices. Note that the

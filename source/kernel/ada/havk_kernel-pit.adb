@@ -79,7 +79,13 @@ IS
    PROCEDURE Interrupt_Manager
    IS
    BEGIN
-      Ticks := Ticks + 1;
+      IF
+         Ticks /= number'last
+      THEN
+         Ticks := Ticks + 1;
+      ELSE
+         Ticks := 0;
+      END IF;
 
       IF
          Countdown /= 0

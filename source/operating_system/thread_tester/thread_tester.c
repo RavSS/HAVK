@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
-// Program         -- HAVK System Call Tester                                //
-// Filename        -- syscall_test.c                                         //
+// Program         -- HAVK Operating System Thread Tester                    //
+// Filename        -- thread_tester.c                                        //
 // License         -- GNU General Public License version 3.0                 //
 // Original Author -- Ravjot Singh Samra, Copyright 2020                     //
 ///////////////////////////////////////////////////////////////////////////////
@@ -16,7 +16,9 @@ void __attribute__((force_align_arg_pointer)) thread_function(void)
 {
 	sysargs_ht arguments;
 
+	arguments.operation = NULL_OPERATION;
 	arguments.argument_1 = 0x575CA11;
+	arguments.argument_5 = 0x1337133713371337;
 
 	for (uint64_t i = 1; i < UINT64_MAX; ++i)
 	{
@@ -32,31 +34,28 @@ void __attribute__((force_align_arg_pointer)) thread_function(void)
 		}
 
 		arguments.argument_2 = i;
-		syscall(NULL_OPERATION, &arguments);
+		syscall(&arguments);
 	}
 
 	while (true);
 }
 
-// This file is just for testing the system calls and ELF loading mechanism.
+// This file is just for testing the system call for thread creation.
 int main(void)
 {
 	static uint64_t alignas(16) stacks[THREADS][STACK_SIZE];
+	uint64_t current_thread = 0;
 	sysargs_ht arguments;
 
+	arguments.operation = CREATE_THREAD_OPERATION;
 	arguments.argument_1 = (uint64_t) thread_function;
 
-	for (uint64_t i = 1, s = 0; i <= UINT32_MAX; ++i)
+	while (current_thread < THREADS)
 	{
-		arguments.argument_2 = (uint64_t) &stacks[s][STACK_SIZE - 1];
-
-		if (s < THREADS
-			&& syscall(CREATE_THREAD_OPERATION, &arguments)
-				== NO_ERROR)
-		{
-			++s;
-		}
+		arguments.argument_2
+			= (uint64_t) &stacks[current_thread][STACK_SIZE - 1];
+		current_thread += syscall(&arguments) == NO_ERROR;
 	}
 
-	while (true);
+	return 0;
 }

@@ -8,14 +8,23 @@
 # This file contains the entry function that HAVK's UEFI bootloader
 # needs to launch itself into the Ada program. We're already in long mode.
 
-.SECTION .bss
+.SECTION .isolated_bss
 
 # System V ABI for x86-64 dictates that stacks grow downwards.
 .ALIGN 16 # 16-byte alignment required by the ABI for the stack.
-.GLOBAL global__stack_base # 32 KiB stack size. It is only temporary.
-global__stack_end:
+global__entry_stack_end:
 	.SPACE 32768 # Check alignment if you're going to change this.
-global__stack_base:
+global__entry_stack_base: # 32 KiB 16-byte aligned stack.
+
+.SECTION .rodata
+
+# The entry stack will later be reused for other purposes, but during kernel
+# initialisation, it will be the sole stack used.
+.GLOBAL global__entry_stack_base_address
+global__entry_stack_base_address:
+	.QUAD global__entry_stack_base
+
+.SECTION .bss
 
 # Space for bootloader information.
 .GLOBAL global__bootloader_arguments
@@ -43,7 +52,7 @@ assembly__entry:
 	# to load a symbol is to use a LEA instruction with an address relative
 	# to RIP. I think it's also possible to accomplish this via sign
 	# extension, but this is easier.
-	LEA RSP, [RIP + global__stack_base]
+	LEA RSP, [RIP + global__entry_stack_base]
 	MOV RBP, RSP
 
 	# This is more reliable here than in the bootloader. Should adhere to

@@ -1,7 +1,9 @@
 #!/bin/sh
 
+# TODO: This script is outdated and needs to be replaced for the purposes of
+# building an x86-64 version of GCC that is for a hosted environment.
+
 # This shell script helps compiles a cross-compiler for x86.
-# An IA-32 C cross compiler is needed to compile the depreciated 32-bit HAVK OS.
 # For that, the "i686-elf target" can be used for GCC.
 set -e
 

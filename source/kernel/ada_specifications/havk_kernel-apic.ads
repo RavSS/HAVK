@@ -21,17 +21,17 @@ PACKAGE HAVK_Kernel.APIC
 WITH
    Abstract_State => Interrupt_Controller_State
 IS
-   -- Each LAPIC (not I/O APIC) belongs to a logical core. Initialised to
-   -- zero so counting it is easier during enumeration without subtraction.
-   CPU_Cores : number := 0;
+   -- Each LAPIC (not I/O APIC) belongs to a logical core.
+   CPU_Cores : number;
 
    -- Enumerates the ACPI table that contains APIC information. Also takes
    -- in a page layout so it can map any APICs if MMIO is required.
    PROCEDURE Enumerate_MADT
    WITH
-      Global => (In_Out => (Interrupt_Controller_State, CPU_Cores,
+      Global => (In_Out => (Interrupt_Controller_State,
                             Paging.Kernel_Page_Layout_State),
-                 Input  => (SPARK.Heap.Dynamic_Memory, ACPI.ACPI_State)),
+                 Input  => (SPARK.Heap.Dynamic_Memory, ACPI.ACPI_State),
+                 Output =>  CPU_Cores),
       Post   => CPU_Cores /= 0;
 
    -- This remaps the two 8248 PICs and it can optionally disable the emulation
@@ -350,10 +350,10 @@ PRIVATE
       -- The interrupt input base. This is not relative, it is universal,
       -- so if I/O APIC 1 begins and ends at 0 to 23, this will be 24 for the
       -- next I/O APIC. Zero based.
-      GSI_Base : number := 0;
+      GSI_Base : number RANGE 0 .. 2**16 - 1 := 0;
       -- The end range of the interrupt inputs. This is retrieved from the
       -- I/O APIC's version register. Zero based.
-      GSI_Last : number := 0;
+      GSI_Last : number RANGE 0 .. 2**16 - 1 := 0;
    END RECORD
    WITH
       Dynamic_Predicate => (IF MMIO = NULL THEN

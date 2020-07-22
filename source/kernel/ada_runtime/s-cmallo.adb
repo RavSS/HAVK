@@ -47,6 +47,34 @@ PACKAGE BODY System.C.Malloc IS
    PRAGMA Import(Assembler, Heap_End, "global__kernel_heap_end");
    --  The address of the variable is the end of the heap
 
+   -- RavSS: I've added an atomic lock to this package so it can be used for
+   -- safer multi-tasking.
+   TYPE atomic_lock IS MOD 2**64
+   WITH
+      Atomic => true;
+   Lock : ALIASED atomic_lock := 0;
+   TYPE big_boolean IS NEW boolean
+   WITH
+      Size => 64;
+
+   FUNCTION Locked
+     (Lock_Pointer  : ACCESS atomic_lock := Lock'access;
+      Value_To_Test : big_boolean := true)
+      RETURN big_boolean
+   WITH
+      Inline        => true,
+      Import        => true,
+      Convention    => Intrinsic,
+      External_Name => "__sync_lock_test_and_set_8";
+
+   PROCEDURE Release_Lock
+     (Lock_Pointer : ACCESS atomic_lock := Lock'access)
+   WITH
+      Inline        => true,
+      Import        => true,
+      Convention    => Intrinsic,
+      External_Name => "__sync_lock_release_8";
+
    FUNCTION Get_Cell_Data
       (Cell : cell_acc)
        RETURN address;
@@ -133,6 +161,12 @@ PACKAGE BODY System.C.Malloc IS
       THEN
          RETURN Null_Address;
       END IF;
+
+      -- RavSS: Lock the memory manager and stop spinning when it's unlocked.
+      LOOP
+         EXIT WHEN NOT Locked;
+      END LOOP;
+
       --  Round size up
 
       Rounded_Size := (Size + Standard'Maximum_Alignment);
@@ -183,6 +217,7 @@ PACKAGE BODY System.C.Malloc IS
                   Add_Free_Cell (New_Next_Cell);
                END IF;
                Res.Cell.Free := False;
+               Release_Lock; -- RavSS: Unlock it.
                RETURN Get_Cell_Data (To_Cell_Acc (Res));
             END IF;
             Res := Res.Next_Free;
@@ -206,9 +241,11 @@ PACKAGE BODY System.C.Malloc IS
 
          IF To_Address (Get_Next_Cell (Res)) > Heap_End
          THEN
+            Release_Lock; -- RavSS: Unlock it.
             RETURN Null_Address;
          END IF;
          Last_Cell := Res;
+         Release_Lock; -- RavSS: Unlock it.
          RETURN Get_Cell_Data (Res);
       END;
    END Alloc;
@@ -221,12 +258,14 @@ PACKAGE BODY System.C.Malloc IS
    IS
       Cell : cell_acc;
    BEGIN
+      -- RavSS: Lock the memory manager and stop spinning when it's unlocked.
+      LOOP
+         EXIT WHEN NOT Locked;
+      END LOOP;
+
       -- RavSS: I've purposefully made it raise an exception if a null address
       -- is passed, as that should not happen.
-      ---- if Ptr = Null_Address then
-      ----    return;
-      ---- end if;
-      PRAGMA Assert (Ptr /= Null_Address, "Cannot free a null address.");
+      PRAGMA Assert(Ptr /= Null_Address, "Cannot free a null address.");
 
       Cell := To_Cell_Acc (Ptr - Cell_Size);
       PRAGMA Assert (NOT Cell.Free);
@@ -248,6 +287,7 @@ PACKAGE BODY System.C.Malloc IS
 
             PRAGMA Assert (Last_Cell = NULL OR ELSE NOT Last_Cell.Free);
          END IF;
+         Release_Lock; -- RavSS: Unlock it.
          RETURN;
       END IF;
       --  Merge with the next cell?
@@ -295,6 +335,7 @@ PACKAGE BODY System.C.Malloc IS
          END;
       END IF;
       Add_Free_Cell (To_Free_Cell_Acc (Cell));
+      Release_Lock; -- RavSS: Unlock it.
    END Free;
 
    -------------------

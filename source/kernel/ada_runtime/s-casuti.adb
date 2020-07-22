@@ -63,16 +63,6 @@ PACKAGE BODY System.Case_Util IS
       END LOOP;
    END To_Lower;
 
-   FUNCTION To_Lower
-      (A : string)
-      RETURN string
-   IS
-      Result : string := A;
-   BEGIN
-      To_Lower (Result);
-      RETURN Result;
-   END To_Lower;
-
    --------------
    -- To_Mixed --
    --------------
@@ -94,16 +84,6 @@ PACKAGE BODY System.Case_Util IS
 
          Ucase := A (J) = '_';
       END LOOP;
-   END To_Mixed;
-
-   FUNCTION To_Mixed
-      (A : string)
-      RETURN string
-   IS
-      Result : string := A;
-   BEGIN
-      To_Mixed (Result);
-      RETURN Result;
    END To_Mixed;
 
    --------------
@@ -134,16 +114,6 @@ PACKAGE BODY System.Case_Util IS
       LOOP
          A (J) := To_Upper (A (J));
       END LOOP;
-   END To_Upper;
-
-   FUNCTION To_Upper
-      (A : string)
-      RETURN string
-   IS
-      Result : string := A;
-   BEGIN
-      To_Upper (Result);
-      RETURN Result;
    END To_Upper;
 
 END System.Case_Util;

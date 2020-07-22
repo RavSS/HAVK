@@ -6,7 +6,11 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Intrinsics;
+   HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Interrupts,
+   HAVK_Kernel.Interrupts.Exceptions,
+   HAVK_Kernel.Interrupts.ISA_IRQs,
+   HAVK_Kernel.Memory;
 
 PACKAGE BODY HAVK_Kernel.Descriptors
 WITH
@@ -79,8 +83,8 @@ IS
          049 => Interrupt_Entry(ISR_049'address), -- Task switching.
 
          -- Cover the disabled PIC and the APIC (spurious) interrupt vectors.
-         -- It is okay if both overlap.
-         OTHERS => Interrupt_Entry(ISR_Default'address)
+         -- It is okay if both overlap. Use an IST entry just in case.
+         OTHERS => Interrupt_Entry(ISR_Default'address, IST => 1)
       );
    END Reset_Interrupt_Descriptor_Table;
 
@@ -120,6 +124,12 @@ IS
 
       PROCEDURE Set_Addresses
       IS
+         -- Reused as a stack for the IST.
+         Entry_Stack_Address : CONSTANT Memory.canonical_address
+         WITH
+            Import        => true,
+            Convention    => Assembler,
+            External_Name => "global__entry_stack_base_address";
       BEGIN
          GDT.Descriptor_TSS64.Descriptor_TSS.Base_Address_Low :=
             TSS'address AND 2**16 - 1;
@@ -133,6 +143,7 @@ IS
 
          GDTR.Base_Address := GDT'address;
          IDTR.Base_Address := IDT'address;
+         TSS.IST_1         := Entry_Stack_Address;
       END Set_Addresses;
    BEGIN
       Intrinsics.Disable_Interrupts;
@@ -149,13 +160,14 @@ IS
    FUNCTION Interrupt_Entry
      (ISR_Entry : IN address;
       Gate      : IN interrupt_descriptor_table_gate_type := interrupt_gate;
-      Ring_3    : IN boolean                              := false)
+      Ring_3    : IN boolean := false;
+      IST       : IN number  := 0)
       RETURN interrupt_descriptor_table_gate
    IS
    (
       ISR_Address_Low    => ISR_Entry AND 2**16 - 1,
       CS_Selector        => (IF Ring_3 THEN 16#28# ELSE CS_Ring_0),
-      IST_Offset         => 0,
+      IST_Offset         => IST,
       Type_Attributes    =>
       (
          Gate            => Gate,

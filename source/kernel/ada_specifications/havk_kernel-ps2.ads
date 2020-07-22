@@ -5,9 +5,6 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   Ada.Unchecked_Conversion;
-
 -- This package handles all aspects of the PS/2 controller with error checking.
 -- All specific logic that does not interact specifically with the PS/2
 -- controller should go into child packages.
@@ -52,6 +49,10 @@ IS
       Volatile_Function => true,
       Inline            => true;
 
+   -- If the output buffer is full on the controller, then empty it properly
+   -- using this procedure.
+   PROCEDURE Flush;
+
 PRIVATE
    PS2_Tag : CONSTANT string := "PS/2";
 
@@ -78,13 +79,6 @@ PRIVATE
    FOR port USE
      (data_port    => 16#60#,
       command_port => 16#64#);
-
-   -- TODO: No "enum_rep" yet, so this is used to get the representation.
-   FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
-     (source => port, target => number);
-   PRAGMA Annotate(GNATprove, False_Positive,
-      "type with constraints on bit representation *",
-      "This is an alternative for the ""enum_rep"" attribute.");
 
    -- There's five common types of devices with these specific identities.
    -- There are various keyboards with negligible differences not worth it.
@@ -308,8 +302,6 @@ PRIVATE
    END RECORD;
 
    -- The main procedure for interacting with the controller and its devices.
-   PRAGMA Warnings(GNATprove, off, "unused variable ""Data""",
-      Reason => "The format is only converted/imported into a byte.");
    GENERIC
       TYPE generic_data IS PRIVATE;
       Port_Type : IN port;
@@ -321,8 +313,6 @@ PRIVATE
 
    -- Receives a response from either one of the two ports and returns it in
    -- the first parameter.
-   PRAGMA Warnings(GNATprove, off, "unused variable ""Port_Type""",
-      Reason => "The port is only converted into its representation.");
    PROCEDURE Receive
      (Message   : OUT response;
       Port_Type : IN port);
@@ -340,10 +330,6 @@ PRIVATE
    PROCEDURE Identify_Device
      (New_Device : OUT device;
       Port_2     : IN boolean);
-
-   -- If the output buffer is full on the controller, then empty it properly
-   -- using this procedure.
-   PROCEDURE Flush;
 
    -- Max `Input_Byte()` and `Output_Byte()` attempts. Doesn't truly matter.
    Retry_Rate            : CONSTANT number := 100;

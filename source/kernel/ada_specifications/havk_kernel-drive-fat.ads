@@ -346,9 +346,10 @@ PRIVATE
 
    -- A type that is an array which describes a path direction. Each element
    -- is an 8.3 entry's name (including the dot extension). A maximum length
-   -- for this would be around 128 components.
+   -- for this would be around 128 components, which is hardcoded as the length
+   -- due to a secondary stack not being available.
    -- TODO: Support long file names.
-   TYPE path IS ARRAY(number RANGE <>) OF path_entry
+   TYPE path IS ARRAY(number RANGE 1 .. 128) OF path_entry
    WITH
       Pack => true;
 
@@ -426,6 +427,8 @@ PRIVATE
                BPB.FAT_Count >= 1 AND THEN
                Root_Directory_Sectors IN 1 .. ((BPB.Directory_Entries * 32) +
                  (BPB.Bytes_Per_Sector - 1)) / BPB.Bytes_Per_Sector AND THEN
+               BPB.Total_Sectors >= ((BPB.Reserved_Sectors + (BPB.FAT_Count *
+                  BPB.Sectors_Per_FAT)) + Root_Directory_Sectors) AND THEN
                Data_Sectors IN 1 .. BPB.Total_Sectors -
                  ((BPB.Reserved_Sectors + (BPB.FAT_Count *
                   BPB.Sectors_Per_FAT)) + Root_Directory_Sectors) AND THEN
@@ -492,9 +495,7 @@ PRIVATE
       RETURN path
    WITH
       Pre  => Path_Name'first = 1 AND THEN
-              Path_Name'last IN Path_Name'first .. 255,
-      Post => Tokenize_Path'result'first = 1 AND THEN
-              Tokenize_Path'result'last IN Tokenize_Path'result'first .. 255;
+              Path_Name'last IN Path_Name'first .. 255;
 
    -- If a file (or directory, if specified) matches the entry name passed,
    -- then this will return the first cluster number. If nothing matches, then

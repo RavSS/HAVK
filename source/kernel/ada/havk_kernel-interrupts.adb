@@ -20,7 +20,14 @@ IS
      (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state)
    IS
    BEGIN
-      APIC.Timer.Ticks := APIC.Timer.Ticks + 1;
+      IF -- Overflow check in case "number" turns into a signed type later.
+         APIC.Timer.Ticks /= number'last
+      THEN
+         APIC.Timer.Ticks := APIC.Timer.Ticks + 1;
+      ELSE
+         APIC.Timer.Ticks := 0;
+      END IF;
+
       Tasking.Schedule;
    END ISR_048_Handler;
 

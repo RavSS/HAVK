@@ -49,7 +49,7 @@ IS
    END Get_Key;
 
    FUNCTION Get_Key_Name
-      RETURN string
+      RETURN key_string
    IS
       Current_Key_State : key_state;
    BEGIN

@@ -23,8 +23,11 @@ AS=as
 INCLUDE=-I ./include/ -L $(BUILD_PATH)
 BASELIB=$(BUILD_PATH)start.o $(BUILD_PATH)havk.o
 
-CC_FLAGS=-c -std=c11 -ffreestanding -nostdlib -Wall -Wextra -Werror \
+CC_FLAGS=-c -std=c11 -ffreestanding -nostdlib -Wall -Wextra \
 	-Wpedantic -pedantic-errors -masm=intel -no-pie
+
+# TODO: A few debug flags for now (required for e.g. `addr2line`).
+CC_FLAGS+= -Og -ggdb3
 
 LD_FLAGS=-Tlinker.ld -zcommon-page-size=0x1000 -zmax-page-size=0x1000
 
@@ -38,8 +41,17 @@ $(BUILD_PATH)start.o: start.S # Make sure to link this first.
 $(BUILD_PATH)havk.o: ./include/havk.c
 	$(CC) $(CC_FLAGS) $(INCLUDE) -o "$@" $^
 
-$(BUILD_PATH)syscall_tester.o: $(BASELIB) syscall_tester/syscall_tester.c
-	$(CC) $(CC_FLAGS) $(INCLUDE) -o "$@" syscall_tester/syscall_tester.c
+$(BUILD_PATH)thread_tester.o: $(BASELIB) thread_tester/thread_tester.c
+	$(CC) $(CC_FLAGS) $(INCLUDE) -o "$@" thread_tester/thread_tester.c
 
-$(BUILD_PATH)syscall_tester.elf: $(BASELIB) $(BUILD_PATH)syscall_tester.o
+$(BUILD_PATH)thread_tester.elf: $(BASELIB) $(BUILD_PATH)thread_tester.o
+	$(LD) $(LD_FLAGS) -o "$@" $^
+
+$(BUILD_PATH)framebuffer_tester.o: $(BASELIB) \
+framebuffer_tester/framebuffer_tester.c
+	$(CC) $(CC_FLAGS) $(INCLUDE) -o "$@" \
+		framebuffer_tester/framebuffer_tester.c
+
+$(BUILD_PATH)framebuffer_tester.elf: $(BASELIB) \
+$(BUILD_PATH)framebuffer_tester.o
 	$(LD) $(LD_FLAGS) -o "$@" $^

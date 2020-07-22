@@ -5,6 +5,9 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   Ada.Unchecked_Conversion;
+
 PACKAGE BODY HAVK_Kernel.ACPI
 WITH
    Refined_State => (ACPI_State => NULL)
@@ -29,11 +32,27 @@ IS
                       "object with constraints on bit representation *",
                       "The RSDP must be valid, even if other tables aren't.");
 
-      Total_Size : number := 0;
+      RSDP_Standard_Length : CONSTANT number :=
+         root_system_description_pointer'size / 8
+      WITH
+         Annotate => (GNATprove, False_Positive, "range check might fail",
+                      "It's just the expected byte size of the RSDP record.");
+      Total_Size           : number := 0;
    BEGIN
+      IF
+         RSDP_Bytes'last /= RSDP_Standard_Length
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - The system's ACPI RSDP length is too large.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "The record type may be outdated if this happens.");
+      END IF;
+
       FOR
          RSDP_Byte OF RSDP_Bytes
       LOOP
+         EXIT WHEN Total_Size > number'last - (2**8 - 1); -- Overflow check.
          Total_Size := Total_Size + RSDP_Byte;
       END LOOP;
 
@@ -75,7 +94,8 @@ IS
          BEGIN
             FOR
                XSDT_Byte OF XSDT_Bytes
-            LOOP
+            LOOP -- Overflow check below.
+               EXIT WHEN Total_Size > number'last - (2**8 - 1);
                Total_Size := Total_Size + XSDT_Byte;
             END LOOP;
          END;
@@ -101,20 +121,38 @@ IS
    WITH
       SPARK_Mode => off -- Annotations can't cover all the unchecked errors.
    IS
-      XSDT          : CONSTANT access_extended_system_description_table :=
+      FUNCTION To_Pointer
+        (Table_Pointer : IN address)
+         RETURN access_system_description_table
+      WITH
+         Import     => true,
+         Convention => Intrinsic;
+
+      XSDT            : CONSTANT access_extended_system_description_table :=
          Get_XSDT;
 
       -- I've hardcoded in the byte size of the SDT or else `gnatprove`
       -- complains.
-      Tables_Offset : CONSTANT := 36;
+      Tables_Offset   : CONSTANT := 36;
 
-      -- The XSDT must be valid before this is ever called.
-      Tables        : system_description_tables
-        (1 .. (XSDT.SDT.Length - Tables_Offset) / 8)
+      -- The XSDT must be valid before this is ever called. Each QWORD here is
+      -- a pointer to a table.
+      Table_Addresses : addresses(1 .. (XSDT.SDT.Length - Tables_Offset) / 8)
       WITH
          Import   => true,
          Address  => XSDT.Table_Pointers'address;
+
+      -- This is what we must return. It's of a fixed size that is hopefully
+      -- enough to contain the present tables.
+      Tables          : system_description_tables := (OTHERS => NULL);
    BEGIN
+      FOR
+         Address_Index IN Table_Addresses'range
+      LOOP
+         EXIT WHEN Address_Index NOT IN Tables'range;
+         Tables(Address_Index) := To_Pointer(Table_Addresses(Address_Index));
+      END LOOP;
+
       RETURN Tables;
    END Get_XSDT_Tables;
 
@@ -151,16 +189,17 @@ IS
                                "object with constraints on bit *",
                                "We manually check it for validity.");
 
-               Total_Bytes : number := 0;
+               Total_Size : number := 0;
             BEGIN
                FOR
                   Table_Byte OF Table_Bytes
-               LOOP
-                  Total_Bytes := Total_Bytes + Table_Byte;
+               LOOP -- Overflow check below.
+                  EXIT WHEN Total_Size > number'last - (2**8 - 1);
+                  Total_Size := Total_Size + Table_Byte;
                END LOOP;
 
                IF
-                  (Total_Bytes AND 16#FF#) = 0
+                 (Total_Size AND 16#FF#) = 0
                THEN
                   RETURN To_Address(Table);
                ELSE
@@ -182,6 +221,9 @@ IS
       -- an import on that very address.
       SPARK_Mode => off
    IS
+      FUNCTION Enum_Val IS NEW Ada.Unchecked_Conversion
+        (source => number, target => interrupt_controller);
+
       MADT         : CONSTANT multiple_APIC_description_table
       WITH
          Import     => true,
@@ -203,18 +245,16 @@ IS
          Byte_Index IN APICs_Bytes'range AND THEN
          APIC_Index IN       APICs'range -- Ignore any APICs above 255.
       LOOP
-         DECLARE -- Avoid an unchecked conversion.
-            APIC_Name : CONSTANT interrupt_controller
-            WITH
-               Import  => true,
-               Size    => 8,
-               Address => APICs_Bytes(Byte_Index)'address;
-         BEGIN
-            APICs(APIC_Index).Enumeration_Value := APIC_Name;
-            APICs(APIC_Index).Record_Address    := APIC_Name'address;
-            Byte_Index := Byte_Index + APICs_Bytes(Byte_Index + 1);
-            APIC_Index := APIC_Index + 1;
-         END;
+         IF -- Check if it's valid first. The default value is otherwise kept.
+            Enum_Val(APICs_Bytes(Byte_Index))'valid
+         THEN
+            APICs(APIC_Index).Enumeration_Value :=
+               Enum_Val(APICs_Bytes(Byte_Index));
+         END IF;
+
+         APICs(APIC_Index).Record_Address := APICs_Bytes(Byte_Index)'address;
+         Byte_Index := Byte_Index + APICs_Bytes(Byte_Index + 1);
+         APIC_Index := APIC_Index + 1;
       END LOOP;
 
       RETURN APICs;

@@ -5,35 +5,26 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   HAVK_Kernel.UEFI;
-
 PACKAGE BODY HAVK_Kernel.Debug
 WITH
-   SPARK_Mode    => off, -- See the private specification of this package.
-   Refined_State => (Debugging_State => (Debugger, Terminal_Hook,
-                                         Terminal_Printing))
+   Refined_State => (Debugging_State => Debugger)
 IS
-   PROCEDURE Initialise
-     (Terminal : IN OUT Graphics.Text.textbox;
-      Printing : IN boolean)
+   PROCEDURE Activate
    WITH
-      Refined_Global => (Input => (Debugger, Terminal_Hook, Terminal_Printing))
+      Refined_Global => (In_Out => Serial.UART_State,
+                         Input  => Debugger,
+                         Output => Intrinsics.CPU_Port_State)
    IS
    BEGIN
-      Debugger.Interface_Initialise;
-
-      -- This is unchecked access should be safe as long as the terminal
-      -- textbox still exists, which it will until the system turns off, as it
-      -- is a static object and is placed into the higher-half kernel space.
-      Terminal_Hook     := Terminal'unchecked_access;
-      Terminal_Printing := Printing;
-   END Initialise;
+      Serial.Prepare_Connection(Debugger);
+   END Activate;
 
    PROCEDURE Message
      (Information : IN string)
    WITH
-      Refined_Global => (Input => (Debugger, Terminal_Hook, Terminal_Printing))
+      Refined_Global => (In_Out => (Intrinsics.CPU_Port_State,
+                                    Serial.UART_State),
+                         Input  => Debugger)
    IS
       -- Strings for indicating to the receiver what they're getting and
       -- where it ends. Useful for regular expressions on the receiver's side.
@@ -41,15 +32,7 @@ IS
       Prefix  : CONSTANT string := "<< ";
       Suffix  : CONSTANT string := " >>";
    BEGIN
-      Debugger.Print(Subject & Prefix & Information & Suffix &
+      Serial.Print(Debugger, Subject & Prefix & Information & Suffix &
          Debugger.Line_Ender);
-
-      IF
-         Terminal_Printing AND THEN Terminal_Hook /= NULL
-      THEN
-         Terminal_Hook.Print(Prefix & Information & Suffix);
-         Terminal_Hook.Draw_On
-           (Graphics.Get_Display(UEFI.Bootloader_Arguments.ALL));
-      END IF;
    END Message;
 END HAVK_Kernel.Debug;

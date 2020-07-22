@@ -5,30 +5,6 @@
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
 
-.SECTION .isolated_bss
-
-# A different stack is used to handle system calls. This is for a single core
-# only at this stage, so the BSP should be loading this in its RSP register.
-# Note that this gets mapped into the user's page layout as supervisor only,
-# so if we wish to avoid that, then maybe add another even smaller stack here.
-# TODO: Maybe just use the task's kernel stack that's used for interrupts...
-.ALIGN 16
-assembly__system_call_stack_end:
-	.SPACE 16384
-assembly__system_call_stack_base:
-
-.ALIGN 4
-
-# An address which lets you store the user task's stack temporarily.
-# It should only ever contain the stack pointer used for handling system calls
-# or the current task's stack pointer. The stack should also be reset upon each
-# subsequent system call.
-assembly__system_call_stack_store:
-	.SPACE 8
-
-assembly__system_call_locked: # 1 means locked, 0 means unlocked.
-	.SPACE 2 # Only a bit is used; can't make it into a byte due to `BTS`.
-
 .SECTION .rodata
 
 # Instead of using the address attribute in Ada, I'll create a pointer here.
@@ -40,9 +16,11 @@ global__system_call_entry_address:
 .SECTION .isolated_text
 
 # These two macros must be consistent with the record shown in the system call
-# handler package called "arguments".
+# handler package called "arguments". A reminder that the stack grows
+# downwards, so the arguments are pushed in reverse to the record shown in the
+# system call handler package in the Ada code.
 .MACRO REGISTER_ARGUMENTS_TO_STACK_ARGUMENTS
-	PUSH RAX
+	PUSH RAX # Previously clobbered by us.
 	PUSH R10
 	PUSH R9
 	PUSH R8
@@ -53,7 +31,8 @@ global__system_call_entry_address:
 	PUSH RCX # Task's RIP.
 .ENDM
 # Be sure to use this after any and all function calls, as we don't want
-# anything in here to be modified at all.
+# anything in here to be modified at all. The user should be seeing all these
+# values.
 .MACRO STACK_ARGUMENTS_TO_REGISTER_ARGUMENTS
 	POP RCX
 	POP R11
@@ -70,14 +49,17 @@ global__system_call_entry_address:
 # (RCX => return address, R11 => previous RFLAGS value, OTHERS => specific to
 # the system call)
 assembly__system_call_entry:
-	.L_locked: # Keep the spinlock simple for now, make it better later.
-		LOCK BTS WORD PTR [RIP + assembly__system_call_locked], 0
-		JC .L_locked # No deadlock checks implemented yet, just spin.
-
 	# The stack is not changed upon entry, we currently have the task's
 	# stack loaded into RSP, so change it for the system call stack.
-	MOV [RIP + assembly__system_call_stack_store], RSP # Save their stack.
-	LEA RSP, [RIP + assembly__system_call_stack_base] # Load ours.
+
+	# Get the task's ring 0 kernel stack (four bytes into the TSS).
+	# Don't clobber RSP just yet, as we need to store their stack pointer.
+	# Don't touch RBP. The rest of the calls shouldn't either.
+	MOV RAX, [RIP + global__task_state_segment + 4]
+
+	SUB RAX, 8 # Create enough room for a pointer.
+	MOV [RAX], RSP # Save their stack.
+	MOV RSP, RAX # Now we're using the task's kernel stack.
 
 	# Load the kernel's page layout, as we need it to handle system calls.
 	MOV RAX, [RIP + global__kernel_page_map_base_address]
@@ -93,10 +75,11 @@ assembly__system_call_entry:
 
 	STACK_ARGUMENTS_TO_REGISTER_ARGUMENTS
 
-	MOV RSP, [RIP + assembly__system_call_stack_store] # Load their stack.
+	# Load the user's stack again that was stored on the kernel stack.
+	MOV RSP, [RSP]
 
-	# Handled the call. Disable the entry lock and enter ring 3 again.
-	MOV WORD PTR [RIP + assembly__system_call_locked], 0
+	# Handled the call. Enter ring 3 again.
+	SFENCE # Memory fence (make everything prior to this globally visible).
 
 	# WARNING: The address `SYSCALL` was executed from can only ever be a
 	# canonical address, so `REX.W SYSRET` will only ever return to that

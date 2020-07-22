@@ -24,12 +24,12 @@ IS
       -- Always send it over COM* first, as it does not have a length limit
       -- below that of the string type's own indexing type range constraint.
       IF
-         Information'last < positive'last - Log_Prefix'Length
+         Information'last < (positive'last / 2) - Log_Prefix'length
       THEN
          Debug.Message(Log_Prefix & Information);
       ELSE
          Debug.Message(Log_Prefix & Information
-           (Information'first .. positive'last - Log_Prefix'Length));
+           (Information'first .. (positive'last / 2) - Log_Prefix'length));
       END IF;
 
       IF -- Now check if the log's information can actually be stored.
@@ -146,76 +146,16 @@ IS
 
    FUNCTION Image
      (Value   : IN number;
-      Base    : IN number := 10;
-      Padding : IN number := 0)
-      RETURN string
+      Base    : IN number   := 10;
+      Padding : IN positive := 01)
+      RETURN image_string
    IS
-      FUNCTION Get_Digits
-         RETURN number
-      WITH
-         Inline => true,
-         Pre    => Base IN 10 | 16 AND THEN Padding < 64,
-         Post   => (IF Padding = 0 THEN Get_Digits'result IN 1 .. 64
-                       ELSE Get_Digits'result IN Padding .. 64);
-
-      FUNCTION Get_Digits
-         RETURN number
-      IS
-         Digit_Count : number RANGE 0 .. 64 := 0;
-         Temporary   : number := Value;
-      BEGIN
-         IF
-            Base = 10
-         THEN -- TODO: The digit counts aren't automatically provable.
-            WHILE
-               Temporary /= 0
-            LOOP
-               PRAGMA Loop_Invariant(Digit_Count <= Base * 2);
-
-               IF
-                  Digit_Count < Base * 2
-               THEN
-                  Digit_Count := Digit_Count + 1;
-               END IF;
-
-               Temporary := Temporary / Base;
-            END LOOP;
-         ELSIF
-            Base = 16
-         THEN
-            WHILE
-               Temporary /= 0
-            LOOP
-               PRAGMA Loop_Invariant(Digit_Count <= Base);
-
-               IF
-                  Digit_Count < Base
-               THEN
-                  Digit_Count := Digit_Count + 1;
-               END IF;
-
-               Temporary := Shift_Right(Temporary, 4);
-            END LOOP;
-         END IF;
-
-         IF
-            Digit_Count < Padding
-         THEN
-            RETURN Padding;
-         ELSIF
-            Value /= 0
-         THEN
-            RETURN Digit_Count;
-         ELSE -- Even a value of zero has a single digit.
-            RETURN 1;
-         END IF;
-      END Get_Digits;
-
       Base_16   : CONSTANT ARRAY(number RANGE 16#0# .. 16#0F#) OF character :=
         ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
          'A', 'B', 'C', 'D', 'E', 'F');
-      Imaged    : string(1 .. positive(Get_Digits)) := (OTHERS => '0');
-      Temporary : number := Value;
+      Imaged    : image_string := (OTHERS => NUL);
+      Temporary : number  := Value;
+      Pad_Count : natural := Padding;
    BEGIN
       IF
          Base = 10
@@ -223,7 +163,16 @@ IS
          FOR
             Index IN REVERSE Imaged'range
          LOOP
-            EXIT WHEN Temporary = 0;
+            IF
+               Temporary = 0
+            THEN
+               EXIT WHEN Pad_Count = 0;
+               Pad_Count := Pad_Count - 1;
+            ELSE
+               Pad_Count := (IF Pad_Count /= 0 THEN
+                  Pad_Count - 1 ELSE Pad_Count);
+            END IF;
+
             Imaged(Index) :=
                character'val((Temporary MOD Base) + character'pos('0'));
             Temporary     := Temporary / Base;
@@ -234,7 +183,16 @@ IS
          FOR
             Index IN REVERSE Imaged'range
          LOOP
-            EXIT WHEN Temporary = 0;
+            IF
+               Temporary = 0
+            THEN
+               EXIT WHEN Pad_Count = 0;
+               Pad_Count := Pad_Count - 1;
+            ELSE
+               Pad_Count := (IF Pad_Count /= 0 THEN
+                  Pad_Count - 1 ELSE Pad_Count);
+            END IF;
+
             Imaged(Index) := Base_16(Temporary AND Base - 1);
             Temporary     := Shift_Right(Temporary, 4);
          END LOOP;
@@ -245,9 +203,9 @@ IS
 
    FUNCTION Image
      (Value   : IN address;
-      Base    : IN number := 16;
-      Padding : IN number := 0)
-      RETURN string
+      Base    : IN number   := 16;
+      Padding : IN positive := 01)
+      RETURN image_string
    IS
      (Image(number(Value), Base => Base, Padding => Padding));
 END HAVK_Kernel;

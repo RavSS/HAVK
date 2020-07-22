@@ -208,7 +208,8 @@ IS
          "-fstack-usage",
          -- Issue any warnings for potential stack overflows. This should be
          -- kept consistent with the stack size set in the "entry.S" file.
-         -- TODO: Revisit this when (if) removing the secondary stack.
+         -- TODO: Revisit this when we have time to provide static bounds on
+         -- every single primary stack object.
          ---- "-Wstack-usage=32768",
          -- TODO: The x86-64 red zone is a problem when handling interrupts as
          -- the stack is shared with the ISR and whatever was executing before
@@ -306,13 +307,7 @@ IS
          "-s", "-E",
          -- The stack size is controlled inside "entry.S", but I've also
          -- specified it here just in case it changes anything.
-         "-d32768",
-         -- Default secondary stack size is set to 32 KiB as well. I find that
-         -- it benefits from more space than the primary stack itself, as
-         -- returning large arrays and strings on the secondary stack can
-         -- cause an exception if they're too big. I do not have access to
-         -- `gnatstack`, but this should be enough.
-         "-D32768");
+         "-d32768");
    END Binder;
 
    PACKAGE Linker

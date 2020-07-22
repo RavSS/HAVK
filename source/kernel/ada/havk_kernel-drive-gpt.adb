@@ -11,24 +11,6 @@ WITH
 
 PACKAGE BODY HAVK_Kernel.Drive.GPT
 IS
-   FUNCTION UTF16_To_ASCII
-     (UTF16_String : IN words)
-      RETURN string
-   IS
-      ASCII_String : string(1 .. UTF16_String'length) :=
-        (OTHERS => character'val(0));
-   BEGIN
-      FOR
-         I IN UTF16_String'range
-      LOOP
-         EXIT WHEN UTF16_String(I) = 0; -- Assuming a null-terminated string.
-         ASCII_String(positive(I)) :=
-            character'val(UTF16_String(I) AND 16#FF#);
-      END LOOP;
-
-      RETURN ASCII_String;
-   END UTF16_To_ASCII;
-
    FUNCTION Resolve_UUID
      (UUID : IN unique_identifier)
       RETURN unique_identifier
@@ -40,20 +22,6 @@ IS
          Shift_Right(Intrinsics.Byte_Swap(UUID.Sequence_And_Variant), 48),
       Node                  =>
          Shift_Right(Intrinsics.Byte_Swap(UUID.Node), 16));
-
-   FUNCTION Image
-     (UUID : IN unique_identifier)
-      RETURN string
-   IS
-      Imaged : CONSTANT string :=
-         Image(UUID.Time_Low,              Base => 16, Padding => 08) & '-' &
-         Image(UUID.Time_Middle,           Base => 16, Padding => 04) & '-' &
-         Image(UUID.Time_High_And_Version, Base => 16, Padding => 04) & '-' &
-         Image(UUID.Sequence_And_Variant,  Base => 16, Padding => 04) & '-' &
-         Image(UUID.Node,                  Base => 16, Padding => 12);
-   BEGIN
-      RETURN Imaged(partition_name'range);
-   END Image;
 
    PROCEDURE Get_Partition
      (New_Partition   : OUT partition;
@@ -132,8 +100,8 @@ IS
          New_Partition      :=
            (Present         => true,
             Index           => Index,
-            Name            => UTF16_To_ASCII
-              (Table_Sector(Index MOD 4).Name)(New_Partition.Name'range),
+            Name            =>
+               Table_Sector(Index MOD 4).Name(New_Partition.Name'range),
             LBA_First       => Table_Sector(Index MOD 4).LBA_First,
             LBA_Last        => Table_Sector(Index MOD 4).LBA_Last,
             Drive_UUID      => Resolve_UUID
@@ -154,7 +122,7 @@ IS
 
    PROCEDURE Get_Partition
      (New_Partition   : OUT partition;
-      Name            : IN string;
+      Name            : IN wide_string;
       Secondary_Bus   : IN boolean := false;
       Secondary_Drive : IN boolean := false)
    IS

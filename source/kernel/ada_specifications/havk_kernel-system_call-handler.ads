@@ -6,7 +6,8 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Intrinsics;
+   HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Memory;
 USE TYPE
    HAVK_Kernel.Intrinsics.model_specific_register;
 
@@ -27,24 +28,25 @@ PRIVATE
       External_Name => "global__system_call_entry_address";
 
    -- A pointer to this record is passed to the system call handler. That way
-   -- we can provide a return code without using functions in Ada. Passing
-   -- the values normally with the "IN OUT" mode means that each value needs
-   -- to be placed onto the stack anyway with a pointer to it. This ensures
-   -- consistency.
-   TYPE arguments IS RECORD
+   -- we can provide a return code without using functions in Ada. Passing the
+   -- values normally with the "IN OUT" mode means that each value needs to be
+   -- placed onto the stack anyway with a pointer to it. This ensures
+   -- consistency. Also make sure that this consistent with the push/pop
+   -- sequence macros defined in the "system_call.S" file.
+   TYPE arguments IS LIMITED RECORD
       -- RCX is clobbered by `SYSCALL` and it puts the instruction's RIP into
       -- the RCX register itself.
-      RCX_RIP    : address;
+      RCX_RIP    : Memory.canonical_address; -- Should probably not touch this.
       -- Similar to the RCX register, the R11 register is clobbered as well and
       -- gets replaced with the value of RFLAGS before `SYSCALL` was executed.
-      R11_RFLAGS : number;
+      R11_RFLAGS : register;  -- Should probably not touch this.
       RDI        : operation; -- Validate this before reading it.
-      RSI        : number;
-      RDX        : number;
-      R8         : number;
-      R9         : number;
-      R10        : number;
-      RAX        : error; -- Not passed by the user, but returned by us.
+      RSI        : register;  -- Argument 1.
+      RDX        : register;  -- Argument 2.
+      R8         : register;  -- Argument 3.
+      R9         : register;  -- Argument 4.
+      R10        : register;  -- Argument 5.
+      RAX        : register;  -- Not passed by the user, but returned by us.
    END RECORD
    WITH
       Convention => Assembler;
@@ -57,9 +59,13 @@ PRIVATE
       R8         AT 40 RANGE 0 .. 63;
       R9         AT 48 RANGE 0 .. 63;
       R10        AT 56 RANGE 0 .. 63;
-      RAX        AT 64 RANGE 0 .. 63;
+      RAX        AT 64 RANGE 0 .. 63; -- Clobbers RAX, not just EAX.
    END RECORD;
 
+   -- This procedure passes the arguments to an operation according to the
+   -- system call. It expects that the entry stub for the system call passes a
+   -- pointer/access to the record up above. They must match, or else trouble
+   -- will occur.
    PROCEDURE System_Call_Handler
      (Values : NOT NULL ACCESS arguments)
    WITH

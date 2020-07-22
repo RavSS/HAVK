@@ -157,7 +157,8 @@ HAVK_SYSTEM_SOURCE_PATH=$(SOURCE_PATH)operating_system/
 HAVK_SYSTEM_ABSOLUTE_BUILD_PATH=$(abspath $(HAVK_SYSTEM_BUILD_PATH))/
 
 HAVK_SYSTEM_FILES=\
-	syscall_tester.elf
+	thread_tester.elf \
+	framebuffer_tester.elf
 
 # This whitespace separated list includes singular quotes around each program.
 HAVK_SYSTEM=$(foreach FILE, $(HAVK_SYSTEM_FILES), \

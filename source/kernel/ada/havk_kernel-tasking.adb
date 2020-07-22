@@ -7,7 +7,8 @@
 
 WITH
    Ada.Unchecked_Deallocation,
-   HAVK_Kernel.Intrinsics;
+   HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Interrupts;
 
 PACKAGE BODY HAVK_Kernel.Tasking
 WITH
@@ -31,13 +32,16 @@ IS
                                     Memory.Kernel_Isolated_Data_Size,
                                     Memory.Kernel_Isolated_BSS_Base,
                                     Memory.Kernel_Isolated_BSS_Size,
-                                    UEFI.Bootloader_Arguments))
+                                    UEFI.Bootloader_Arguments,
+                                    UEFI.Memory_Map))
    IS
       PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
         (object => task_control_block, name => access_task_control_block);
 
       Error_Check : error;
    BEGIN
+      Task_Cleaner; -- Try to remove any dead tasks first.
+
       FOR
          Task_Index IN Tasks'range
       LOOP
@@ -160,7 +164,7 @@ IS
    WITH
       Refined_Global => (In_Out => (Tasks, Paging.Kernel_Page_Layout_State,
                                     Memory.Frames.Frame_Allocator_State),
-                         Input  => (UEFI.Bootloader_Arguments, Active_Task,
+                         Input  => (UEFI.Memory_Map, Active_Task,
                                     SPARK.Heap.Dynamic_Memory)),
       Refined_Post   => Error_Status IN no_error | attempt_error | memory_error
                            AND THEN
@@ -174,7 +178,8 @@ IS
    BEGIN
       IF -- Task needs to be present and have a page layout ready for mapping.
          Task_Index NOT IN Tasks'range OR ELSE
-         Tasks(Task_Index) = NULL
+         Tasks(Task_Index) = NULL      OR ELSE
+        (FOR ALL Region OF UEFI.Memory_Map => Region = NULL)
       THEN
          Error_Status := attempt_error;
          RETURN;
@@ -467,17 +472,48 @@ IS
          PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
             "We cannot continue if all the user tasks failed.");
       END IF;
-
-      Switch;
    END Kill_Active_Task;
 
+   PROCEDURE Kill_Active_Thread
+     (Kill_Code : IN number)
+   IS
+   BEGIN
+      IF
+         Tasks(Active_Task) = NULL
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - Active task does not actually exist.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "This should be called more carefully.");
+      END IF;
+
+      Tasks(Active_Task).Threads(Tasks(Active_Task).Active_Thread).Alive :=
+         false; -- Thread killed.
+      Tasks(Active_Task).Threads(Tasks(Active_Task).Active_Thread).Exit_Code :=
+         Kill_Code; -- Assigned the code after the kill.
+
+      Log("Thread " & Image(Tasks(Active_Task).Active_Thread) & " of task """ &
+         Tasks(Active_Task).Name & """ has exited with code " &
+         Image(Kill_Code) & '.', Tag => Tasking_Tag);
+
+      IF -- Kill the task too if there's no more threads.
+        (FOR ALL Thread OF Tasks(Active_Task).Threads => NOT Thread.Alive)
+      THEN
+         Log("Task """ & Tasks(Active_Task).Name & """ is being killed due " &
+            "to no living threads remaining.", Tag => Tasking_Tag);
+         Kill_Active_Task;
+      END IF;
+   END Kill_Active_Thread;
+
    PROCEDURE Page_Fault_Handler
-     (Error_Code : IN number)
+     (Error_Location : IN address;
+      Error_Code     : IN number)
    IS
       FUNCTION Read_CR2
          RETURN address
       WITH
-         Global            => NULL,
+         Global            => (Input => Paging.MMU_State),
          Volatile_Function => true,
          Import            => true,
          Convention        => Assembler,
@@ -512,20 +548,23 @@ IS
 
       -- TODO: Add more to describe the page fault. I've only covered 2 fields.
    BEGIN
-      IF -- Let the active task killer handle the panic.
+      -- Let the active task killer handle the panic when the active task is
+      -- neither dead or alive.
+      IF
          Tasks(Active_Task) = NULL
       THEN
          Tasking.Kill_Active_Task;
          RETURN;
       END IF;
 
-      Log("Task page fault - Error code: 0x" & Image(Error_Code, Base => 16) &
-         " - Fault address: 0x" & Image(Fault_Address) & " - " &
+      Log("Task """ & Tasks(Active_Task).Name & """ (thread " &
+         Image(Tasks(Active_Task).Active_Thread) & ") " &
+         "page fault - Error code: 0x" & Image(Error_Code, Base => 16) &
+         " - Fault address: 0x" & Image(Fault_Address) &
+         " - Instruction address: 0x" & Image(Error_Location) & " - " &
          Present_Field & Write_Field, Tag => Tasking_Tag, Warn => true);
 
-      Log("Page fault was triggered; now killing """ &
-         Tasks(Active_Task).Name & """.", Tag => Tasking_Tag, Warn => true);
-
+      -- TODO: Right now, I'm just marking the task for death.
       Tasking.Kill_Active_Task;
    END Page_Fault_Handler;
 
@@ -556,13 +595,12 @@ IS
    END Schedule;
 
    PROCEDURE Round_Robin
-     (Yield : IN boolean := false)
    IS
    BEGIN
       IF -- A true state-of-the-art scheduler.
-         Yield                        OR ELSE
+         Countdown = 0                OR ELSE
          NOT Tasks(Active_Task).Alive OR ELSE
-         Countdown = 0
+         NOT Tasks(Active_Task).Threads(Tasks(Active_Task).Active_Thread).Alive
       THEN
          Switch;
       ELSE
@@ -628,10 +666,6 @@ IS
             END IF;
          END LOOP;
       END IF;
-
-      -- Run the task cleaner.
-      -- TODO: May not want to run this for every single context switch.
-      Task_Cleaner;
 
       IF -- Handle a case where all tasks are dead.
          Tasks(Active_Task) = NULL    OR ELSE
@@ -713,6 +747,37 @@ IS
       END LOOP;
    END Task_Cleaner;
 
+   PROCEDURE Map_Address_Range
+     (Task_Index       : IN number;
+      Virtual_Address  : IN address;
+      Physical_Address : IN address;
+      Size             : IN number;
+      Page_Size        : IN Paging.page_frame_variant := Paging.Page;
+      Present          : IN boolean :=  true;
+      Write_Access     : IN boolean := false;
+      User_Access      : IN boolean := false;
+      No_Execution     : IN boolean :=  true)
+   IS
+   BEGIN
+      IF -- TODO: Return a proper error status.
+         Task_Index NOT IN Tasks'range OR ELSE
+         Tasks(Task_Index) = NULL
+      THEN
+         RETURN;
+      END IF;
+
+      Paging.Map_Address_Range
+        (Layout           => Tasks(Task_Index).Virtual_Space,
+         Virtual_Address  => Virtual_Address,
+         Physical_Address => Physical_Address,
+         Size             => Size,
+         Page_Size        => Page_Size,
+         Present          => Present,
+         Write_Access     => Write_Access,
+         User_Access      => User_Access,
+         No_Execution     => No_Execution);
+   END Map_Address_Range;
+
    PROCEDURE Get_Task_Index
      (Task_Name    : IN string;
       Task_Index   : OUT number;
@@ -743,7 +808,7 @@ IS
    END Get_Task_Index;
 
    FUNCTION Get_Active_Task_Name
-      RETURN string
+      RETURN task_name_string
    IS
    (
       IF
@@ -751,7 +816,7 @@ IS
       THEN
          Tasks(Active_Task).Name
       ELSE
-        (1 .. 64 => character'val(0))
+        (OTHERS => NUL)
    )
    WITH
       Refined_Global => (Input => (Enabled, Tasks, Active_Task));

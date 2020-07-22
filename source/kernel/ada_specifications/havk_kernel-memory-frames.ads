@@ -5,6 +5,11 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   HAVK_Kernel.UEFI;
+USE TYPE
+   HAVK_Kernel.UEFI.access_memory_descriptor;
+
 -- This package manages physical frames of 4 KiB each. It currently uses a very
 -- naive and simple way of allocating/deallocating them.
 PACKAGE HAVK_Kernel.Memory.Frames
@@ -20,8 +25,10 @@ IS
       Frame_Owner        : IN number;
       Frame_Count        : IN number := 1)
    WITH
-      Pre => Frame_Count IN 1 .. number(address'last) / Paging.Page AND THEN
-             Frame_Owner <= 2**15 - 1;
+      Pre => Frame_Count IN 1 .. number(address'last / address(Paging.Page))
+                AND THEN
+             Frame_Owner <= 2**15 - 1 AND THEN
+            (FOR SOME Region OF UEFI.Memory_Map => Region /= NULL);
 
    -- Converts a frame's base address to an element and sets it to unused.
    -- Can do a chain of free operations as well.
@@ -29,7 +36,9 @@ IS
      (Frame_Base_Address : IN page_address;
       Frame_Count        : IN number := 1)
    WITH
-      Pre => Frame_Count /= 0;
+      Pre => Frame_Count IN 1 .. number(address'last / address(Paging.Page))
+                AND THEN
+            (FOR SOME Region OF UEFI.Memory_Map => Region /= NULL);
 
    -- This frees all frames that have been marked for a specific owner.
    PROCEDURE Deallocate_All_Owner_Frames
@@ -96,7 +105,8 @@ PRIVATE
       RETURN boolean
    WITH
       Inline => true,
-      Pre    => Frame_Index IN frame_collection'range;
+      Pre    => Frame_Index IN frame_collection'range AND THEN
+               (FOR SOME Region OF UEFI.Memory_Map => Region /= NULL);
 
    -- The actual variable for counting physical frames. The range is built into
    -- the "frame_collection" type itself, which is defined up above.

@@ -19,8 +19,7 @@ IS
    SUBTYPE partition_index IS number RANGE 0 .. 127;
 
    -- The partition name string for GPT can only have 36 UTF-16 code points.
-   -- By doing some conversion, I can turn that into ASCII most of the time.
-   SUBTYPE partition_name IS string(1 .. 36);
+   SUBTYPE partition_name_string IS wide_string(1 .. 36);
 
    -- A Universally Unique Identifier (UUID) type. This is also called the
    -- Globally Unique Identifier (GUID) by Microsoft. It does what its name
@@ -73,7 +72,8 @@ IS
    TYPE partition IS RECORD
       Present         : boolean               := false;
       Index           : partition_index       := 0;
-      Name            : partition_name        := (OTHERS => character'val(0));
+      Name            : partition_name_string :=
+        (OTHERS => wide_character'val(0));
       LBA_First       : logical_block_address := logical_block_address'first;
       LBA_Last        : logical_block_address := logical_block_address'first;
       Drive_UUID      : unique_identifier     := (OTHERS => 0);
@@ -102,23 +102,14 @@ IS
    -- It will retrieve the first partition that matches the name.
    PROCEDURE Get_Partition
      (New_Partition   : OUT partition;
-      Name            : IN string;
+      Name            : IN wide_string;
       Secondary_Bus   : IN boolean := false;
       Secondary_Drive : IN boolean := false)
    WITH
       Global => (In_Out => (Intrinsics.CPU_Port_State, Drive_State,
                             SPARK.Heap.Dynamic_Memory)),
-      Pre    => Name'first = partition_name'first AND THEN
-                Name'last <= partition_name'last;
-
-   -- Returns a hexidecimal representation of a UUID with dashes and no
-   -- additional padding beyond that of a UUID's maximum values.
-   FUNCTION Image
-     (UUID : IN unique_identifier)
-      RETURN string
-   WITH
-      Post => Image'result'first = partition_name'first AND THEN
-              Image'result'last  = partition_name'last;
+      Pre    => Name'first = partition_name_string'first AND THEN
+                Name'last <= partition_name_string'last;
 
 PRIVATE
    -- This is the GPT revision/version I currently support. The reasoning is
@@ -238,9 +229,8 @@ PRIVATE
       -- This is actually only 36 UTF-16 code points. By ignoring all the odd
       -- index bytes, you can most likely print the name without the above
       -- issue. See how I did it in HAVK's UEFI bootloader.
-      Name           : words
-        (number(partition_name'first) .. number(partition_name'last)) :=
-        (OTHERS => 0);
+      Name           : partition_name_string :=
+        (OTHERS => wide_character'val(0));
    END RECORD;
    FOR partition_table_entry USE RECORD
       Type_UUID      AT 00 RANGE 0 .. 127;
@@ -257,16 +247,6 @@ PRIVATE
    WITH
       Component_Size => 1024, -- Entries are 128 bytes minimum as of now.
       Size           => 4096; -- 512 bytes minimum (most common sector size).
-
-   -- Attempts to shorten the UTF-16 code point to only a single byte in the
-   -- hopes that it will become an ASCII compatible string. The passed word
-   -- array is presumed to be null-terminated.
-   FUNCTION UTF16_To_ASCII
-     (UTF16_String : IN words)
-      RETURN string
-   WITH
-      Pre => UTF16_String'first = number(positive'first) AND THEN
-             UTF16_String'last <= number(positive'last);
 
    -- The order of the UUID when read off the drives is not correct, as they're
    -- in mixed endian. This corrects that by taking in the raw value and

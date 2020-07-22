@@ -7,7 +7,6 @@
 
 WITH
    HAVK_Kernel.PS2.Keyboard,
-   HAVK_Kernel.PS2.Mouse,
    HAVK_Kernel.PIT;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.ISA_IRQs
@@ -106,7 +105,7 @@ IS
      (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state)
    IS
    BEGIN
-      PS2.Mouse.Interrupt_Manager;
+      PS2.Flush;
    END ISR_044_Handler;
 
    PROCEDURE ISR_045_Handler

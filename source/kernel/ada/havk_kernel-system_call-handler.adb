@@ -10,8 +10,6 @@ WITH
 
 PACKAGE BODY HAVK_Kernel.System_Call.Handler
 IS
-   PRAGMA Warnings(off, "formal parameter * is not modified",
-      Reason => "In time, it likely will be. Silence the warning for now.");
    PROCEDURE System_Call_Handler
      (Values : NOT NULL ACCESS arguments)
    IS
@@ -33,14 +31,22 @@ IS
       IS
          WHEN null_operation =>
             Null_Operation_Call(Values.RSI, Values.RDX, Values.R8, Values.R9,
-               Values.RCX_RIP, Values.RAX);
+               Values.R10, register(Values.RCX_RIP), Values.RAX);
+
+         WHEN exit_thread_operation =>
+            Exit_Thread_Operation_Call(Values.RSI);
 
          WHEN create_thread_operation =>
             Create_Thread_Operation_Call(Values.RSI, Values.RDX, Values.RAX);
 
+         WHEN framebuffer_access_operation =>
+            Framebuffer_Access_Operation_Call(Values.RSI, Values.RDX,
+               Values.R8, Values.R9, Values.R10, Values.RAX);
+
          WHEN OTHERS => -- TODO: Expand these as we implement the user space.
-            Log("Call """ & Values.RDI'image & """ is not yet implemented.",
-               Tag => System_Call_Tag, Warn => true);
+            Log("Call """ & Values.RDI'image &
+               """ is not yet implemented.", Tag => System_Call_Tag,
+               Warn => true);
       END CASE;
    END System_Call_Handler;
 
@@ -55,7 +61,7 @@ IS
          Shift_Left(16#08#, 32);
 
       -- The mask for RFLAGS. Right now, interrupts are disabled during the
-      -- handling of the system call, as only a single stack exists for it.
+      -- handling of the system call to avoid some concurrency issues.
       -- It can be resolved much later when performance can be improved.
       -- Reminder that a set bit here means that bit is zeroed upon entry.
       -- READ: https://en.wikipedia.org/wiki/FLAGS_register

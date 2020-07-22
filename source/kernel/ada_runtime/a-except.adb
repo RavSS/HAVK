@@ -50,6 +50,7 @@ PACKAGE BODY Ada.Exceptions IS
       PRAGMA Import (C, Last_Chance_Handler, "__gnat_last_chance_handler");
       PRAGMA No_Return (Last_Chance_Handler);
 
+      Aliased_Message : ALIASED CONSTANT string := Message;
    BEGIN
       --  The last chance handler is expecting a C string as Msg parameter,
       --  which means a NUL terminated string.
@@ -70,12 +71,12 @@ PACKAGE BODY Ada.Exceptions IS
          DECLARE
             S : string (Message'First .. Message'Last + 1) WITH
                Import,
-               Address => Message'Address;
+               Address => Aliased_Message'Address;
          BEGIN
             IF S (S'Last) = character'val (0)
             THEN
                --  We have a proper C string representation
-               Last_Chance_Handler (Message'Address, 0);
+               Last_Chance_Handler (Aliased_Message'Address, 0);
             ELSE
                DECLARE
                   --  Dynamic stack allocated string: may be problematic in

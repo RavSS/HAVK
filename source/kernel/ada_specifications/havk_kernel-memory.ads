@@ -36,7 +36,7 @@ IS
       RETURN number
    WITH
       Inline => true,
-      Pre    => Alignment /= 0 AND THEN (Alignment AND -Alignment) = Alignment,
+      Pre    => Alignment >= 2 AND THEN (Alignment AND (Alignment - 1)) = 0,
       Post   => Align'result MOD Alignment = 0;
 
    -- Converts a virtual address inside kernel space (higher-half virtual
@@ -101,9 +101,36 @@ IS
       External_Name  => "global__kernel_page_map_base_address",
       Linker_Section => ".isolated_bss";
 
+   -- The following virtual addresses are for tasking. Each one defines a
+   -- "standard" virtual address base for various memory ranges that are
+   -- exposed to the user. Right now, it goes from 64 TiB to the end of the
+   -- canonical lower-half of virtual address space. This is indicative of a
+   -- 48-bit address space, which is the standard address space for x86-64
+   -- until 56-bit address spaces are supported.
+   SUBTYPE user_virtual_address IS address
+      RANGE 16#4000_0000_0000# .. 16#7FFF_FFFF_FFFF#;
+
+   -- This should be used for mapping MMIO address ranges into user space for
+   -- tasks that are authorised to use them.
+   SUBTYPE user_hardware_address IS user_virtual_address
+      RANGE user_virtual_address'first .. user_virtual_address'first +
+         2 * TiB - 1;
+
+   SUBTYPE user_framebuffer_address IS user_hardware_address
+      RANGE user_hardware_address'first .. user_hardware_address'first +
+         1 * GiB - 1;
+
+   -- All allocated memory frames/blocks given to tasks should be visible
+   -- through these address ranges.
+   SUBTYPE user_memory_address IS user_virtual_address
+      RANGE user_hardware_address'last .. user_virtual_address'last;
+
    -- What follows below are useful symbol pointer values. Note that some of
    -- them have ranges on them to make `gnatprove` have some notion of what
-   -- values it can realistically expect without needing assumptions.
+   -- values it can realistically expect without needing assumptions. The
+   -- address values should always be canonical and should also be placed on a
+   -- 4 KiB boundary (page-aligned). Both are controlled through the kernel's
+   -- linker script.
 
    -- TODO: Ada (the standard, not GNAT) seems to not understand how to define
    -- true compile-time constants that are imported. For some reason, it won't
@@ -115,116 +142,144 @@ IS
    -- it as a variable in here. It would be nice if a new aspect or something
    -- along it was introduced to alleviate this behaviour.
 
-   Kernel_Virtual_Base       : CONSTANT address
+   Kernel_Virtual_Base       : CONSTANT page_address
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "global__kernel_virtual_base_address";
 
-   Kernel_Virtual_End        : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Virtual_End        : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. address'last - address(Paging.Page)
    WITH
       Import        => true,
       Convention    => Assembler,
       External_Name => "global__kernel_virtual_end_address";
 
-   Kernel_Text_Base          : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Text_Base          : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_text_base_address";
+      External_Name => "global__kernel_text_base_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_Text_End           : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Text_End           : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_text_end_address";
+      External_Name => "global__kernel_text_end_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_RO_Data_Base       : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_RO_Data_Base       : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_rodata_base_address";
+      External_Name => "global__kernel_rodata_base_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_RO_Data_End        : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_RO_Data_End        : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_rodata_end_address";
+      External_Name => "global__kernel_rodata_end_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_Data_Base          : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Data_Base          : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_data_base_address";
+      External_Name => "global__kernel_data_base_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_Data_End           : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Data_End           : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_data_end_address";
+      External_Name => "global__kernel_data_end_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_BSS_Base           : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_BSS_Base           : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_bss_base_address";
+      External_Name => "global__kernel_bss_base_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_BSS_End            : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_BSS_End            : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_bss_end_address";
+      External_Name => "global__kernel_bss_end_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_Isolated_Text_Base : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Isolated_Text_Base : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_isolated_text_base_address";
+      External_Name => "global__kernel_isolated_text_base_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_Isolated_Text_End  : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Isolated_Text_End  : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_isolated_text_end_address";
+      External_Name => "global__kernel_isolated_text_end_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_Isolated_Data_Base : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Isolated_Data_Base : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_isolated_data_base_address";
+      External_Name => "global__kernel_isolated_data_base_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_Isolated_Data_End  : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Isolated_Data_End  : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_isolated_data_end_address";
+      External_Name => "global__kernel_isolated_data_end_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_Isolated_BSS_Base  : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Isolated_BSS_Base  : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_isolated_bss_base_address";
+      External_Name => "global__kernel_isolated_bss_base_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
-   Kernel_Isolated_BSS_End   : CONSTANT address
-      RANGE Kernel_Virtual_Base .. address'last
+   Kernel_Isolated_BSS_End   : CONSTANT page_address
+      RANGE Kernel_Virtual_Base .. Kernel_Virtual_End
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__kernel_isolated_bss_end_address";
+      External_Name => "global__kernel_isolated_bss_end_address",
+      Annotate      => (GNATprove, False_Positive, "range check might fail",
+                        "This is controlled through the linker script.");
 
    Kernel_Size               : CONSTANT number
    WITH

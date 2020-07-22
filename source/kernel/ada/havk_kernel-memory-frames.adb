@@ -5,9 +5,6 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   HAVK_Kernel.UEFI;
-
 PACKAGE BODY HAVK_Kernel.Memory.Frames
 WITH
    Refined_State => (Frame_Allocator_State => Physical_Frames)
@@ -48,22 +45,19 @@ IS
 
       Frame_Base_Address : CONSTANT page_address :=
          page_address(Frame_Index * Paging.Page);
-      Map                : CONSTANT UEFI.memory_map := UEFI.Get_Memory_Map
-      WITH
-         Annotate => (GNATprove, False_Positive,
-                      "memory leak might occur at end of scope",
-                      "No allocation is occurring.");
    BEGIN
       FOR
-         Region OF Map
+         Region OF UEFI.Memory_Map
       LOOP -- Check if the page address is in a reserved system memory region.
+         EXIT WHEN Region = NULL;
+
          IF
             Frame_Base_Address IN Region.Start_Address_Physical ..
                Region.Start_Address_Physical +
                address(Region.Number_Of_Pages * Paging.Page)
          THEN
-               RETURN (Region.Memory_Region_Type /= UEFI.conventional_data
-                  OR ELSE Undesirable_Attributes(Region));
+            RETURN (Region.Memory_Region_Type /= UEFI.conventional_data
+               OR ELSE Undesirable_Attributes(Region));
          END IF;
       END LOOP;
 
@@ -119,9 +113,10 @@ IS
      (Frame_Base_Address : IN page_address;
       Frame_Count        : IN number := 1)
    IS
-      Base_Frame : CONSTANT number := number(Frame_Base_Address) / Paging.Page;
-      End_Frame  : CONSTANT number := number(Frame_Base_Address) +
-        (Base_Frame + (Paging.Page * (Frame_Count - 1)) / Paging.Page);
+      Base_Frame : CONSTANT number :=
+         number(Frame_Base_Address / address(Paging.Page));
+      End_Frame  : CONSTANT number := number(Frame_Base_Address +
+        address(Base_Frame + (Paging.Page * (Frame_Count - 1)) / Paging.Page));
    BEGIN
       IF
          Base_Frame IN Physical_Frames'range AND THEN
@@ -152,6 +147,7 @@ IS
 
    PROCEDURE Prepare_Kernel_Heap
    IS
+      Heap_Frames : number;
    BEGIN
       IF -- Only initialise the heap once. Ignore all other attempts.
          Kernel_Heap_Base /= 0 OR ELSE
@@ -160,8 +156,16 @@ IS
          RETURN;
       END IF;
 
-      Allocate(Kernel_Heap_Base, 0, -- The below needs to be at least one page.
-         Frame_Count => Paging.Size_To_Pages(Kernel_Heap_Size) OR 1);
+      UEFI.Parse_Memory_Map; -- Fill in the memory map accordingly.
+
+      Heap_Frames := Paging.Size_To_Pages(Kernel_Heap_Size);
+      IF -- Need at least one frame for the kernel's heap.
+         Heap_Frames < 1
+      THEN
+         Heap_Frames := 1;
+      END IF;
+
+      Allocate(Kernel_Heap_Base, 0, Frame_Count => Heap_Frames);
       Kernel_Heap_End := Kernel_Heap_Base + page_address(Kernel_Heap_Size);
 
       IF

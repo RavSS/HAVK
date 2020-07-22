@@ -257,24 +257,22 @@ IS
       User_Access      : IN boolean            := false;
       No_Execution     : IN boolean            :=  true)
    IS
-      Pages            : number;
+      Pages : CONSTANT number := Size_To_Pages(Size, Page_Size);
    BEGIN
-      IF -- There will be a wrap-around problem if the size passed is zero.
-         Size = 0
+      IF -- There will be a wrap-around problem if we're mapping zero pages.
+         Pages = 0
       THEN
          RETURN;
       END IF;
 
       -- Start from zero first so we can efficiently map the base addresses.
-      Pages := Size_To_Pages(Size, Page_Size) - 1;
-
       FOR
-         P IN 0 .. Pages
+         Page_Index IN 0 .. Pages - 1
       LOOP
          Map_Address
            (Layout,
-            Virtual_Address  + address(Page_Size * P),
-            Physical_Address + address(Page_Size * P),
+            Virtual_Address  + address(Page_Size * Page_Index),
+            Physical_Address + address(Page_Size * Page_Index),
             Page_Size       =>     Page_Size,
             Present         =>       Present,
             Write_Access    =>  Write_Access,
