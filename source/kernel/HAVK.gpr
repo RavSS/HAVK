@@ -28,14 +28,6 @@ IS
    -- NOTE: Do not include extra spaces in the switches or else `gprbuild`
    -- will fail to parse them properly.
 
-   PACKAGE Naming
-   IS
-      -- Switch the suffix from ".s" to ".S". The latter indicates that the
-      -- assembly file has not gone through preprocessing before being passed
-      -- to the compiler/driver.
-      FOR Body_Suffix("ASM") USE ".S";
-   END Naming;
-
    PACKAGE Metrics
    IS -- `gnatmetric`
       Metrics_Switches :=
@@ -207,7 +199,7 @@ IS
          -- I've allocated in the entry assembly file.
          "-fstack-usage",
          -- Issue any warnings for potential stack overflows. This should be
-         -- kept consistent with the stack size set in the "entry.S" file.
+         -- kept consistent with the stack size set in the "entry.s" file.
          -- TODO: Revisit this when we have time to provide static bounds on
          -- every single primary stack object.
          ---- "-Wstack-usage=32768",
@@ -305,7 +297,7 @@ IS
          -- Check if the source files actually exist and are findable;
          -- otherwise, raise an error.
          "-s", "-E",
-         -- The stack size is controlled inside "entry.S", but I've also
+         -- The stack size is controlled inside "entry.s", but I've also
          -- specified it here just in case it changes anything.
          "-d32768");
    END Binder;

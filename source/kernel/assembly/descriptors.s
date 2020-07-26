@@ -1,6 +1,6 @@
 ###############################################################################
 ## Program         -- HAVK                                                   ##
-## Filename        -- descriptors.S                                          ##
+## Filename        -- descriptors.s                                          ##
 ## License         -- GNU General Public License version 3.0                 ##
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
@@ -8,6 +8,7 @@
 .SECTION .text
 
 .GLOBAL assembly__load_global_descriptor_table
+.TYPE assembly__load_global_descriptor_table, @function
 # (RDI => address of GDT, RSI => CS descriptor offset,
 #  RDX => DS descriptor offset, RCX => TSS descriptor offset)
 assembly__load_global_descriptor_table:
@@ -49,6 +50,7 @@ assembly__load_global_descriptor_table:
 	RET
 
 .GLOBAL assembly__load_interrupt_descriptor_table
+.TYPE assembly__load_interrupt_descriptor_table, @function
 # (RDI => address of IDT)
 assembly__load_interrupt_descriptor_table:
 	LIDT [RDI]
@@ -58,6 +60,7 @@ assembly__load_interrupt_descriptor_table:
 # around with ring 3 and this showcases it, so I've kept it for reference.
 # READ: https://wiki.osdev.org/Getting_to_Ring_3#Entering_Ring_3
 .GLOBAL assembly__user_mode_call
+.TYPE assembly__user_mode_call, @function
 # (RDI => pre-modified CS descriptor index for user mode,
 #  RSI => pre-modified DS descriptor index for user mode,
 #  RDX => address of the function to call in user mode)

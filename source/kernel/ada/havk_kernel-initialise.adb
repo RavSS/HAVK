@@ -319,7 +319,7 @@ IS
    END Boot_Partition_Check;
 
    -- TODO: For now, this just loads a few ELF files. I really need to add more
-   -- worthwhile system calls and create something to handle IPC.
+   -- worthwhile system calls.
    PROCEDURE Begin_Tasking
    IS
       Error_Check     : error;
@@ -327,36 +327,16 @@ IS
    BEGIN
       Boot_Partition_Check(EFI_File_System);
 
-      FOR -- Just to show tasking off for now.
-         Instance IN 1 .. 2
-      LOOP
-         Tasking.ELF.Load(EFI_File_System, Thread_Tester_Path,
-            Thread_Tester_Name & Instance'image, Error_Check);
-
-         IF
-            Error_Check /= no_error
-         THEN
-            RAISE Panic
-            WITH
-               Source_Location & " - Failed to load the thread test program.";
-            PRAGMA Annotate(GNATprove, Intentional,
-               "exception might be raised",
-               "We cannot continue if it fails to load. External error.");
-         END IF;
-      END LOOP;
-
-      Tasking.ELF.Load(EFI_File_System, Framebuffer_Tester_Path,
-         Framebuffer_Tester_Name, Error_Check);
+      Tasking.ELF.Load(EFI_File_System, Initialiser_Path, Initialiser_Name,
+         Error_Check);
 
       IF
          Error_Check /= no_error
       THEN
          RAISE Panic
          WITH
-            Source_Location & " - Failed to load the framebuffer test " &
-            "program.";
-         PRAGMA Annotate(GNATprove, Intentional,
-            "exception might be raised",
+            Source_Location & " - Failed to load the initialiser program.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
             "We cannot continue if it fails to load. External error.");
       END IF;
 

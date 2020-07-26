@@ -5,7 +5,8 @@
 // Original Author -- Ravjot Singh Samra, Copyright 2020                     //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <havk.h>
+#include <string.h>
+#include <havk/havk.h>
 
 volatile uint32_t *framebuffer;
 uint32_t framebuffer_size;

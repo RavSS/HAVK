@@ -8,7 +8,8 @@
 WITH
    HAVK_Kernel.Descriptors,
    HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.Tasking;
+   HAVK_Kernel.Tasking,
+   HAVK_Kernel.Tasking.Exceptions;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.Exceptions
 IS
@@ -18,15 +19,22 @@ IS
    PRAGMA Warnings(off, "formal parameter ""Error_Code"" is not referenced",
       Reason => "Some CPU exception ISRs are passed an error code.");
 
-   PROCEDURE ISR_000_Handler
+   PROCEDURE ISR_000_Handler -- Divide-by-zero.
      (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state)
    IS
    BEGIN
-      RAISE Panic
-      WITH
-         Source_Location & " - Unexpected ISR 0 handler entry.";
-      PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-         "This CPU exception is not yet handled, nor should it occur.");
+      IF
+         Interrupt_Frame.CS = Descriptors.CS_Ring_3 AND THEN
+         Interrupt_Frame.SS = Descriptors.DS_Ring_3
+      THEN
+         Tasking.Exceptions.Zero_Division_Handler(Interrupt_Frame.RIP);
+      ELSE
+         RAISE Panic
+         WITH
+            Source_Location & " - Unexpected ISR 0 handler entry.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "This CPU exception should not occur in kernel space.");
+      END IF;
    END ISR_000_Handler;
 
    PROCEDURE ISR_001_Handler
@@ -199,8 +207,11 @@ IS
          Interrupt_Frame.CS = Descriptors.CS_Ring_3 AND THEN
          Interrupt_Frame.SS = Descriptors.DS_Ring_3
       THEN
-         Tasking.Page_Fault_Handler(Interrupt_Frame.RIP, Error_Code);
+         Tasking.Exceptions.Page_Fault_Handler(Interrupt_Frame.RIP,
+            Error_Code);
       ELSE
+         Log("Page fault in kernel - Error code: " & Image(Error_Code) & '.',
+            Tag => Exceptions_Tag, Critical => true);
          RAISE Panic
          WITH
             Source_Location & " - Unexpected ISR 14 handler entry.";

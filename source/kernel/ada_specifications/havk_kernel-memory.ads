@@ -101,30 +101,6 @@ IS
       External_Name  => "global__kernel_page_map_base_address",
       Linker_Section => ".isolated_bss";
 
-   -- The following virtual addresses are for tasking. Each one defines a
-   -- "standard" virtual address base for various memory ranges that are
-   -- exposed to the user. Right now, it goes from 64 TiB to the end of the
-   -- canonical lower-half of virtual address space. This is indicative of a
-   -- 48-bit address space, which is the standard address space for x86-64
-   -- until 56-bit address spaces are supported.
-   SUBTYPE user_virtual_address IS address
-      RANGE 16#4000_0000_0000# .. 16#7FFF_FFFF_FFFF#;
-
-   -- This should be used for mapping MMIO address ranges into user space for
-   -- tasks that are authorised to use them.
-   SUBTYPE user_hardware_address IS user_virtual_address
-      RANGE user_virtual_address'first .. user_virtual_address'first +
-         2 * TiB - 1;
-
-   SUBTYPE user_framebuffer_address IS user_hardware_address
-      RANGE user_hardware_address'first .. user_hardware_address'first +
-         1 * GiB - 1;
-
-   -- All allocated memory frames/blocks given to tasks should be visible
-   -- through these address ranges.
-   SUBTYPE user_memory_address IS user_virtual_address
-      RANGE user_hardware_address'last .. user_virtual_address'last;
-
    -- What follows below are useful symbol pointer values. Note that some of
    -- them have ranges on them to make `gnatprove` have some notion of what
    -- values it can realistically expect without needing assumptions. The

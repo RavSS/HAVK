@@ -5,6 +5,15 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
+PRAGMA Restrictions(No_Specification_Of_Aspect => Pre);
+
+WITH
+   Ada.Unchecked_Conversion,
+   HAVK_Kernel.Intrinsics;
+USE TYPE
+   HAVK_Kernel.Intrinsics.general_register,
+   HAVK_Kernel.Intrinsics.XMM_registers;
+
 -- In this package, there is an API to interact with the kernel from ring 3.
 -- The actual handling of the system calls is handled from a child package, but
 -- the call logic is implemented here for the sake of organisation. When
@@ -12,21 +21,11 @@
 -- value and avoid placing preconditions on the system call subprograms. Only
 -- user tasks should be "calling" the subprograms in here, not kernel code
 -- elsewhere in other packages.
+-- TODO: Document the system calls more carefully.
 PACKAGE HAVK_Kernel.System_Call
 IS
 PRIVATE
    System_Call_Tag : CONSTANT string := "SYSCALL";
-
-   -- This describes a general register (64-bit variant) for x86-64. It's kept
-   -- different from the "number" and "address" types just in case of future
-   -- differences in those types. It is unsigned by default, so if signed
-   -- values need to be returned, then make a different type.
-   TYPE register IS MOD 2**64
-   WITH
-      Size        => 64,
-      Object_Size => 64,
-      Annotate    => (GNATprove, No_Wrap_Around);
-   PRAGMA Provide_Shift_Operators(register);
 
    -- The system calls that HAVK supports. The indicated call should always be
    -- in the RDI register, with the following function argument registers for
@@ -34,54 +33,148 @@ PRIVATE
    -- TODO: Implement more of them once we have a functioning user space.
    TYPE operation IS
      (null_operation,
-      exit_thread_operation,
-      create_thread_operation,
-      framebuffer_access_operation,
-      future_operation) -- Just to silence case statement warnings.
+      exit_task_operation,
+      receive_message_operation,
+      send_message_operation,
+      identify_task_operation,
+      load_elf_operation,
+      heap_increase_operation,
+      yield_operation,
+      log_operation,
+      framebuffer_access_operation)
    WITH
       Convention => C;
 
    -- This system call does nothing and only logs the arguments passed.
+   -- @param RSI Argument 1.
+   -- @param RDX Argument 2.
+   -- @param R8 Argument 3.
+   -- @param R9 Argument 4.
+   -- @param R10 Argument 5.
+   -- @param RAX An error status.
    PROCEDURE Null_Operation_Call
-     (RSI : IN register;   -- Argument 1.
-      RDX : IN register;   -- Argument 2.
-      R8  : IN register;   -- Argument 3.
-      R9  : IN register;   -- Argument 4.
-      R10 : IN register;   -- Argument 5.
-      RIP : IN register;   -- Call address.
-      RAX : OUT register); -- An error status returned by us.
+     (RSI : IN Intrinsics.general_register;
+      RDX : IN Intrinsics.general_register;
+      R8  : IN Intrinsics.general_register;
+      R9  : IN Intrinsics.general_register;
+      R10 : IN Intrinsics.general_register;
+      RAX : OUT Intrinsics.general_register;
+      RIP : IN Intrinsics.general_register);
 
-   -- This simply marks the thread it was called from to be killed later and
+   -- This simply marks the task it was called from to be removed later and
    -- stores the exit code for future reference. An infinite loop should be
    -- placed after the system call for this operation, as the task still has
    -- a remaining time slice left.
    -- TODO: Right now, an exit code of anything above zero is considered an
    -- error. This perhaps should be expanded.
-   PROCEDURE Exit_Thread_Operation_Call
-     (RSI : IN register); -- Exit code returned by the task's thread.
+   -- @param RSI Exit code returned by the task.
+   PROCEDURE Exit_Task_Operation_Call
+     (RSI : IN Intrinsics.general_register);
 
-   -- This creates a thread. The primary thing passed to the call at this stage
-   -- is a canonical virtual address which should be pointing to code, meaning
-   -- that it must be below 2 GiB (in the range of a 32-bit signed integer).
-   -- The stack address is not necessary and can be anything, as invalid stack
-   -- addresses should cause an issue in user space due to the fact that we do
-   -- nothing except load it into the RSP register.
-   PROCEDURE Create_Thread_Operation_Call
-     (RSI : IN register;   -- The entry address. Must be canonical.
-      RDX : IN register;   -- The stack address. Must be canonical.
-      RAX : OUT register); -- An error status returned by us.
+   -- Obtains the oldest message sent to the task that called this operation.
+   -- @param RSI The sending task's index/identity. This is not supplied by the
+   -- task, but is rather returned to indicate who truly send the message data.
+   -- @param RDX The length of the data. It will be at or below the total XMM
+   -- bit space, which is 2048 bits or 256 bytes. This is only provided for
+   -- convenience, as you could use your own header in the data itself.
+   -- @param R8 The port the message was sent to.
+   -- @param XMM A buffer of data which fits inside all XMM registers.
+   -- @param RAX An error status.
+   PROCEDURE Receive_Message_Operation_Call
+     (RSI : OUT Intrinsics.general_register;
+      RDX : OUT Intrinsics.general_register;
+      R8  : OUT Intrinsics.general_register;
+      XMM : OUT Intrinsics.XMM_registers;
+      RAX : OUT Intrinsics.general_register);
+
+   -- Creates a new message directed towards the task index specified and holds
+   -- it in a buffer until it is received.
+   -- @param RSI The receiving task's index/identity.
+   -- @param RDX The length of the data. Must be at or below the total XMM bit
+   -- space, which is 2048 bits or 256 bytes. This is only provided for
+   -- convenience, as you could use your own header in the data itself.
+   -- @param R8 The port the message will be sent to.
+   -- @param XMM A buffer of data which fits inside all XMM registers.
+   -- @param RAX An error status.
+   PROCEDURE Send_Message_Operation_Call
+     (RSI : IN Intrinsics.general_register;
+      RDX : IN Intrinsics.general_register;
+      R8  : IN Intrinsics.general_register;
+      XMM : IN Intrinsics.XMM_registers;
+      RAX : OUT Intrinsics.general_register);
+
+   -- Returns the task index/identity and the task's string name.
+   -- @param RSI The task index/identity. If this is zero, then the status of
+   -- the calling task is returned.
+   -- @param XMM The task's string name.
+   -- @param RAX An error status.
+   PROCEDURE Identify_Task_Operation_Call
+     (RSI : IN Intrinsics.general_register;
+      XMM : OUT Intrinsics.XMM_registers;
+      RAX : OUT Intrinsics.general_register);
+
+   -- Loads an ELF file off the EFI file system. This is only intended for
+   -- early usage.
+   -- TODO: This lets any task load a file. For now, that is temporary.
+   -- @param XMM The buffer containing the 192 character/byte file path and 64
+   -- character/byte task name in that order.
+   -- @param RAX An error status.
+   PROCEDURE Load_ELF_Operation_Call
+     (XMM : IN Intrinsics.XMM_registers;
+      RAX : OUT Intrinsics.general_register);
+
+   -- Increases the total heap area of the task's memory space by a single
+   -- physical frame (4 KiB page).
+   -- @param RSI The new end of the heap memory area (if successful).
+   -- @param RAX An error status.
+   PROCEDURE Heap_Increase_Operation_Call
+     (RSI : OUT Intrinsics.general_register;
+      RAX : OUT Intrinsics.general_register);
+
+   -- This system call simply ends the time slice for the operation caller.
+   -- @param RAX An error status. This always returns no error.
+   PROCEDURE Yield_Operation_Call
+     (RAX : OUT Intrinsics.general_register);
+
+   -- Simply outputs a string to the UART.
+   -- TODO: Right now, any task can call this. It's only for debugging user
+   -- tasks at this stage. In the future, giving a specified "logging program"
+   -- the capability to call this would be good.
+   -- @param XMM The 256-byte string. Null characters are internally ignored.
+   -- @param RAX An error status. As of now, no error can occur.
+   PROCEDURE Log_Operation_Call
+     (XMM : IN Intrinsics.XMM_registers;
+      RAX : OUT Intrinsics.general_register);
 
    -- This hands over the framebuffer to a task by mapping it into the task's
    -- virtual memory.
    -- TODO: Right now, this just hands it over to any task.
    -- TODO: Does not yet support giving pixel formats that are defined via a
    -- bitmask.
+   -- @param RSI Returned framebuffer base address.
+   -- @param RDX Returned byte size of the framebuffer.
+   -- @param R8 63:32 = Width. 31:0 = Height.
+   -- @param R9 The amount of pixels in a scanline.
+   -- @param R10 The pixel format.
+   -- @param RAX An error status.
    PROCEDURE Framebuffer_Access_Operation_Call
-     (RSI : OUT register;  -- Returned framebuffer base address.
-      RDX : OUT register;  -- Returned byte size of the framebuffer.
-      R8  : OUT register;  -- 63:32 = Width. 31:0 = Height.
-      R9  : OUT register;  -- The amount of pixels in a scanline.
-      R10 : OUT register;  -- The pixel format.
-      RAX : OUT register); -- An error status returned by us.
+     (RSI : OUT Intrinsics.general_register;
+      RDX : OUT Intrinsics.general_register;
+      R8  : OUT Intrinsics.general_register;
+      R9  : OUT Intrinsics.general_register;
+      R10 : OUT Intrinsics.general_register;
+      RAX : OUT Intrinsics.general_register);
+
+   -- A type to help with converting the data buffer to a string.
+   TYPE XMM_registers_characters IS ARRAY(1 .. 256) OF character
+   WITH
+      Size        => 128 * Intrinsics.XMM_registers'length,
+      Object_Size => 128 * Intrinsics.XMM_registers'length;
+
+   FUNCTION To_Characters IS NEW Ada.Unchecked_Conversion
+     (source => Intrinsics.XMM_registers,
+      target => XMM_registers_characters);
+   PRAGMA Annotate(GNATprove, False_Positive, "type with constraints *",
+      "It's just an array with each element being a byte.");
 
 END HAVK_Kernel.System_Call;

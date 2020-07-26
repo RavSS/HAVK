@@ -19,7 +19,7 @@ IS
       Critical    : IN boolean := false)
    IS
       Log_Prefix  : CONSTANT string := (IF Critical THEN "[CRITICAL] {" ELSIF
-         Warn THEN "[WARNING] {" ELSE "{") & Tag & "} ";
+         Warn THEN "[WARNING] {" ELSE "[NOMINAL] {") & Tag & "} ";
    BEGIN
       -- Always send it over COM* first, as it does not have a length limit
       -- below that of the string type's own indexing type range constraint.

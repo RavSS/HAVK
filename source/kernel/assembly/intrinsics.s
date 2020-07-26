@@ -1,6 +1,6 @@
 ###############################################################################
 ## Program         -- HAVK                                                   ##
-## Filename        -- intrinsics.S                                           ##
+## Filename        -- intrinsics.s                                           ##
 ## License         -- GNU General Public License version 3.0                 ##
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
@@ -8,6 +8,7 @@
 .SECTION .text
 
 .GLOBAL assembly__output_byte
+.TYPE assembly__output_byte, @function
 # (RDI => port, RSI => value)
 assembly__output_byte:
 	MOV DX, DI
@@ -16,6 +17,7 @@ assembly__output_byte:
 	RET
 
 .GLOBAL assembly__output_word
+.TYPE assembly__output_word, @function
 # (RDI => port, RSI => value)
 assembly__output_word:
 	MOV DX, DI
@@ -24,6 +26,7 @@ assembly__output_word:
 	RET
 
 .GLOBAL assembly__input_byte
+.TYPE assembly__input_byte, @function
 # (RDI => port) >> (RAX => inputted byte)
 assembly__input_byte:
 	XOR RAX, RAX
@@ -32,6 +35,7 @@ assembly__input_byte:
 	RET
 
 .GLOBAL assembly__input_word
+.TYPE assembly__input_word, @function
 # (RDI => port) >> (RAX => inputted word)
 assembly__input_word:
 	XOR RAX, RAX
@@ -40,6 +44,7 @@ assembly__input_word:
 	RET
 
 .GLOBAL assembly__write_model_specific_register
+.TYPE assembly__write_model_specific_register, @function
 # (RDI => model-specific register, RSI => value)
 assembly__write_model_specific_register:
 	MOV ECX, EDI # The MSR's index is only 32 bits.
@@ -51,6 +56,7 @@ assembly__write_model_specific_register:
 	RET
 
 .GLOBAL assembly__read_model_specific_register
+.TYPE assembly__read_model_specific_register, @function
 # (RDI => model-specific register) >> (RAX => value)
 assembly__read_model_specific_register:
 	MOV ECX, EDI
@@ -61,18 +67,21 @@ assembly__read_model_specific_register:
 	RET
 
 .GLOBAL assembly__halt
+.TYPE assembly__halt, @function
 # ()
 assembly__halt:
 	HLT
 	RET
 
 .GLOBAL assembly__enable_interrupts
+.TYPE assembly__enable_interrupts, @function
 # ()
 assembly__enable_interrupts:
 	STI
 	RET
 
 .GLOBAL assembly__disable_interrupts
+.TYPE assembly__disable_interrupts, @function
 # ()
 assembly__disable_interrupts:
 	CLI
@@ -99,6 +108,7 @@ assembly__disable_interrupts:
 .POPSECTION
 
 .GLOBAL assembly__cpuid
+.TYPE assembly__cpuid, @function
 # (RDI => pointer to structure that we must fill, RSI => CPUID leaf,
 #  RDX => CPUID leaf argument)
 assembly__cpuid:
@@ -128,6 +138,7 @@ assembly__cpuid:
 # never call `CPUID` with an invalid or unsupported leaf value and then use
 # some random values returned by the processor.
 .GLOBAL assembly__cpuid_highest_leaves
+.TYPE assembly__cpuid_highest_leaves, @function
 # (RDI => normal leaf mask, RSI => extended leaf mask) >>
 # (RAX => highest normal leaf in lower 32 bits and highest extended leaf in
 #  higher 32 bits)

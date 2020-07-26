@@ -1,5 +1,5 @@
 /*****************************************************************************/
-/* Program         -- HAVK                                                   */
+/* Program         -- HAVK Operating System                                  */
 /* Filename        -- linker.ld                                              */
 /* License         -- GNU General Public License version 3.0                 */
 /* Original Author -- Ravjot Singh Samra, Copyright 2020                     */

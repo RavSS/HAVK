@@ -150,19 +150,12 @@ UEFI_SO_FILE=$(BUILD_PATH)$(BOOTLOADER_NAME).so
 # itself in this Git repository. I may move them later on if they get too
 # large and unwieldy for the current repository. Also avoid potential name
 # collisions by putting the output in a subdirectory of the build path.
-# I'll pass a list of the OS programs I want built for this build along with
-# the absolute path of the build subdirectory.
+# I'll simply make all of the operating system programs and store any generated
+# ELF files onto the EFI partition.
 HAVK_SYSTEM_BUILD_PATH=$(BUILD_PATH)operating_system/
 HAVK_SYSTEM_SOURCE_PATH=$(SOURCE_PATH)operating_system/
 HAVK_SYSTEM_ABSOLUTE_BUILD_PATH=$(abspath $(HAVK_SYSTEM_BUILD_PATH))/
-
-HAVK_SYSTEM_FILES=\
-	thread_tester.elf \
-	framebuffer_tester.elf
-
-# This whitespace separated list includes singular quotes around each program.
-HAVK_SYSTEM=$(foreach FILE, $(HAVK_SYSTEM_FILES), \
-	'$(HAVK_SYSTEM_ABSOLUTE_BUILD_PATH)$(FILE)')
+HAVK_SYSTEM=operating-system # A phony/dummy.
 
 # Change these if you want a bigger disk image etc. It assumes that
 # `parted` treats the sector size as 512 bytes. Since I don't need all
@@ -223,44 +216,28 @@ endef
 # $2 => The location of the copy/copies. Supply "::" as prefix for the path.
 define mtools_copy
 	@mcopy -D o -i $(HAVK_IMAGE_ESP) $1 $2
+	@echo -e "$2\r\n          $1"
 endef
 
 .DEFAULT_GOAL: all
 .PHONY: all
 all: $(HAVK_BOOTLOADER) $(HAVK_KERNEL) $(HAVK_SYSTEM)
 
+######################## Build Structure Preparations #########################
+
 $(BUILD_PATH):
-	@mkdir "$@"
+	-@mkdir "$@"
 
 $(HAVK_ADALIB_PATH) $(HAVK_SYSTEM_BUILD_PATH): | $(BUILD_PATH)
-	@mkdir "$@"
+	-@mkdir "$@"
 
 $(HAVK_ADAINCLUDE_PATH): | $(BUILD_PATH)
-	@mkdir "$@"
+	-@mkdir "$@"
 	@ln $(HAVK_RUNTIME_PATH)/* "$@"
 
-$(ESP_PARTITION): | $(BUILD_PATH)
-	$(call echo, "CREATING BLANK \"EFI\" SYSTEM PARTITION AT $@")
+############################# Bootloader Building #############################
 
-	dd if=/dev/zero of="$@" bs=$(IMAGE_BLOCK_SIZE) count=$(ESP_SECTOR_SIZE)
-	mkfs.fat -v -F $(FAT_SIZE) -s 1 -S $(IMAGE_BLOCK_SIZE) "$@"
-
-$(HAVK_IMAGE): | $(ESP_PARTITION)
-	$(call echo, "CREATING BOOTABLE IMAGE AT $@")
-
-	dd if=/dev/zero of="$@" bs=$(IMAGE_BLOCK_SIZE) count=$(IMAGE_SECTORS)
-
-	parted "$@" --align minimal --script \
-		mktable gpt \
-		mkpart primary fat$(FAT_SIZE) \
-			$(ESP_SECTOR_START)s $(ESP_SECTOR_END)s \
-		name 1 EFI \
-		set 1 esp on \
-
-	dd if="$(ESP_PARTITION)" of="$@" bs=$(IMAGE_BLOCK_SIZE) \
-		count=$(ESP_SECTOR_SIZE) seek=$(ESP_SECTOR_START) conv=notrunc
-
-$(UEFI_O_FILE): $(UEFI_C_FILE) | $(HAVK_IMAGE)
+$(UEFI_O_FILE): $(UEFI_C_FILE) | $(BUILD_PATH)
 	$(call echo, "BUILDING BOOTLOADER TO $(HAVK_BOOTLOADER)")
 
 	$(CC) $(UEFI_CC_FLAGS) -c "$<" -o "$@"
@@ -283,9 +260,7 @@ $(HAVK_BOOTLOADER): $(UEFI_SO_FILE)
 		-j .rel -j .rela -j .reloc --target=efi-app-x86_64 \
 		"$<" "$@"
 
-	$(call mtools_create, '/EFI')
-	$(call mtools_create, '/EFI/BOOT')
-	$(call mtools_copy, "$@", '::/EFI/BOOT/BOOTX64.EFI')
+############################### Kernel Building ###############################
 
 $(HAVK_LIBRARY): | $(HAVK_ADAINCLUDE_PATH) $(HAVK_ADALIB_PATH)
 	$(call echo, "BUILDING THE HAVK RUNTIME IN $(BUILD_PATH)")
@@ -299,22 +274,59 @@ $(HAVK_KERNEL): $(HAVK_LIBRARY)
 	@gprbuild -P $(HAVK_PROJECT) $(GPR_VARIABLES) -p -eL \
 		--complete-output $(GPR_KERNEL_FLAGS) -j0 -s -o "./../../$@"
 
-	$(call mtools_create, "/$(NAME)")
-	$(call mtools_copy, "$@", "::/$(NAME)/$(NAME).elf")
-
-$(HAVK_SYSTEM): $(HAVK_IMAGE) | $(HAVK_SYSTEM_BUILD_PATH)
-	$(call echo, "BUILDING \"$(notdir $@)'\" FOR HAVK\'S OPERATING SYSTEM")
+.PHONY: $(HAVK_SYSTEM)
+$(HAVK_SYSTEM): | $(HAVK_SYSTEM_BUILD_PATH)
+	$(call echo, "BUILDING HAVK\'S OPERATING SYSTEM IN \
+		$(HAVK_SYSTEM_BUILD_PATH)")
 
 	@$(MAKE) -C "$(HAVK_SYSTEM_SOURCE_PATH)" \
-		BUILD_PATH=$(HAVK_SYSTEM_ABSOLUTE_BUILD_PATH) $@
+		BUILD_PATH=$(HAVK_SYSTEM_ABSOLUTE_BUILD_PATH)
+
+################################ Image Building ###############################
+
+$(ESP_PARTITION): | $(BUILD_PATH)
+	$(call echo, "CREATING BLANK \"EFI\" SYSTEM PARTITION AT $@")
+
+	dd if=/dev/zero of="$@" bs=$(IMAGE_BLOCK_SIZE) count=$(ESP_SECTOR_SIZE)
+	mkfs.fat -v -F $(FAT_SIZE) -s 1 -S $(IMAGE_BLOCK_SIZE) "$@"
+
+$(HAVK_IMAGE): | $(ESP_PARTITION)
+	$(call echo, "CREATING BOOTABLE IMAGE AT $@")
+
+	dd if=/dev/zero of="$@" bs=$(IMAGE_BLOCK_SIZE) count=$(IMAGE_SECTORS)
+
+	parted "$@" --align minimal --script \
+		mktable gpt \
+		mkpart primary fat$(FAT_SIZE) \
+			$(ESP_SECTOR_START)s $(ESP_SECTOR_END)s \
+		name 1 EFI \
+		set 1 esp on \
+
+	dd if="$(ESP_PARTITION)" of="$@" bs=$(IMAGE_BLOCK_SIZE) \
+		count=$(ESP_SECTOR_SIZE) seek=$(ESP_SECTOR_START) conv=notrunc
+
+.PHONY: image-configuration
+image-configuration: $(HAVK_BOOTLOADER) $(HAVK_KERNEL) $(HAVK_SYSTEM) \
+$(HAVK_IMAGE)
+	$(call echo, "CONFIGURING HAVK ON IMAGE AT $(HAVK_IMAGE)")
+
+	$(call mtools_create, '/EFI')
+	$(call mtools_create, '/EFI/BOOT')
+	$(call mtools_copy, "$(HAVK_BOOTLOADER)","::/EFI/BOOT/BOOTX64.EFI")
+
+	$(call mtools_create, "/$(NAME)")
+	$(call mtools_copy, "$(HAVK_KERNEL)","::/$(NAME)/$(NAME).elf")
 
 	$(call mtools_create, "/$(NAME)")
 	$(call mtools_create, "/$(NAME)/system")
-	$(call mtools_copy, $@, "::/$(NAME)/system")
+	$(call mtools_copy, \
+		$(HAVK_SYSTEM_BUILD_PATH)*.elf,"::/$(NAME)/system")
+
+########################### Virtual Machine Testing ###########################
 
 # (CTRL + A, C) to exit serial and enter monitor, and vice versa.
 .PHONY: qemu
-qemu: $(HAVK_IMAGE) $(HAVK_BOOTLOADER) $(HAVK_KERNEL) $(HAVK_SYSTEM)
+qemu: $(HAVK_IMAGE) image-configuration
 	$(call echo, "LOADING QEMU WITH $<")
 
 	-qemu-system-x86_64 \
@@ -328,7 +340,7 @@ qemu: $(HAVK_IMAGE) $(HAVK_BOOTLOADER) $(HAVK_KERNEL) $(HAVK_SYSTEM)
 
 	@tput sgr0 # Corrected terminal after serial console usage.
 
-$(HAVK_VMDK): $(HAVK_IMAGE) $(HAVK_BOOTLOADER) $(HAVK_KERNEL) $(HAVK_SYSTEM)
+$(HAVK_VMDK): $(HAVK_IMAGE) image-configuration
 	$(call echo, "CREATING VMDK FILE AT $@")
 
 	@qemu-img convert -f raw -O vmdk "$<" "$@"
@@ -367,6 +379,8 @@ uefi-gdb:
 		-ex "set gdb_ready=1" \
 		-ex "continue"
 
+################################### Proving ###################################
+
 .PHONY: proof
 proof: $(BUILD_PATH)
 	$(call echo, "PROVING HAVK KERNEL\'S CORRECTNESS")
@@ -386,20 +400,45 @@ stats:
 	@cd "$(HAVK_SOURCE_PATH)" && gnatmetric -P $(NAME).gpr \
 		$(GPR_VARIABLES) -U -eL
 
-.PHONY: clean
-clean: | $(BUILD_PATH) $(HAVK_ADAINCLUDE_PATH) $(HAVK_ADALIB_PATH) \
-$(HAVK_SYSTEM_BUILD_PATH)
-	$(call echo, "CLEANING ALL COMPILED PROJECTS IN $(BUILD_PATH)")
+################################## Cleaning ###################################
+
+.PHONY: clean-kernel
+clean-kernel: | $(BUILD_PATH) $(HAVK_ADAINCLUDE_PATH) $(HAVK_ADALIB_PATH)
+	$(call echo, "CLEANING ALL KERNEL FILES IN $(BUILD_PATH)")
+
 	@gprclean -P "$(HAVK_RUNTIME)" $(GPR_VARIABLES)
 	@gprclean -P "$(HAVK_PROJECT)" $(GPR_VARIABLES)
-	@rm -vr "$(HAVK_SYSTEM_BUILD_PATH)"
+	@rm -vrf "$(HAVK_KERNEL)"
+
+.PHONY: clean-operating-system
+clean-operating-system: | $(BUILD_PATH) $(HAVK_SYSTEM_BUILD_PATH)
+	$(call echo, "CLEANING ALL OPERATING SYSTEM FILES IN \
+		$(HAVK_SYSTEM_BUILD_PATH)")
+
+	@rm -vrf "$(HAVK_SYSTEM_BUILD_PATH)/*"
+
+.PHONY: clean-bootloader
+clean-bootloader: | $(BUILD_PATH)
+	$(call echo, "CLEANING ALL UEFI BOOTLOADER FILES IN $(BUILD_PATH)")
+
+	@rm -vrf "$(UEFI_O_FILE)" "$(UEFI_SO_FILE)" "$(HAVK_BOOTLOADER)" \
+		"$(HAVK_BOOTLOADER).debug"
+
+.PHONY: clean-image
+clean-image: | $(BUILD_PATH)
+	$(call echo, "CLEANING ALL IMAGE FILES IN $(BUILD_PATH)")
+
+	@rm -vrf "$(HAVK_IMAGE)" "$(ESP_PARTITION)"
 
 .PHONY: clean-proof
 clean-proof: | $(BUILD_PATH) $(HAVK_ADAINCLUDE_PATH)
 	$(call echo, "CLEANING ALL PROOF IN $(BUILD_PATH)")
+
 	@gnatprove -P "$(HAVK_PROJECT)" $(GPR_VARIABLES) --clean
 
 .PHONY: clean-all
-clean-all: clean clean-proof
+clean-all: clean-kernel clean-operating-system clean-bootloader clean-image \
+clean-proof
 	$(call echo, "DELETING BUILD DIRECTORY $(BUILD_PATH)")
+
 	@rm -vrf "$(BUILD_PATH)"

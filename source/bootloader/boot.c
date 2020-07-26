@@ -113,7 +113,7 @@ MACRO_END
 	#define GDB_BREAKPOINT()\
 	MACRO_BEGIN\
 		CONST VOLATILE BOOLEAN gdb_ready = FALSE;\
-		while (!gdb_ready) __builtin_ia32_pause();\
+		while (!gdb_ready) __asm__ VOLATILE ("PAUSE" ::: "memory");\
 	MACRO_END
 
 	#define BREAK() GDB_BREAKPOINT()
@@ -134,7 +134,7 @@ MACRO_END
 			text_section_base);
 		Print(u"        ! BOOTLOADER DATA BASE: 0x%X\r\n",
 			data_section_base);
-		Print(u"! EXECUTE `make uefi-gdb EFI_IMAGE_BASE=0x%X`"
+		Print(u"! EXECUTE `make uefi-gdb UEFI_IMAGE_BASE=0x%X`"
 			" TO BEGIN\r\n",
 			image->ImageBase);
 
@@ -306,6 +306,45 @@ CHAR16 *ansi_to_wide(CHAR8 *ansi_string)
 	}
 
 	return (CHAR16 *)wide_string;
+}
+
+// This function allocates at the lowest possible address and it works up from
+// there. UEFI memory allocation seems to be extremely finnicky. If pool memory
+// allocation is behaving eratic, then use this instead.
+// TODO: I'm currently not making any attempts to reclaim the memory that this
+// returns, but with better usage of the memory types (along with a custom
+// one), the kernel itself could do that.
+VOID *low_malloc(UINT64 size)
+{
+	static EFI_PHYSICAL_ADDRESS lowest_address;
+	EFI_STATUS allocation;
+
+	do
+	{
+		allocation = uefi_call_wrapper(BS->AllocatePages, 4,
+			AllocateAddress,
+			EfiLoaderData,
+			EFI_SIZE_TO_PAGES(size),
+			&lowest_address);
+		lowest_address += size;
+	}
+	while (allocation != EFI_SUCCESS);
+
+	return (VOID *)lowest_address;
+}
+
+// `malloc()` that returns an address which is page-aligned to 0x1000 (4 KiB).
+// The highest level of the page structure must be aligned, so that is used
+// to align the page structure, where the first member of the struct itself
+// is the highest level (the map/PML4). `AllocatePool()` and its zeroed
+// shortcut variant both return an 8 KiB aligned value if I remember correctly,
+// but I'm using `AllocateAddress()` instead.
+VOID *page_malloc(UINT64 size)
+{
+	CONST EFI_PHYSICAL_ADDRESS zeroed_pool
+		= (EFI_PHYSICAL_ADDRESS) low_malloc(size + EFI_PAGE_SIZE);
+
+	return (VOID *)((zeroed_pool + 1 + EFI_PAGE_MASK) & ~EFI_PAGE_MASK);
 }
 
 // A function that prints some welcome information and sets up the environment.
@@ -1122,19 +1161,6 @@ VOID get_memory_map(VOLATILE struct uefi_arguments *arguments,
 	have_uefi_boot_services = FALSE;
 }
 
-// `malloc()` that returns an address which is page-aligned to 0x1000 (4 KiB).
-// The highest level of the page structure must be aligned, so that is used
-// to align the page structure, where the first member of the struct itself
-// is the highest level (the map/PML4). `AllocatePool()` and its zeroed
-// shortcut variant both return an 8-KiB aligned value if I remember correctly.
-VOID *page_malloc(UINT64 size)
-{
-	CONST EFI_PHYSICAL_ADDRESS zeroed_pool = (EFI_PHYSICAL_ADDRESS)
-		AllocateZeroPool(size + EFI_PAGE_SIZE);
-
-	return (VOID *)((zeroed_pool + 1 + EFI_PAGE_MASK) & ~EFI_PAGE_MASK);
-}
-
 // This maps the kernel's virtual space. Instead of creating a new dictionary,
 // I've just reused the UEFI dictionary. This must be called after the boot
 // services have ended, not before. Will always map the base address.
@@ -1211,6 +1237,9 @@ VOID default_mappings(struct elf64_file *havk_elf,
 			havk_virtual_base_check);
 	}
 
+	// Zero the area first to avoid any false mappings.
+	ZeroMem((VOID *)structure, sizeof(struct uefi_page_structure));
+
 	// I've given up trying to map every important thing one by one, so
 	// I've just mapped 0 GiB to 4 GiB entirely. OVMF does this anyway, but
 	// adds special pages (essentially restrictions) for certain ranges.
@@ -1230,27 +1259,6 @@ VOID default_mappings(struct elf64_file *havk_elf,
 		havk_size > havk_memory_size ? havk_size : havk_memory_size);
 
 	Print(u"TEMPORARY PAGE STRUCTURE ADDRESS: 0x%llX\r\n", structure);
-}
-
-// This function allocates at the lowest possible address and it works up
-// from there.
-VOID *low_malloc(UINT64 size)
-{
-	static EFI_PHYSICAL_ADDRESS lowest_address;
-	EFI_STATUS allocation;
-
-	do
-	{
-		allocation = uefi_call_wrapper(BS->AllocatePages, 4,
-			AllocateAddress,
-			EfiLoaderData,
-			EFI_SIZE_TO_PAGES(size),
-			&lowest_address);
-		lowest_address += size;
-	}
-	while (allocation != EFI_SUCCESS);
-
-	return (VOID *)lowest_address;
 }
 
 // Enables some necessary CPU features and switches to the new page structure.

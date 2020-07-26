@@ -260,6 +260,8 @@ IS
       FOR
          Letter OF Path_Name
       LOOP
+         EXIT WHEN Letter = NUL;
+
          IF
             Letter = Separator AND THEN
             Entries /= number'last -- For `gnatprove` (overflow check).
@@ -269,24 +271,26 @@ IS
       END LOOP;
 
       IF -- TODO: Not sure if the below range check is the correct length.
+         Path_Name'length = 0                    OR ELSE
          Path_Name(Path_Name'first) /= Separator OR ELSE
-         Path_Name'length NOT IN 1 .. 256        OR ELSE
          Entries NOT IN 1 .. 128
       THEN
-         RETURN (OTHERS => (OTHERS => <>));
+         RETURN (OTHERS => <>);
       END IF;
 
       RETURN -- Remember that 8.3 path names are padded with spaces.
          Parsed_Path : path
       DO
-         Entries := 0; -- Reused as an entry index variable.
+         Entries := 1; -- Reused as an entry index variable.
          Index   := Parsed_Path(Parsed_Path'first).Name'first;
 
-         FOR
-            Letter OF Path_Name
+         FOR -- Skip the first separator, as we now know it's there.
+            Letter OF Path_Name(Path_Name'first + 1 .. Path_Name'last)
          LOOP
-            PRAGMA Loop_Invariant(Index IN
-               Parsed_Path(Parsed_Path'first).Name'range);
+            PRAGMA Loop_Invariant
+              (Index IN Parsed_Path(Parsed_Path'first).Name'range AND THEN
+               Entries IN 1 .. 128);
+            EXIT WHEN Letter = NUL;
 
             IF
                Letter /= Separator AND THEN

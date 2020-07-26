@@ -1,5 +1,5 @@
 # Tasklist for the HAVK operating system
-### Last Updated: 2020-07-22
+### Last Updated: 2020-07-27
 #### High priority
 - The kernel crashes on AMD systems (but not Intel systems) during
   some point in which my descriptor tables are prepared and loaded, which
@@ -8,9 +8,8 @@
   currently gives all tasks an identical time slice.
 - Create a package for better concurrency support e.g. mutexes.
 - Start implementing various system calls so user space can do something.
-  IPC is particularly needed so we can take things out of ring 0.
-- Create a virtual filesystem for the purpose of abstracting the kernel from
-  the current FAT16 driver.
+- Create a virtual filesystem task.
+- Implement a user-space thread library using `setjmp()` and `longjmp()`.
 
 #### Low priority
 - Take the PS/2 driver out of the kernel and into a ring 3 task.
@@ -24,3 +23,4 @@
   concurrency issues and performance is not a demand, so leave this out until
   the tasking system is solid.
 - Finally start engaging with security concepts centred around user space.
+- Rework the physical frame allocator.

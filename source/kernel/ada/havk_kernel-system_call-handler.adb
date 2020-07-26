@@ -13,14 +13,24 @@ IS
    PROCEDURE System_Call_Handler
      (Values : NOT NULL ACCESS arguments)
    IS
+      Caller_Index  : CONSTANT number := Tasking.Get_Active_Task_Index;
+      Caller_Status : CONSTANT Tasking.task_status :=
+         Tasking.Get_Task_Status(Caller_Index);
    BEGIN
       PRAGMA Warnings(GNATprove, off,
          "attribute Valid is assumed to return True",
          Reason => "Need the validity check. Make sure invalids are handled.");
       IF
+         NOT Caller_Status.Alive
+      THEN
+         Log("Task """ & Caller_Status.Name &
+            """ attempted to do a system call after death.",
+            Tag => System_Call_Tag, Warn => true);
+         RETURN;
+      ELSIF
          NOT Values.RDI'valid
       THEN
-         Log("Task """ & Tasking.Get_Active_Task_Name &
+         Log("Task """ & Caller_Status.Name &
             """ called a non-existent system operation.",
             Tag => System_Call_Tag, Warn => true);
          RETURN;
@@ -28,25 +38,48 @@ IS
 
       CASE
          Values.RDI
-      IS
-         WHEN null_operation =>
-            Null_Operation_Call(Values.RSI, Values.RDX, Values.R8, Values.R9,
-               Values.R10, register(Values.RCX_RIP), Values.RAX);
+      IS -- Format the syntax for this so we really know what we're passing.
+         WHEN null_operation
+         =>   Null_Operation_Call
+                (Values.RSI, Values.RDX, Values.R8, Values.R9, Values.R10,
+                 Values.RAX, Intrinsics.general_register(Values.RCX_RIP));
 
-         WHEN exit_thread_operation =>
-            Exit_Thread_Operation_Call(Values.RSI);
+         WHEN exit_task_operation
+         =>   Exit_Task_Operation_Call
+                (Values.RSI);
 
-         WHEN create_thread_operation =>
-            Create_Thread_Operation_Call(Values.RSI, Values.RDX, Values.RAX);
+         WHEN receive_message_operation
+         =>   Receive_Message_Operation_Call
+                (Values.RSI, Values.RDX, Values.R8, Values.XMM, Values.RAX);
 
-         WHEN framebuffer_access_operation =>
-            Framebuffer_Access_Operation_Call(Values.RSI, Values.RDX,
-               Values.R8, Values.R9, Values.R10, Values.RAX);
+         WHEN send_message_operation
+         =>   Send_Message_Operation_Call
+                (Values.RSI, Values.RDX, Values.R8, Values.XMM, Values.RAX);
 
-         WHEN OTHERS => -- TODO: Expand these as we implement the user space.
-            Log("Call """ & Values.RDI'image &
-               """ is not yet implemented.", Tag => System_Call_Tag,
-               Warn => true);
+         WHEN identify_task_operation
+         =>   Identify_Task_Operation_Call
+                (Values.RSI, Values.XMM, Values.RAX);
+
+         WHEN load_elf_operation
+         =>   Load_ELF_Operation_Call
+                (Values.XMM, Values.RAX);
+
+         WHEN heap_increase_operation
+         =>   Heap_Increase_Operation_Call
+                (Values.RSI, Values.RAX);
+
+         WHEN yield_operation
+         =>   Yield_Operation_Call
+                (Values.RAX);
+
+         WHEN log_operation
+         =>   Log_Operation_Call
+                (Values.XMM, Values.RAX);
+
+         WHEN framebuffer_access_operation
+         =>   Framebuffer_Access_Operation_Call
+                (Values.RSI, Values.RDX, Values.R8, Values.R9, Values.R10,
+                 Values.RAX);
       END CASE;
    END System_Call_Handler;
 

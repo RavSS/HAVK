@@ -21,7 +21,7 @@ IS
    PROCEDURE Set_MSRs;
 
 PRIVATE
-   System_Call_Entry : CONSTANT address
+   System_Call_Entry : CONSTANT Memory.canonical_address
    WITH
       Import        => true,
       Convention    => Assembler,
@@ -32,21 +32,32 @@ PRIVATE
    -- values normally with the "IN OUT" mode means that each value needs to be
    -- placed onto the stack anyway with a pointer to it. This ensures
    -- consistency. Also make sure that this consistent with the push/pop
-   -- sequence macros defined in the "system_call.S" file.
+   -- sequence macros defined in the "system_call.s" file.
    TYPE arguments IS LIMITED RECORD
       -- RCX is clobbered by `SYSCALL` and it puts the instruction's RIP into
-      -- the RCX register itself.
-      RCX_RIP    : Memory.canonical_address; -- Should probably not touch this.
+      -- the RCX register itself. Changing this will return the task to another
+      -- place in the user's code.
+      RCX_RIP    : Memory.canonical_address;
       -- Similar to the RCX register, the R11 register is clobbered as well and
       -- gets replaced with the value of RFLAGS before `SYSCALL` was executed.
-      R11_RFLAGS : register;  -- Should probably not touch this.
-      RDI        : operation; -- Validate this before reading it.
-      RSI        : register;  -- Argument 1.
-      RDX        : register;  -- Argument 2.
-      R8         : register;  -- Argument 3.
-      R9         : register;  -- Argument 4.
-      R10        : register;  -- Argument 5.
-      RAX        : register;  -- Not passed by the user, but returned by us.
+      -- There should be little reason to modify this.
+      R11_RFLAGS : Intrinsics.general_register;
+      -- Validate this before reading it.
+      RDI        : operation;
+      -- This is argument 1.
+      RSI        : Intrinsics.general_register;
+      -- This is argument 2.
+      RDX        : Intrinsics.general_register;
+      -- This is argument 3.
+      R8         : Intrinsics.general_register;
+      -- This is argument 4.
+      R9         : Intrinsics.general_register;
+      -- This is argument 5.
+      R10        : Intrinsics.general_register;
+      -- Not passed by the user, but returned by us.
+      RAX        : Intrinsics.general_register;
+      -- User data in all XMM registers.
+      XMM        : Intrinsics.XMM_registers;
    END RECORD
    WITH
       Convention => Assembler;
@@ -60,6 +71,7 @@ PRIVATE
       R9         AT 48 RANGE 0 .. 63;
       R10        AT 56 RANGE 0 .. 63;
       RAX        AT 64 RANGE 0 .. 63; -- Clobbers RAX, not just EAX.
+      XMM        AT 72 RANGE 0 .. (128 * Intrinsics.XMM_registers'length) - 1;
    END RECORD;
 
    -- This procedure passes the arguments to an operation according to the

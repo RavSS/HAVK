@@ -81,7 +81,8 @@ IS
    -- the base byte and/or byte size parameters do not correspond to a file
    -- properly, then the procedure will silently return. Returns "path_error"
    -- if the path does not resolve to the path name or "size_error" if the
-   -- byte offsets are invalid.
+   -- byte offsets are invalid. A byte size of zero will mean that the file
+   -- (from the base byte) will read the file until the end of the file.
    PROCEDURE Read_File
      (FAT_Context  : IN file_system;
       Path_Name    : IN string;
@@ -487,15 +488,15 @@ PRIVATE
 
    -- As of now, this simply turns a single string indicating a path into an
    -- array of 128 12-character strings, with each element being the name of a
-   -- file/directory entry. A completely blank (space padded) string terminates
-   -- the path.
+   -- file/directory entry. A completely blank (space padded) string element in
+   -- the path type terminates the path. The path name string passed is either
+   -- parsed until its end or until the first null character.
    FUNCTION Tokenize_Path
      (Path_Name      : IN string;
       Dictionary_End : IN boolean := false)
       RETURN path
    WITH
-      Pre  => Path_Name'first = 1 AND THEN
-              Path_Name'last IN Path_Name'first .. 255;
+      Pre => Path_Name'length <= 256;
 
    -- If a file (or directory, if specified) matches the entry name passed,
    -- then this will return the first cluster number. If nothing matches, then

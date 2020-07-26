@@ -1,9 +1,11 @@
 ###############################################################################
 ## Program         -- HAVK                                                   ##
-## Filename        -- system_call.S                                          ##
+## Filename        -- system_call.s                                          ##
 ## License         -- GNU General Public License version 3.0                 ##
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
+
+.INCLUDE "macros.s"
 
 .SECTION .rodata
 
@@ -18,8 +20,14 @@ global__system_call_entry_address:
 # These two macros must be consistent with the record shown in the system call
 # handler package called "arguments". A reminder that the stack grows
 # downwards, so the arguments are pushed in reverse to the record shown in the
-# system call handler package in the Ada code.
+# system call handler package in the Ada code. Note that before this is called,
+# the stack must be 16-byte aligned, as `MOVDQA` is used instead of `MOVDQU`.
 .MACRO REGISTER_ARGUMENTS_TO_STACK_ARGUMENTS
+	# Push the SIMD registers first.
+	SUB RSP, 16 * 17 # RSP must be aligned after this.
+	M_SAVE_XMM_REGISTERS RSP
+
+	# Now push the general registers.
 	PUSH RAX # Previously clobbered by us.
 	PUSH R10
 	PUSH R9
@@ -43,9 +51,13 @@ global__system_call_entry_address:
 	POP R9
 	POP R10
 	POP RAX
+
+	M_LOAD_XMM_REGISTERS RSP
+	ADD RSP, 16 * 17
 .ENDM
 
 .GLOBAL assembly__system_call_entry
+.TYPE assembly__system_call_entry, @function
 # (RCX => return address, R11 => previous RFLAGS value, OTHERS => specific to
 # the system call)
 assembly__system_call_entry:
@@ -57,7 +69,7 @@ assembly__system_call_entry:
 	# Don't touch RBP. The rest of the calls shouldn't either.
 	MOV RAX, [RIP + global__task_state_segment + 4]
 
-	SUB RAX, 8 # Create enough room for a pointer.
+	SUB RAX, 16 # Create enough room for a pointer while keeping alignment.
 	MOV [RAX], RSP # Save their stack.
 	MOV RSP, RAX # Now we're using the task's kernel stack.
 
@@ -71,7 +83,7 @@ assembly__system_call_entry:
 
 	CALL ada__system_call_handler
 
-	CALL assembly__switch_to_task_cr3 # Vanish the full kernel mappings.
+	M_SWITCH_TO_TASK_CR3 # Remove the full kernel mappings.
 
 	STACK_ARGUMENTS_TO_REGISTER_ARGUMENTS
 

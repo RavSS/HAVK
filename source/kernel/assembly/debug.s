@@ -1,6 +1,6 @@
 ###############################################################################
 ## Program         -- HAVK                                                   ##
-## Filename        -- debug.S                                                ##
+## Filename        -- debug.s                                                ##
 ## License         -- GNU General Public License version 3.0                 ##
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
@@ -8,6 +8,7 @@
 .SECTION .text
 
 .GLOBAL assembly__breakpoint
+.TYPE assembly__breakpoint, @function
 # ()
 assembly__breakpoint:
 	XCHG BX, BX # For the Bochs magic break.

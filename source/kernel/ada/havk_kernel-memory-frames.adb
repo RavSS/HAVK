@@ -49,9 +49,8 @@ IS
       FOR
          Region OF UEFI.Memory_Map
       LOOP -- Check if the page address is in a reserved system memory region.
-         EXIT WHEN Region = NULL;
-
          IF
+            Region /= NULL AND THEN
             Frame_Base_Address IN Region.Start_Address_Physical ..
                Region.Start_Address_Physical +
                address(Region.Number_Of_Pages * Paging.Page)
@@ -59,6 +58,9 @@ IS
             RETURN (Region.Memory_Region_Type /= UEFI.conventional_data
                OR ELSE Undesirable_Attributes(Region));
          END IF;
+         PRAGMA Annotate(GNATprove, False_Positive,
+            "null exclusion check might fail",
+            "The region access won't become null during this subprogram.");
       END LOOP;
 
       RETURN true;
@@ -67,7 +69,7 @@ IS
    PROCEDURE Allocate
      (Frame_Base_Address : OUT page_address;
       Frame_Owner        : IN number;
-      Frame_Count        : IN number := 1)
+      Frame_Count        : IN frame_limit := 1)
    WITH
       Refined_Post => (IF Frame_Base_Address /= Null_Frame_Address THEN
                           number(Frame_Base_Address)
@@ -111,7 +113,7 @@ IS
 
    PROCEDURE Deallocate
      (Frame_Base_Address : IN page_address;
-      Frame_Count        : IN number := 1)
+      Frame_Count        : IN frame_limit := 1)
    IS
       Base_Frame : CONSTANT number :=
          number(Frame_Base_Address / address(Paging.Page));

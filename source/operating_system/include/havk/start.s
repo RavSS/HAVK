@@ -1,6 +1,6 @@
 ###############################################################################
 ## Program         -- HAVK                                                   ##
-## Filename        -- start.S                                                ##
+## Filename        -- start.s                                                ##
 ## License         -- GNU General Public License version 3.0                 ##
 ## Original Author -- Ravjot Singh Samra, Copyright 2020                     ##
 ###############################################################################
@@ -8,9 +8,9 @@
 .SECTION .bss
 
 .ALIGN 16 # System V ABI dictates that x86-64 stacks are 16-byte aligned.
-stack_end:
+_stack_end:
 	.SPACE 8192 # Just 8 KiB for now.
-stack_base:
+_stack_base:
 
 .SECTION .text
 
@@ -49,8 +49,9 @@ stack_base:
 .ENDM
 
 .GLOBAL _start
+.TYPE _start, @function
 _start:
-	LEA RSP, [RIP + stack_base] # Load the stack and set the base pointer.
+	LEA RSP, [RIP + _stack_base] # Load the stack and set the base pointer.
 	MOV RBP, RSP
 
 	INITIALISE_REGISTER_STATE

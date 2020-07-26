@@ -15,17 +15,17 @@ IS
    PROCEDURE ISR_000_Stub
      (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state)
    WITH
-      No_Return     => true,
       Import        => true,
       Convention    => Assembler,
-      External_Name => "assembly__interrupt_handler_stub_000";
+      External_Name => "assembly__interrupt_handler_stub_000",
+      Annotate      => (GNATprove, Might_Not_Return);
    PROCEDURE ISR_000_Handler
      (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state)
    WITH
-      No_Return     => true,
       Export        => true,
       Convention    => Assembler,
-      External_Name => "ada__interrupt_handler_000";
+      External_Name => "ada__interrupt_handler_000",
+      Annotate      => (GNATprove, Might_Not_Return);
 
    -- Debug exception - DB - fault/trap.
    PROCEDURE ISR_001_Stub

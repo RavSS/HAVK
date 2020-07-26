@@ -5,14 +5,15 @@
 // Original Author -- Ravjot Singh Samra, Copyright 2020                     //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <havk.h>
+#include <string.h>
+#include <havk/havk.h>
 
 #define THREADS 5
 #define STACK_SIZE 512
 #define PAGE_FAULT_ADDRESS 0xDEADC0DE
 
 // The below attribute aligns the thread's stack pointer (RSP).
-void __attribute__((force_align_arg_pointer)) thread_function(void)
+void ALIGN_STACK thread_function(void)
 {
 	sysargs_ht arguments;
 
@@ -41,21 +42,15 @@ void __attribute__((force_align_arg_pointer)) thread_function(void)
 }
 
 // This file is just for testing the system call for thread creation.
-int main(void)
+// TODO: I've removed threading in the kernel and I want to bring it into user
+// space instead, so this will have to wait for now.
+uint64_t main(void)
 {
-	static uint64_t alignas(16) stacks[THREADS][STACK_SIZE];
-	uint64_t current_thread = 0;
+	static char log_string[256] = "TODO: User-space thread capabilities.";
 	sysargs_ht arguments;
 
-	arguments.operation = CREATE_THREAD_OPERATION;
-	arguments.argument_1 = (uint64_t) thread_function;
+	arguments.operation = LOG_OPERATION;
+	syscall_data(&arguments, log_string);
 
-	while (current_thread < THREADS)
-	{
-		arguments.argument_2
-			= (uint64_t) &stacks[current_thread][STACK_SIZE - 1];
-		current_thread += syscall(&arguments) == NO_ERROR;
-	}
-
-	return 0;
+	return 1;
 }

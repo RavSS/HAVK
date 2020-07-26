@@ -6,7 +6,6 @@
 -------------------------------------------------------------------------------
 
 WITH
-   Ada.Unchecked_Conversion,
    Ada.Unchecked_Deallocation,
    HAVK_Kernel.Drive,
    HAVK_Kernel.Drive.FAT;
@@ -355,12 +354,6 @@ PRIVATE
       specially_ordered_section_flag         => 16#40000000#,
       potentially_excluded_section_flag      => 16#80000000#,
       processor_specific_section_flag        => 16#F0000000#);
-   -- TODO: Replace this when Ada 202X is available.
-   FUNCTION Enum_Rep IS NEW Ada.Unchecked_Conversion
-     (source => section_flags, target => number);
-   PRAGMA Annotate(GNATprove, False_Positive,
-      "type with constraints on bit representation *",
-      "The enumeration can fit inside the number type.");
 
    -- This makes up the section header table. Each entry describes a section.
    TYPE section_header_entry IS RECORD
@@ -410,6 +403,11 @@ PRIVATE
    TYPE access_file_header IS ACCESS file_header;
    TYPE access_program_header_entry IS ACCESS program_header_entry;
    TYPE access_section_header_entry IS ACCESS section_header_entry;
+
+   -- A maximum of 128 segments is defined. You can increase this, but there
+   -- should be no real reason for something to have more segments than that.
+   TYPE program_header_entries IS ARRAY(number RANGE 1 .. 128) OF
+      access_program_header_entry;
 
    PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
      (object => file_header, name => access_file_header);

@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////////////
-// Program         -- HAVK	                                             //
+// Program         -- HAVK Operating System                                  //
 // Filename        -- havk.h                                                 //
 // License         -- GNU General Public License version 3.0                 //
 // Original Author -- Ravjot Singh Samra, Copyright 2020                     //
@@ -25,6 +25,8 @@
 #define MACRO_END }while(0)
 #define PACKED __attribute__((packed))
 #define ALWAYS_INLINE __inline__ __attribute__((always_inline))
+#define ASSEMBLY_BODY __attribute__((naked))
+#define ALIGN_STACK __attribute__((force_align_arg_pointer))
 
 // Helper macros.
 #define ARRAY_LENGTH(x) (sizeof((x)) / sizeof((x)[0]))
@@ -32,8 +34,14 @@
 typedef enum
 {
 	NULL_OPERATION,
-	EXIT_THREAD_OPERATION,
-	CREATE_THREAD_OPERATION,
+	EXIT_TASK_OPERATION,
+	RECEIVE_MESSAGE_OPERATION,
+	SEND_MESSAGE_OPERATION,
+	IDENTIFY_TASK_OPERATION,
+	LOAD_ELF_OPERATION,
+	HEAP_INCREASE_OPERATION,
+	YIELD_OPERATION,
+	LOG_OPERATION,
 	FRAMEBUFFER_ACCESS_OPERATION
 } syscall_ht;
 
@@ -52,17 +60,22 @@ typedef enum
 
 typedef struct
 {
-	syscall_ht operation;
-	uint64_t argument_1;
-	uint64_t argument_2;
-	uint64_t argument_3;
-	uint64_t argument_4;
-	uint64_t argument_5;
+	uint64_t operation; // RDX.
+	uint64_t argument_1; // RSI.
+	uint64_t argument_2; // RDX.
+	uint64_t argument_3; // R8.
+	uint64_t argument_4; // R9.
+	uint64_t argument_5; // R10.
 } PACKED sysargs_ht;
 
-// A general system call wrapper.
+// A general system call wrapper. Cannot handle all calls.
+ASSEMBLY_BODY
 syserr_ht syscall(sysargs_ht *arguments);
 
-void memset(void *area, int value, size_t bytes);
+// A general system call wrapper that also sends or receives data up to 256
+// bytes along with the system call. The data buffer area must be valid up to
+// 256 bytes, even if you intend to send less.
+ASSEMBLY_BODY
+syserr_ht syscall_data(sysargs_ht *arguments, void *data);
 
 #endif

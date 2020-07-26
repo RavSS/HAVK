@@ -76,9 +76,9 @@ IS
    PROCEDURE Dynamic_Memory
    RENAMES Memory.Frames.Prepare_Kernel_Heap;
 
-   -- Sets up the mechanisms for multi-tasking and leaves initialisation.
-   -- Everything that doesn't have support for concurrency needs to be called
-   -- before calling this is even considered.
+   -- Sets up the mechanisms for multi-tasking and leaves kernel-level
+   -- initialisation. Everything that doesn't have support for concurrency
+   -- needs to be called before calling this is even considered.
    PROCEDURE Begin_Tasking
    WITH
       No_Return => true;
@@ -91,16 +91,9 @@ PRIVATE
       Drive.FAT.Separator & "HAVK" &
       Drive.FAT.Separator & "system" & Drive.FAT.Separator;
 
-   -- A thread testing program.
-   Thread_Tester_Name      : CONSTANT string :=
-      "Thread Tester";
-   Thread_Tester_Path      : CONSTANT string :=
-      Operating_System_Folder & "THREAD~1.ELF";
-
-   -- A framebuffer testing program.
-   Framebuffer_Tester_Name : CONSTANT string :=
-      "Framebuffer Tester";
-   Framebuffer_Tester_Path : CONSTANT string :=
-      Operating_System_Folder & "FRAMEB~1.ELF";
+   -- The root server program that will start everything else up.
+   Initialiser_Name : CONSTANT string := "Initialiser";
+   Initialiser_Path : CONSTANT string :=
+      Operating_System_Folder & "INITIA~1.ELF";
 
 END HAVK_Kernel.Initialise;

@@ -1,6 +1,6 @@
 ###############################################################################
 ## Program         -- HAVK                                                   ##
-## Filename        -- strings.S                                              ##
+## Filename        -- strings.s                                              ##
 ## License         -- GNU General Public License version 3.0                 ##
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
@@ -12,6 +12,7 @@
 # "size_t". Will stop at the first null byte, but will also not go over the
 # length limit.
 .GLOBAL assembly__string_length
+.TYPE assembly__string_length, @function
 # (RDI => pointer to null-terminated string, RSI => maximum length as a
 # non-negative C integer) >> (RAX => the length as a non-negative C integer)
 assembly__string_length:

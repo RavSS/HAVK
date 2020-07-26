@@ -7,7 +7,7 @@
 
 -- This package contains x86(-64) procedures and functions that are imported
 -- from external sources or are small and universal enough to do a variety of
--- goals. See the "intrinsics.S" file in the assembly folder. The reason for
+-- goals. See the "intrinsics.s" file in the assembly folder. The reason for
 -- not including inline assembly via the machine code package is due to SPARK
 -- disallowing it, constraints being hard to manage than GAS, and importation
 -- being in the standard. Compile-time inlining is however not functional.
@@ -174,5 +174,37 @@ IS
       Import        => true,
       Convention    => Intrinsic,
       External_Name => "__sync_synchronize";
+
+   -- This describes a general register (64-bit variant) for x86-64. It's kept
+   -- different from the "number" and "address" types just in case of future
+   -- differences in those types. It is unsigned by default, so if signed
+   -- values need to be returned, then make a different type.
+   TYPE general_register IS MOD 2**64
+   WITH
+      Size        => 64,
+      Object_Size => 64,
+      Annotate    => (GNATprove, No_Wrap_Around);
+   PRAGMA Provide_Shift_Operators(general_register);
+
+   -- Describes one of the XMM registers that come with SSE support. x86-64 at
+   -- a minimum supports SSE and SSE2.
+   TYPE XMM_register IS RECORD
+      High : number := 0;
+      Low  : number := 0;
+   END RECORD
+   WITH
+      Object_Size => 128;
+   FOR XMM_register USE RECORD
+      High AT 0 RANGE 0 .. 63;
+      Low  AT 8 RANGE 0 .. 63;
+   END RECORD;
+
+   -- This array type can hold the total data stored in the XMM registers.
+   -- The array index is identical to the register name's index.
+   TYPE XMM_registers IS ARRAY(number RANGE 0 .. 15) OF XMM_register
+   WITH
+      Size           => 128 * 16,
+      Object_Size    => 128 * 16,
+      Component_Size => 128;
 
 END HAVK_Kernel.Intrinsics;

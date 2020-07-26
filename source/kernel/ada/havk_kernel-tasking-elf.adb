@@ -91,13 +91,39 @@ IS
       Error_Check        : error;
       ELF_File           : Drive.FAT.file;
       ELF_Header         : access_file_header;
-      ELF_Segment        : access_program_header_entry;
+      ELF_Segments       : program_header_entries;
       ELF_Segment_Offset : address;
       -- Usually the virtual base is specified by the first "LOAD" segment
       -- section, but I'll check it just in case.
       ELF_Virtual_Base   : address := address'last;
       ELF_Memory_Size    : number := 0;
       Task_Index         : Tasking.task_limit;
+
+      -- Just a shortcut procedure to free all allocated ELF segment entries.
+      PRAGMA Warnings(GNATprove, off, "unused assignment to ""ELF_Segments""",
+         Reason => "It can't pick up on the fact that it's freeing it.");
+      PROCEDURE Free_ELF_Segments
+      WITH
+         Inline => true,
+         Post   => (FOR ALL ELF_Segment OF ELF_Segments => ELF_Segment = NULL);
+
+      PROCEDURE Free_ELF_Segments
+      IS
+      BEGIN
+         WHILE -- This check is for `gnatprove`.
+            NOT (FOR ALL ELF_Segment OF ELF_Segments => ELF_Segment = NULL)
+         LOOP
+            FOR
+               ELF_Segment OF ELF_Segments
+            LOOP
+               IF
+                  ELF_Segment /= NULL
+               THEN
+                  Free(ELF_Segment);
+               END IF;
+            END LOOP;
+         END LOOP;
+      END Free_ELF_Segments;
    BEGIN
       Log("Attempting to load """ & File_Path & """.", Tag => ELF_Tag);
       Drive.FAT.Check_File(FAT_Context, File_Path, Error_Check, ELF_File);
@@ -132,18 +158,34 @@ IS
          Error_Status := format_error;
          Free(ELF_Header);
          RETURN;
+      ELSIF -- Handled specially, as it doesn't indicate a corrupt file header.
+         ELF_Header.Program_Header_Entry_Count NOT IN ELF_Segments'range
+      THEN
+         Log("The ELF file has too many or too little program header " &
+            "entries (segments) for HAVK to process.", Tag => ELF_Tag,
+            Warn => true);
+         Error_Status := format_error;
+         Free(ELF_Header);
+         RETURN;
       END IF;
 
-      ELF_Segment := NEW program_header_entry;
+      FOR
+         ELF_Segment OF ELF_Segments
+      LOOP
+         ELF_Segment := NULL;
+      END LOOP;
 
       FOR
-         Index IN 0 .. ELF_Header.Program_Header_Entry_Count - 1
+         Index IN 1 .. ELF_Header.Program_Header_Entry_Count
       LOOP
          -- The `Read_File()` function's base offset begins from one, not zero.
          ELF_Segment_Offset := (ELF_Header.Program_Header_Offset + 1) +
-            address(ELF_Header.Program_Header_Entry_Size * Index);
+            address(ELF_Header.Program_Header_Entry_Size * (Index - 1));
 
-         Drive.FAT.Read_File(FAT_Context, File_Path, To_Address(ELF_Segment),
+         ELF_Segments(Index) := NEW program_header_entry;
+
+         Drive.FAT.Read_File(FAT_Context, File_Path,
+            To_Address(ELF_Segments(Index)),
             Error_Check,
             Base_Byte => number(ELF_Segment_Offset),
             Byte_Size => program_header_entry'size / 8);
@@ -154,27 +196,28 @@ IS
             Log("Could not read the ELF file.", Tag => ELF_Tag,
                Warn => true);
             Error_Status := Error_Check;
-            Free(ELF_Segment);
+            Free_ELF_Segments;
             Free(ELF_Header);
             RETURN;
          ELSIF
-            NOT Valid_Program_Header_Entry(ELF_Segment)
+            NOT Valid_Program_Header_Entry(ELF_Segments(Index))
          THEN
             Log("The ELF file has a corrupt program header entry.",
                Tag => ELF_Tag, Warn => true);
             Error_Status := format_error;
-            Free(ELF_Segment);
+            Free_ELF_Segments;
             Free(ELF_Header);
             RETURN;
          ELSIF
-            ELF_Segment.Segment_Type = loadable_segment
+            ELF_Segments(Index).Segment_Type = loadable_segment
          THEN
-            ELF_Memory_Size := ELF_Memory_Size + ELF_Segment.Memory_Size;
+            ELF_Memory_Size :=
+               ELF_Memory_Size + ELF_Segments(Index).Memory_Size;
 
             IF
-               ELF_Segment.Virtual_Address < ELF_Virtual_Base
+               ELF_Segments(Index).Virtual_Address < ELF_Virtual_Base
             THEN
-               ELF_Virtual_Base := ELF_Segment.Virtual_Address;
+               ELF_Virtual_Base := ELF_Segments(Index).Virtual_Address;
             END IF;
          END IF;
       END LOOP;
@@ -191,7 +234,7 @@ IS
          Log("Task creation error while loading ELF.", Tag => ELF_Tag,
             Warn => true);
          Error_Status := Error_Check;
-         Free(ELF_Segment);
+         Free_ELF_Segments;
          Free(ELF_Header);
          RETURN;
       END IF;
@@ -204,7 +247,7 @@ IS
          Log("Task was created, but its index could not be found.",
             Tag => ELF_Tag, Warn => true);
          Error_Status := Error_Check;
-         Free(ELF_Segment);
+         Free_ELF_Segments;
          Free(ELF_Header);
          RETURN;
       END IF;
@@ -216,47 +259,23 @@ IS
          Write_Access => true);
 
       FOR
-         Index IN 0 .. ELF_Header.Program_Header_Entry_Count - 1
+         ELF_Segment OF ELF_Segments
       LOOP
-         -- The `Read_File()` function's base offset begins from one, not zero.
-         ELF_Segment_Offset := (ELF_Header.Program_Header_Offset + 1) +
-            address(ELF_Header.Program_Header_Entry_Size * Index);
+         EXIT WHEN ELF_Segment = NULL;
 
-         Drive.FAT.Read_File(FAT_Context, File_Path, To_Address(ELF_Segment),
-            Error_Check,
-            Base_Byte => number(ELF_Segment_Offset),
-            Byte_Size => program_header_entry'size / 8);
-
-         -- We've already validated the program header, but when concurrency is
-         -- more privalent in the kernel, then it would be wise to check it
-         -- again or use some sort of lock.
          IF
-            Error_Check /= no_error
-         THEN
-            Log("Failed to prepare ELF segment for loading.", Tag => ELF_Tag,
-               Warn => true);
-
-            -- Remove the mapping as well on an error.
-            Paging.Kernel_Map_Address_Range
-              (Tasks(Task_Index).Physical_Base,
-               Tasks(Task_Index).Physical_Base,
-               ELF_Memory_Size,
-               Present => false);
-
-            Error_Status := Error_Check;
-            Free(ELF_Segment);
-            Free(ELF_Header);
-            RETURN;
-         ELSIF
             ELF_Segment.Segment_Type = loadable_segment
          THEN
-            -- TODO: This check is for a segment only containing the BSS.
-            -- It seems to have a file offset specified that goes over the
-            -- file itself; however, that makes some sense, as it's a "NOBITS"
-            -- section. Fix this in a more eloquent manner later.
+            -- TODO: This check is for a segment only containing the BSS. It
+            -- seems to have a file offset specified that goes over the file
+            -- itself; however, that makes some sense, as it's a "NOBITS"
+            -- section. Fix this in a more eloquent manner later. If the entry
+            -- has a file size of zero, then don't accidentally read/load the
+            -- whole file, as that will cause a page fault.
             IF
                number(ELF_Segment.File_Offset) + ELF_Segment.File_Size <=
-                  ELF_File.Size
+                  ELF_File.Size AND THEN
+               ELF_Segment.File_Size /= 0
             THEN -- Need to read section-specific information.
                Drive.FAT.Read_File(FAT_Context, File_Path,
                   Tasks(Task_Index).Physical_Base +
@@ -280,7 +299,7 @@ IS
                   Present => false);
 
                Error_Status := Error_Check;
-               Free(ELF_Segment);
+               Free_ELF_Segments;
                Free(ELF_Header);
                RETURN;
             END IF;
@@ -307,10 +326,9 @@ IS
          Present => false);
 
       Tasks(Task_Index).Alive := true;
-      Tasks(Task_Index).Threads(Tasks(Task_Index).Active_Thread).Alive := true;
 
       Error_Status := no_error;
-      Free(ELF_Segment);
+      Free_ELF_Segments;
       Free(ELF_Header);
       Log("ELF loaded successfully.", Tag => ELF_Tag);
    END Load;

@@ -1,6 +1,6 @@
 ###############################################################################
 ## Program         -- HAVK                                                   ##
-## Filename        -- entry.S                                                ##
+## Filename        -- entry.s                                                ##
 ## License         -- GNU General Public License version 3.0                 ##
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
@@ -38,6 +38,7 @@ global__bootloader_magic:
 .ALIGN 4 # 4-byte alignment from here on out.
 
 .GLOBAL assembly__entry
+.TYPE assembly__entry, @function
 # (RDI => bootloader arguments, RSI => bootloader magic)
 assembly__entry:
 	# To avoid any clobbering, I'm saving the UEFI application's passed

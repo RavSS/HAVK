@@ -1,9 +1,11 @@
 ###############################################################################
 ## Program         -- HAVK                                                   ##
-## Filename        -- interrupts.S                                           ##
+## Filename        -- interrupts.s                                           ##
 ## License         -- GNU General Public License version 3.0                 ##
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
+
+.INCLUDE "macros.s"
 
 # The GCC attribute "interrupt" when applied to an Ada procedure with the
 # "Machine_Attribute" pragma is finnicky and often breaks completely on
@@ -19,12 +21,15 @@
 .MACRO INTERRUPT_HANDLER_STUB VECTOR:req ERROR_CODE=0 RESET_LAPIC=0
 	.IF \VECTOR < 10 # Padding so it remains consistent with my Ada code.
 		.GLOBAL assembly__interrupt_handler_stub_00\VECTOR
+		.TYPE assembly__interrupt_handler_stub_00\VECTOR, @function
 		assembly__interrupt_handler_stub_00\VECTOR:
 	.ELSEIF \VECTOR < 100
 		.GLOBAL assembly__interrupt_handler_stub_0\VECTOR
+		.TYPE assembly__interrupt_handler_stub_0\VECTOR, @function
 		assembly__interrupt_handler_stub_0\VECTOR:
 	.ELSEIF \VECTOR < 256
 		.GLOBAL assembly__interrupt_handler_stub_\VECTOR
+		.TYPE assembly__interrupt_handler_stub_\VECTOR, @function
 		assembly__interrupt_handler_stub_\VECTOR:
 	.ELSE
 		.ERROR "the provided vector is too high"
@@ -47,33 +52,11 @@
 		PUSH RDI
 		PUSH RSI
 
-		# I'm not quite sure how costly this is, but it allows
-		# the actual part of the handlers to use SSE
-		# instructions that don't touch the YMM and ZMM
-		# variants (if present). I've used the aligned version
-		# of `MOVDQU` as we have a 16-byte aligned stack, so
-		# hopefully it's faster. GCC doesn't support this, so
-		# just for show, I will. Note that an extra 8 bytes is
-		# subtracted for alignment so `MOVDQA` (faster) can be
-		# used.
+		# Note that an extra 8 bytes is subtracted for alignment so
+		# `MOVDQA` (faster) can be used.
 		# TODO: Maybe replace this with `FXSAVE` etc.
 		SUB RSP, 16 * 17 + 8
-		MOVDQA [RSP], XMM0
-		MOVDQA [RSP + 16], XMM1
-		MOVDQA [RSP + 16 * 2], XMM2
-		MOVDQA [RSP + 16 * 3], XMM3
-		MOVDQA [RSP + 16 * 4], XMM4
-		MOVDQA [RSP + 16 * 5], XMM5
-		MOVDQA [RSP + 16 * 6], XMM6
-		MOVDQA [RSP + 16 * 7], XMM7
-		MOVDQA [RSP + 16 * 8], XMM8
-		MOVDQA [RSP + 16 * 9], XMM9
-		MOVDQA [RSP + 16 * 10], XMM10
-		MOVDQA [RSP + 16 * 11], XMM11
-		MOVDQA [RSP + 16 * 12], XMM12
-		MOVDQA [RSP + 16 * 13], XMM13
-		MOVDQA [RSP + 16 * 14], XMM14
-		MOVDQA [RSP + 16 * 15], XMM15
+		M_SAVE_XMM_REGISTERS RSP
 
 		# The ISR can't make an assumption about the direction
 		# flag. GCC also clears it before doing anything else.
@@ -106,24 +89,9 @@
 			CALL ada__interrupt_handler_\VECTOR
 		.ENDIF
 
-		CALL assembly__switch_to_task_cr3
+		M_SWITCH_TO_TASK_CR3
 
-		MOVDQA XMM15, [RSP + 16 * 15]
-		MOVDQA XMM14, [RSP + 16 * 14]
-		MOVDQA XMM13, [RSP + 16 * 13]
-		MOVDQA XMM12, [RSP + 16 * 12]
-		MOVDQA XMM11, [RSP + 16 * 11]
-		MOVDQA XMM10, [RSP + 16 * 10]
-		MOVDQA XMM9, [RSP + 16 * 9]
-		MOVDQA XMM8, [RSP + 16 * 8]
-		MOVDQA XMM7, [RSP + 16 * 7]
-		MOVDQA XMM6, [RSP + 16 * 6]
-		MOVDQA XMM5, [RSP + 16 * 5]
-		MOVDQA XMM4, [RSP + 16 * 4]
-		MOVDQA XMM3, [RSP + 16 * 3]
-		MOVDQA XMM2, [RSP + 16 * 2]
-		MOVDQA XMM1, [RSP + 16]
-		MOVDQA XMM0, [RSP]
+		M_LOAD_XMM_REGISTERS RSP
 		ADD RSP, 16 * 17 + 8
 
 		POP RSI # Recover these first before signalling EOI.
@@ -161,12 +129,15 @@
 .MACRO RAISE_INTERRUPT_FUNCTION VECTOR:req
 	.IF \VECTOR < 10 # Padding so it remains consistent with my Ada code.
 		.GLOBAL assembly__raise_interrupt_00\VECTOR
+		.TYPE assembly__raise_interrupt_00\VECTOR, @function
 		assembly__raise_interrupt_00\VECTOR:
 	.ELSEIF \VECTOR < 100
 		.GLOBAL assembly__raise_interrupt_0\VECTOR
+		.TYPE assembly__raise_interrupt_0\VECTOR, @function
 		assembly__raise_interrupt_0\VECTOR:
 	.ELSEIF \VECTOR < 256
 		.GLOBAL assembly__raise_interrupt_\VECTOR
+		.TYPE assembly__raise_interrupt_\VECTOR, @function
 		assembly__raise_interrupt_\VECTOR:
 	.ELSE
 		.ERROR "the provided vector is too high"
@@ -178,6 +149,7 @@
 .SECTION .isolated_text
 
 .GLOBAL assembly__interrupt_handler_spurious
+.TYPE assembly__interrupt_handler_spurious, @function
 assembly__interrupt_handler_spurious:
 	REX.W IRET # TODO: Do I need to signal EOI?
 

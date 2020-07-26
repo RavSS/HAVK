@@ -1,6 +1,6 @@
 ###############################################################################
 ## Program         -- HAVK                                                   ##
-## Filename        -- tasking.S                                              ##
+## Filename        -- tasking.s                                              ##
 ## License         -- GNU General Public License version 3.0                 ##
 ## Original Author -- Ravjot Singh Samra, Copyright 2019-2020                ##
 ###############################################################################
@@ -26,43 +26,44 @@
 	SS_STATE:
 .STRUCT SS_STATE + 8
 
-.MACRO SAVE_REGISTERS_TO_STATE REGISTER_WITH_STATE_POINTER:req
-	MOV [\REGISTER_WITH_STATE_POINTER + RBX_STATE], RBX
-	MOV [\REGISTER_WITH_STATE_POINTER + RBP_STATE], RBP
-	MOV [\REGISTER_WITH_STATE_POINTER + RSP_STATE], RSP
-	MOV [\REGISTER_WITH_STATE_POINTER + R12_STATE], R12
-	MOV [\REGISTER_WITH_STATE_POINTER + R13_STATE], R13
-	MOV [\REGISTER_WITH_STATE_POINTER + R14_STATE], R14
-	MOV [\REGISTER_WITH_STATE_POINTER + R15_STATE], R15
+.MACRO SAVE_REGISTERS_TO_STATE STATE_POINTER:req
+	MOV [\STATE_POINTER + RBX_STATE], RBX
+	MOV [\STATE_POINTER + RBP_STATE], RBP
+	MOV [\STATE_POINTER + RSP_STATE], RSP
+	MOV [\STATE_POINTER + R12_STATE], R12
+	MOV [\STATE_POINTER + R13_STATE], R13
+	MOV [\STATE_POINTER + R14_STATE], R14
+	MOV [\STATE_POINTER + R15_STATE], R15
 	# Don't bother saving segment register states, as we handle the switch
 	# from ring 0 and don't want to give the wrong DPL to the task. Assign
 	# SS statically at task creation.
 .ENDM
 
-.MACRO LOAD_REGISTERS_FROM_STATE REGISTER_WITH_STATE_POINTER:req
-	MOV RBX, [\REGISTER_WITH_STATE_POINTER + RBX_STATE]
-	MOV RBP, [\REGISTER_WITH_STATE_POINTER + RBP_STATE]
-	MOV RSP, [\REGISTER_WITH_STATE_POINTER + RSP_STATE]
-	MOV R12, [\REGISTER_WITH_STATE_POINTER + R12_STATE]
-	MOV R13, [\REGISTER_WITH_STATE_POINTER + R13_STATE]
-	MOV R14, [\REGISTER_WITH_STATE_POINTER + R14_STATE]
-	MOV R15, [\REGISTER_WITH_STATE_POINTER + R15_STATE]
-	MOV DS, [\REGISTER_WITH_STATE_POINTER + SS_STATE]
-	MOV ES, [\REGISTER_WITH_STATE_POINTER + SS_STATE]
-	MOV FS, [\REGISTER_WITH_STATE_POINTER + SS_STATE]
-	MOV GS, [\REGISTER_WITH_STATE_POINTER + SS_STATE]
+.MACRO LOAD_REGISTERS_FROM_STATE STATE_POINTER:req
+	MOV RBX, [\STATE_POINTER + RBX_STATE]
+	MOV RBP, [\STATE_POINTER + RBP_STATE]
+	MOV RSP, [\STATE_POINTER + RSP_STATE]
+	MOV R12, [\STATE_POINTER + R12_STATE]
+	MOV R13, [\STATE_POINTER + R13_STATE]
+	MOV R14, [\STATE_POINTER + R14_STATE]
+	MOV R15, [\STATE_POINTER + R15_STATE]
+	MOV DS, [\STATE_POINTER + SS_STATE]
+	MOV ES, [\STATE_POINTER + SS_STATE]
+	MOV FS, [\STATE_POINTER + SS_STATE]
+	MOV GS, [\STATE_POINTER + SS_STATE]
 	# CS and SS are already handled by `REX.W IRET`.
 .ENDM
 
 .SECTION .isolated_text
 
 .GLOBAL assembly__start_tasking
+.TYPE assembly__start_tasking, @function
 # ()
 assembly__start_tasking:
 	CLI # Disable any interrupts just in case as usual.
 	LOCK INC BYTE PTR [RIP + global__tasking_enabled] # Enable tasking.
 
-	CALL ada__get_active_thread_state
+	CALL ada__get_active_task_state
 	LOAD_REGISTERS_FROM_STATE RAX # Switched to the task's kernel stack.
 
 	CALL ada__get_active_task_cr3 # Get the CR3 value and load it.
@@ -78,6 +79,7 @@ assembly__start_tasking:
 # It can be called from another interrupt handler via interrupt nesting.
 # Note that it must be called from ring 0, not ring 3.
 .GLOBAL assembly__switch_task
+.TYPE assembly__switch_task, @function
 # ()
 assembly__switch_task:
 	# Switch to the kernel's page layout just in case we haven't already
@@ -85,14 +87,14 @@ assembly__switch_task:
 	MOV RAX, [RIP + global__kernel_page_map_base_address]
 	MOV CR3, RAX
 
-	CALL ada__get_active_thread_state
+	CALL ada__get_active_task_state
 	SAVE_REGISTERS_TO_STATE RAX # Save and continue to clobber if required.
 
 	# This switches the active task.
 	CALL ada__round_robin_cycle
 
-	# We are now ready to get the new task thread's register state.
-	CALL ada__get_active_thread_state
+	# We are now ready to get the new task's register state.
+	CALL ada__get_active_task_state
 	LOAD_REGISTERS_FROM_STATE RAX
 
 	# If not equal, then we're returning to ring 0 from here, not the task.
@@ -122,16 +124,3 @@ assembly__switch_task:
 	WBINVD
 
 	REX.W IRET
-
-.GLOBAL assembly__switch_to_task_cr3
-# ()
-assembly__switch_to_task_cr3:
-	CMP BYTE PTR [RIP + global__tasking_enabled], 0x0
-	JZ 1f # If it's not enabled, then we don't do the CR3 switch.
-
-	CALL ada__get_active_task_cr3 # Get the CR3 value and load it.
-	MOV CR3, RAX
-	XOR RAX, RAX # Don't leak it by accident.
-
-	1:
-		RET
