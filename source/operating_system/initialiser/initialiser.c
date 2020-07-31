@@ -5,8 +5,10 @@
 // Original Author -- Ravjot Singh Samra, Copyright 2020                     //
 ///////////////////////////////////////////////////////////////////////////////
 
+#include <stdlib.h>
 #include <string.h>
 #include <havk/havk.h>
+#include <havk/debug.h>
 
 #define SYSTEM_FOLDER ">HAVK>system>"
 
@@ -18,18 +20,6 @@
 
 #define FRAMEBUFFER_TESTER_PATH SYSTEM_FOLDER "FRAMEB~1.ELF"
 #define FRAMEBUFFER_TESTER_NAME "Framebuffer Tester"
-
-// Null terminated only. Only for convenience, zero error checking or safety.
-static syserr_ht log_string(const char *text)
-{
-	sysargs_ht arguments;
-	uint8_t buffer[256];
-
-	memset(buffer, 0, ARRAY_LENGTH(buffer));
-	arguments.operation = LOG_OPERATION;
-	memcpy(buffer, text, strlen(text));
-	return syscall_data(&arguments, buffer);
-}
 
 // The name can be up to 64 bytes and the path can be up to 192 bytes.
 static syserr_ht load_file(const char *name, const char *path)

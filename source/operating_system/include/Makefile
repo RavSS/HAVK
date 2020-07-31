@@ -50,13 +50,15 @@ HAVK_OS_S_OBJECTS:=$(patsubst ./havk/%.s, $(LIBRARY_BUILD_PATH)/%.o, \
 all: $(LIBRARY)
 
 $(LIBRARY_BUILD_PATH):
-	@mkdir $(LIBRARY_BUILD_PATH)
+	@if [ ! -d "$(LIBRARY_BUILD_PATH)" ]; then \
+		mkdir "$(LIBRARY_BUILD_PATH)"; \
+	fi
 
 $(LIBRARY_BUILD_PATH)/%.o: %.c | $(LIBRARY_BUILD_PATH)
-	$(CC) $(CC_FLAGS) -std=c89 $< -o "$@"
+	$(CC) $(CC_FLAGS) -std=c17 $< -o "$@"
 
 $(LIBRARY_BUILD_PATH)/%.o: ./havk/%.c | $(LIBRARY_BUILD_PATH)
-	$(CC) $(CC_FLAGS) -std=c11 $< -o "$@"
+	$(CC) $(CC_FLAGS) -std=c17 $< -o "$@"
 
 $(LIBRARY_BUILD_PATH)/%.o: ./havk/%.s | $(LIBRARY_BUILD_PATH)
 	$(AS) $(AS_FLAGS) -o "$@" $<

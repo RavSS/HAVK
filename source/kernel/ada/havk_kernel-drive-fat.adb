@@ -581,7 +581,7 @@ IS
         (1 .. FAT_Context.Root_Directory_Sectors,
          1 .. FAT_Context.BPB.Bytes_Per_Sector / 32);
 
-      Next_Cluster   : number RANGE 0 .. 2**32 - 1;
+      Old_Cluster, Next_Cluster : number RANGE 0 .. 2**32 - 1;
    BEGIN
       Get_File_Entries(FAT_Context, FAT_Context.First_Root_Directory_Sector,
          FAT_Context.Root_Directory_Sectors, Root_Directory);
@@ -608,16 +608,27 @@ IS
       LOOP
          EXIT WHEN NOT Parsed_Path(Path_Index).Present;
 
-         Search_For_Entry(FAT_Context, Parsed_Path(Path_Index).Name,
-            Next_Cluster, Next_Cluster, File_Entry,
-            Dictionary => Parsed_Path(Path_Index).Dictionary);
+         Old_Cluster := Next_Cluster;
 
-         IF -- Incorrect path if true.
-            Next_Cluster = No_File_Match
-         THEN
-            Error_Status := path_error;
-            RETURN;
-         END IF;
+         -- Directories can be bigger than just a 512-byte cluster, which would
+         -- limit a directory to 16 file entries; thus, we need to check every
+         -- cluster of the directory for obvious reasons.
+         Directory_Search : LOOP
+            Search_For_Entry(FAT_Context, Parsed_Path(Path_Index).Name,
+               Next_Cluster, Next_Cluster, File_Entry,
+               Dictionary => Parsed_Path(Path_Index).Dictionary);
+
+            EXIT Directory_Search WHEN Next_Cluster /= No_File_Match;
+
+            Get_Next_Cluster(FAT_Context, Old_Cluster, Next_Cluster);
+
+            IF -- Incorrect path if true.
+               Next_Cluster = No_File_Match
+            THEN
+               Error_Status := path_error;
+               RETURN;
+            END IF;
+         END LOOP Directory_Search;
       END LOOP;
 
       Error_Status := no_error;

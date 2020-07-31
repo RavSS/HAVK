@@ -226,14 +226,14 @@ all: $(HAVK_BOOTLOADER) $(HAVK_KERNEL) $(HAVK_SYSTEM)
 ######################## Build Structure Preparations #########################
 
 $(BUILD_PATH):
-	-@mkdir "$@"
+	@if [ ! -d "$@" ]; then mkdir "$@"; fi
 
 $(HAVK_ADALIB_PATH) $(HAVK_SYSTEM_BUILD_PATH): | $(BUILD_PATH)
-	-@mkdir "$@"
+	@if [ ! -d "$@" ]; then mkdir "$@"; fi
 
 $(HAVK_ADAINCLUDE_PATH): | $(BUILD_PATH)
-	-@mkdir "$@"
-	@ln $(HAVK_RUNTIME_PATH)/* "$@"
+	@if [ ! -d "$@" ]; then mkdir "$@"; fi
+	@ln -f $(HAVK_RUNTIME_PATH)/* "$@"
 
 ############################# Bootloader Building #############################
 
@@ -415,7 +415,7 @@ clean-operating-system: | $(BUILD_PATH) $(HAVK_SYSTEM_BUILD_PATH)
 	$(call echo, "CLEANING ALL OPERATING SYSTEM FILES IN \
 		$(HAVK_SYSTEM_BUILD_PATH)")
 
-	@rm -vrf "$(HAVK_SYSTEM_BUILD_PATH)/*"
+	@rm -vrf $(HAVK_SYSTEM_BUILD_PATH)*
 
 .PHONY: clean-bootloader
 clean-bootloader: | $(BUILD_PATH)

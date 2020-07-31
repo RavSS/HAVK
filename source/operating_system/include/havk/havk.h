@@ -60,7 +60,7 @@ typedef enum
 
 typedef struct
 {
-	uint64_t operation; // RDX.
+	uint64_t operation; // RDI.
 	uint64_t argument_1; // RSI.
 	uint64_t argument_2; // RDX.
 	uint64_t argument_3; // R8.
@@ -68,7 +68,9 @@ typedef struct
 	uint64_t argument_5; // R10.
 } PACKED sysargs_ht;
 
-// A general system call wrapper. Cannot handle all calls.
+// A general system call wrapper to use as a point of reference. Cannot handle
+// all calls. For now, avoid making assembly functions for each separate
+// operation and instead try to only use this.
 ASSEMBLY_BODY
 syserr_ht syscall(sysargs_ht *arguments);
 

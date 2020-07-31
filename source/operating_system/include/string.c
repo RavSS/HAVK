@@ -1,9 +1,9 @@
-/*****************************************************************************/
-/* Program         -- HAVK Libc                                              */
-/* Filename        -- string.c                                               */
-/* License         -- GNU General Public License version 3.0                 */
-/* Original Author -- Ravjot Singh Samra, Copyright 2020                     */
-/*****************************************************************************/
+///////////////////////////////////////////////////////////////////////////////
+// Program         -- HAVK Libc                                              //
+// Filename        -- string.c                                               //
+// License         -- GNU General Public License version 3.0                 //
+// Original Author -- Ravjot Singh Samra, Copyright 2020                     //
+///////////////////////////////////////////////////////////////////////////////
 
 #include "string.h"
 

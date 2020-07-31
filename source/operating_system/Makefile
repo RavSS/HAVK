@@ -31,7 +31,7 @@ INCLUDE=-I ./include/
 LIBRARY_NAME?=havkos
 LIBRARY=$(BUILD_PATH)/lib$(LIBRARY_NAME).a
 
-CC_FLAGS=-c -std=c11 -ffreestanding -nostdlib -Wall -Wextra \
+CC_FLAGS=-c -std=c17 -ffreestanding -nostdlib -Wall -Wextra \
 	-Wpedantic -pedantic-errors -masm=intel -no-pie \
 	-L $(BUILD_PATH) -l$(LIBRARY_NAME)
 

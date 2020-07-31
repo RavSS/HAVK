@@ -5,6 +5,7 @@
 // Original Author -- Ravjot Singh Samra, Copyright 2020                     //
 ///////////////////////////////////////////////////////////////////////////////
 
+#include <stdlib.h>
 #include <string.h>
 #include <havk/havk.h>
 
@@ -18,22 +19,6 @@ uint8_t pixel_type;
 
 #define PIXEL_POSITION(x, y) ((x) * pixel_width + (y) * scanline_width)
 #define CLEAR_SCREEN() memset((void *)framebuffer, 0, framebuffer_size)
-
-// Taken from Wikipedia (modified state handling).
-uint64_t xorshift128plus(void)
-{
-	static uint64_t a = 123, b = 321;
-	uint64_t t = a;
-	const uint64_t s = b;
-
-	a = s;
-	t ^= t << 23;
-	t ^= t >> 17;
-	t ^= s ^ (s >> 26);
-	b = t;
-
-	return t + s;
-}
 
 // Poor man's delay.
 void delay(uintmax_t value)
@@ -147,10 +132,12 @@ uint64_t main(void)
 	pixel_width = scanline_width / framebuffer_width;
 	pixel_type = arguments.argument_5;
 
+	srand(0x13371337);
+
 	while (true)
 	{
-		test_pattern(xorshift128plus(), INT32_MAX / 100, false);
-		test_pattern(xorshift128plus(), INT32_MAX / 100, true);
+		test_pattern(rand(), INT32_MAX / 100, false);
+		test_pattern(rand(), INT32_MAX / 100, true);
 	}
 
 	return 0;
