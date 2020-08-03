@@ -12,6 +12,7 @@ USE
 
 -- This package revolves around the PS/2 keyboard. Anything specific to it
 -- instead of generic PS/2 logic should be here.
+-- TODO: This package is now deprecated and needs to be moved into user space.
 PACKAGE HAVK_Kernel.PS2.Keyboard
 IS
    PRAGMA Preelaborate;

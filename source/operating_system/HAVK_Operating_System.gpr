@@ -1,0 +1,28 @@
+-------------------------------------------------------------------------------
+-- Program         -- HAVK Operating System                                  --
+-- Filename        -- HAVK_Operating_System.gpr                              --
+-- License         -- GNU General Public License version 3.0                 --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-------------------------------------------------------------------------------
+
+AGGREGATE PROJECT HAVK_Operating_System
+IS
+   FOR Project_Path   USE("./"); -- Avoid using this path if possible.
+   FOR Object_Dir     USE "./../../build/operating_system/";
+   FOR Runtime("Ada") USE HAVK_Operating_System'Object_Dir;
+   -- Operating system program projects go below.
+   FOR Project_Files  USE
+     ("./initialiser/HAVK_Initialiser.gpr",
+      "./ipc_tester/HAVK_IPC_Tester.gpr",
+      "./framebuffer_tester/HAVK_Framebuffer_Tester.gpr",
+      "./thread_tester/HAVK_Thread_Tester.gpr");
+
+   TYPE Operating_System_Type IS("Final", "Debug");
+   Build : Operating_System_Type := EXTERNAL("Build", "Final");
+
+   PACKAGE Builder
+   IS
+      FOR Global_Configuration_Pragmas USE -- Needs to be included here too.
+         "./include/ada_specifications/havk_operating_system.adc";
+   END Builder;
+END HAVK_Operating_System;

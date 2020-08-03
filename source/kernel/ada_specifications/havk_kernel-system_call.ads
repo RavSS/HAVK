@@ -41,6 +41,8 @@ PRIVATE
       heap_increase_operation,
       yield_operation,
       log_operation,
+      irq_statistics_operation,
+      io_port_operation,
       framebuffer_access_operation)
    WITH
       Convention => C;
@@ -144,6 +146,38 @@ PRIVATE
    -- @param RAX An error status. As of now, no error can occur.
    PROCEDURE Log_Operation_Call
      (XMM : IN Intrinsics.XMM_registers;
+      RAX : OUT Intrinsics.general_register);
+
+   -- This retrieves statistics for an IRQ vector.
+   -- TODO: Define whether this is per-CPU or global.
+   -- TODO: Don't let just any task call this.
+   -- @param RSI The IRQ vector that you wish to retrieve statistics for.
+   -- @param RDX The amount of times the IRQ has been triggered.
+   PROCEDURE IRQ_Statistics_Operation_Call
+     (RSI : IN Intrinsics.general_register;
+      RDX : OUT Intrinsics.general_register;
+      RAX : OUT Intrinsics.general_register);
+
+   -- Interacts with the x86 I/O ports.
+   -- TODO: This currently lets any task mess with them, so that will need to
+   -- change sooner or later.
+   -- TODO: This is also a temporary substitute for proper I/O permissions in
+   -- the TSS; however, that seems to be an obscure x86 feature that may be
+   -- valuable in potentially avoiding?
+   -- @param RSI The 16-bit port address.
+   -- @param RDX The value to send/output or the value to retrieve/input
+   -- depending on the call options. The size of the value also depends.
+   -- @param R8 A boolean value indicating whether to send (false) or retrieve
+   -- (true). Any value that is not zero is interpreted as true.
+   -- @param R9 A boolean value indicating whether to send or retrieve an 8-bit
+   -- value (false) or a 16-bit value (true). Any value that is not zero is
+   -- interpreted as true.
+   -- @param RAX An error status.
+   PROCEDURE IO_Port_Operation_Call
+     (RSI : IN Intrinsics.general_register;
+      RDX : IN OUT Intrinsics.general_register;
+      R8  : IN Intrinsics.general_register;
+      R9  : IN Intrinsics.general_register;
       RAX : OUT Intrinsics.general_register);
 
    -- This hands over the framebuffer to a task by mapping it into the task's

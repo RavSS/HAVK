@@ -1,0 +1,26 @@
+-------------------------------------------------------------------------------
+-- Program         -- HAVK Operating System IPC Tester                       --
+-- Filename        -- HAVK_IPC_Tester.gpr                                    --
+-- License         -- GNU General Public License version 3.0                 --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-------------------------------------------------------------------------------
+
+PROJECT HAVK_IPC_Tester EXTENDS "../HAVK_Operating_System_Program.gpr"
+IS
+   -- The name of the ELF and internal build directory.
+   Name := "ipc_tester";
+
+   FOR Object_Dir          USE HAVK_Operating_System_Program'Object_Dir &
+      Name & "/";
+   FOR Exec_Dir            USE HAVK_Operating_System_Program'Object_Dir &
+      "programs/";
+   FOR Main                USE("main.c");
+   FOR Create_Missing_Dirs USE "true";
+
+   PACKAGE Builder EXTENDS HAVK_Operating_System_Program.Builder
+   IS
+      -- The name of the generated ELF file placed in the executable directory.
+      FOR Executable("main.c") USE Name;
+   END Builder;
+
+END HAVK_IPC_Tester;

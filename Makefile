@@ -50,27 +50,28 @@ CC=gcc
 LD=ld
 AS=as
 
-HAVK_SOURCE_PATH=$(SOURCE_PATH)kernel/
-HAVK_PROJECT=$(HAVK_SOURCE_PATH)$(NAME).gpr
-HAVK_RUNTIME=$(HAVK_SOURCE_PATH)$(NAME)_RTS.gpr
+KERNEL_BUILD_PATH=$(BUILD_PATH)kernel/
+KERNEL_SOURCE_PATH=$(SOURCE_PATH)kernel/
+KERNEL_PROJECT=$(KERNEL_SOURCE_PATH)$(NAME)_Kernel.gpr
+KERNEL_RUNTIME_PROJECT=$(KERNEL_SOURCE_PATH)$(NAME)_Kernel_Runtime.gpr
 
 # Not the best solution, but should stop anyone from running the Makefile
-# outside its directory, as that could be dangerous. Looks for main GPR file.
-ifeq ("$(wildcard $(HAVK_PROJECT))", "")
+# outside its directory, as that could be dangerous. Finds the kernel GPR file.
+ifeq ("$(wildcard $(KERNEL_PROJECT))", "")
 	$(error Only run Make from the root directory of HAVK's repository)
 endif
 
 # Copy the source directory to the directory structure GNAT demands.
-HAVK_RUNTIME_PATH=$(HAVK_SOURCE_PATH)ada_runtime/
-HAVK_ADAINCLUDE_PATH=$(BUILD_PATH)adainclude/
-HAVK_ADALIB_PATH=$(BUILD_PATH)adalib/
+KERNEL_RUNTIME_PATH=$(KERNEL_SOURCE_PATH)ada_runtime/
+KERNEL_ADAINCLUDE_PATH=$(KERNEL_BUILD_PATH)adainclude/
+KERNEL_ADALIB_PATH=$(KERNEL_BUILD_PATH)adalib/
 
-HAVK_BOOTLOADER=$(BUILD_PATH)$(NAME).efi
-HAVK_LIBRARY=$(BUILD_PATH)lib$(NAME).a
-HAVK_KERNEL=$(BUILD_PATH)$(NAME).elf
+UEFI_BOOTLOADER=$(BUILD_PATH)$(NAME).efi
+KERNEL_LIBRARY=$(KERNEL_ADALIB_PATH)libhavk_kernel_runtime.a
+KERNEL=$(KERNEL_BUILD_PATH)$(NAME).elf
 
-HAVK_IMAGE?=$(BUILD_PATH)$(NAME).img
-HAVK_VMDK=$(BUILD_PATH)$(NAME).vmdk
+IMAGE?=$(BUILD_PATH)$(NAME).img
+VMDK=$(BUILD_PATH)$(NAME).vmdk
 
 OVMF_PATH=./tools/ovmf-x64/
 LIB_PATH=/usr/lib/
@@ -152,10 +153,24 @@ UEFI_SO_FILE=$(BUILD_PATH)$(BOOTLOADER_NAME).so
 # collisions by putting the output in a subdirectory of the build path.
 # I'll simply make all of the operating system programs and store any generated
 # ELF files onto the EFI partition.
-HAVK_SYSTEM_BUILD_PATH=$(BUILD_PATH)operating_system/
-HAVK_SYSTEM_SOURCE_PATH=$(SOURCE_PATH)operating_system/
-HAVK_SYSTEM_ABSOLUTE_BUILD_PATH=$(abspath $(HAVK_SYSTEM_BUILD_PATH))/
-HAVK_SYSTEM=operating-system # A phony/dummy.
+OPERATING_SYSTEM_BUILD_PATH=$(BUILD_PATH)operating_system/
+OPERATING_SYSTEM_SOURCE_PATH=$(SOURCE_PATH)operating_system/
+
+OPERATING_SYSTEM_RUNTIME_PATH=\
+	$(OPERATING_SYSTEM_SOURCE_PATH)include/ada_runtime/
+OPERATING_SYSTEM_ADAINCLUDE_PATH=$(OPERATING_SYSTEM_BUILD_PATH)adainclude/
+OPERATING_SYSTEM_ADALIB_PATH=$(OPERATING_SYSTEM_BUILD_PATH)adalib/
+
+OPERATING_SYSTEM_RUNTIME_PROJECT=\
+	$(OPERATING_SYSTEM_SOURCE_PATH)$(NAME)_Operating_System_Runtime.gpr
+OPERATING_SYSTEM_PROJECT=\
+	$(OPERATING_SYSTEM_SOURCE_PATH)$(NAME)_Operating_System.gpr
+
+OPERATING_SYSTEM_LIBRARY=\
+	$(OPERATING_SYSTEM_ADALIB_PATH)libhavk_operating_system_runtime.a
+OPERATING_SYSTEM_PROGRAMS=\
+	$(wildcard $(OPERATING_SYSTEM_BUILD_PATH)programs/*)
+OPERATING_SYSTEM=operating-system # A phony/dummy.
 
 # Change these if you want a bigger disk image etc. It assumes that
 # `parted` treats the sector size as 512 bytes. Since I don't need all
@@ -175,24 +190,24 @@ ESP_SECTOR_SIZE=9550
 ESP_PARTITION:=$(BUILD_PATH)ESP.partition
 
 # Instead of creating a new drive image each time, we'll just modify the
-# already created one (if one exists). You can provide your own "HAVK_IMAGE"
+# already created one (if one exists). You can provide your own "IMAGE"
 # and "ESP_OFFSET" variables for a drive image not made by this Makefile.
 ESP_OFFSET?=$$(($(IMAGE_BLOCK_SIZE) * $(ESP_SECTOR_START)))
-HAVK_IMAGE_ESP=$(HAVK_IMAGE)@@$(ESP_OFFSET)
+IMAGE_ESP=$(IMAGE)@@$(ESP_OFFSET)
 
 # When debugging, consider warnings as errors and be more verbose.
 # Also control the optimisation here so it's easier to tweak.
 ifeq ("$(BUILD)", "Debug")
 	O?=g
 	UEFI_CC_OPT+= -ggdb3 -O$(O)
-	GPR_RTS_FLAGS=-we -k -d -O$(O)
-	GPR_KERNEL_FLAGS=-we -k -d -O$(O)
+	GPR_RUNTIME_FLAGS=-we -k -d -O$(O)
+	GPR_FLAGS=-we -k -d -O$(O)
 	GPR_VARIABLES=-XBuild=$(BUILD)
 else
 	O?=2
 	UEFI_CC_OPT+= -g0 -O$(O)
-	GPR_RTS_FLAGS=-q -vP0 -O$(O)
-	GPR_KERNEL_FLAGS=-q -vP0 -O$(O)
+	GPR_RUNTIME_FLAGS=-q -vP0 -O$(O)
+	GPR_FLAGS=-q -vP0 -O$(O)
 	GPR_VARIABLES=-XBuild=$(BUILD)
 endif
 
@@ -207,38 +222,46 @@ endef
 
 # $1 => The directory to create. Handles logic for when it exists.
 define mtools_create
-	@if ! mdir -i $(HAVK_IMAGE_ESP) $1 > /dev/null 2>&1; then \
-		mmd -i $(HAVK_IMAGE_ESP) $1; \
+	@if ! mdir -i $(IMAGE_ESP) $1 > /dev/null 2>&1; then \
+		mmd -i $(IMAGE_ESP) $1; \
 	fi
 endef
 
 # $1 => The file(s) to copy. Mind spaces and quotes.
 # $2 => The location of the copy/copies. Supply "::" as prefix for the path.
 define mtools_copy
-	@mcopy -D o -i $(HAVK_IMAGE_ESP) $1 $2
+	@mcopy -D o -i $(IMAGE_ESP) $1 $2
 	@echo -e "$2\r\n          $1"
 endef
 
 .DEFAULT_GOAL: all
 .PHONY: all
-all: $(HAVK_BOOTLOADER) $(HAVK_KERNEL) $(HAVK_SYSTEM)
+all: $(UEFI_BOOTLOADER) $(KERNEL) $(OPERATING_SYSTEM)
 
 ######################## Build Structure Preparations #########################
 
 $(BUILD_PATH):
 	@if [ ! -d "$@" ]; then mkdir "$@"; fi
 
-$(HAVK_ADALIB_PATH) $(HAVK_SYSTEM_BUILD_PATH): | $(BUILD_PATH)
+$(KERNEL_BUILD_PATH) $(OPERATING_SYSTEM_BUILD_PATH): | $(BUILD_PATH)
 	@if [ ! -d "$@" ]; then mkdir "$@"; fi
 
-$(HAVK_ADAINCLUDE_PATH): | $(BUILD_PATH)
+$(KERNEL_ADALIB_PATH) $(OPERATING_SYSTEM_ADALIB_PATH): \
+| $(KERNEL_BUILD_PATH) $(OPERATING_SYSTEM_BUILD_PATH)
 	@if [ ! -d "$@" ]; then mkdir "$@"; fi
-	@ln -f $(HAVK_RUNTIME_PATH)/* "$@"
+
+$(KERNEL_ADAINCLUDE_PATH): | $(KERNEL_BUILD_PATH)
+	@if [ ! -d "$@" ]; then mkdir "$@"; fi
+	@ln -f $(KERNEL_RUNTIME_PATH)/* "$@"
+
+$(OPERATING_SYSTEM_ADAINCLUDE_PATH): | $(OPERATING_SYSTEM_BUILD_PATH)
+	@if [ ! -d "$@" ]; then mkdir "$@"; fi
+	@ln -f $(OPERATING_SYSTEM_RUNTIME_PATH)/* "$@"
 
 ############################# Bootloader Building #############################
 
 $(UEFI_O_FILE): $(UEFI_C_FILE) | $(BUILD_PATH)
-	$(call echo, "BUILDING BOOTLOADER TO $(HAVK_BOOTLOADER)")
+	$(call echo, "BUILDING BOOTLOADER TO $(UEFI_BOOTLOADER)")
 
 	$(CC) $(UEFI_CC_FLAGS) -c "$<" -o "$@"
 
@@ -247,7 +270,7 @@ $(UEFI_SO_FILE): $(UEFI_O_FILE)
 
 	$(LD) $(UEFI_LD_FLAGS) "$<" -o "$@" $(UEFI_LD_LIB)
 
-$(HAVK_BOOTLOADER): $(UEFI_SO_FILE)
+$(UEFI_BOOTLOADER): $(UEFI_SO_FILE)
 	$(call echo, "FIXING GNU-EFI BOOTLOADER\'S SECTIONS")
 
 	objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym \
@@ -262,25 +285,40 @@ $(HAVK_BOOTLOADER): $(UEFI_SO_FILE)
 
 ############################### Kernel Building ###############################
 
-$(HAVK_LIBRARY): | $(HAVK_ADAINCLUDE_PATH) $(HAVK_ADALIB_PATH)
-	$(call echo, "BUILDING THE HAVK RUNTIME IN $(BUILD_PATH)")
+.PHONY: $(KERNEL_LIBRARY) # Let `gprbuild` handle change detection.
+$(KERNEL_LIBRARY): | $(KERNEL_ADAINCLUDE_PATH) $(KERNEL_ADALIB_PATH)
+	$(call echo, "BUILDING THE HAVK KERNEL\'S RUNTIME IN \
+		$(KERNEL_BUILD_PATH)")
 
-	@gprbuild -P $(HAVK_RUNTIME) $(GPR_VARIABLES) -p -eL \
-		--complete-output $(GPR_RTS_FLAGS) -j0 -s -o "./../../$@"
+	@gprbuild -P $(KERNEL_RUNTIME_PROJECT) $(GPR_VARIABLES) -p -eL \
+		--complete-output $(GPR_RUNTIME_FLAGS) -j0 -s -o "./../../$@"
 
-$(HAVK_KERNEL): $(HAVK_LIBRARY)
+.PHONY: $(KERNEL) # Let `gprbuild` handle change detection.
+$(KERNEL): $(KERNEL_LIBRARY)
 	$(call echo, "BUILDING THE HAVK KERNEL TO $@")
 
-	@gprbuild -P $(HAVK_PROJECT) $(GPR_VARIABLES) -p -eL \
-		--complete-output $(GPR_KERNEL_FLAGS) -j0 -s -o "./../../$@"
+	@gprbuild -P $(KERNEL_PROJECT) $(GPR_VARIABLES) -p -eL \
+		--complete-output $(GPR_FLAGS) -j0 -s -o "./../../$@"
 
-.PHONY: $(HAVK_SYSTEM)
-$(HAVK_SYSTEM): | $(HAVK_SYSTEM_BUILD_PATH)
-	$(call echo, "BUILDING HAVK\'S OPERATING SYSTEM IN \
-		$(HAVK_SYSTEM_BUILD_PATH)")
+########################## Operating System Building ##########################
 
-	@$(MAKE) -C "$(HAVK_SYSTEM_SOURCE_PATH)" \
-		BUILD_PATH=$(HAVK_SYSTEM_ABSOLUTE_BUILD_PATH)
+.PHONY: $(OPERATING_SYSTEM_LIBRARY) # Let `gprbuild` handle change detection.
+$(OPERATING_SYSTEM_LIBRARY): | $(OPERATING_SYSTEM_ADAINCLUDE_PATH) \
+$(OPERATING_SYSTEM_ADALIB_PATH)
+	$(call echo, "BUILDING THE HAVK OPERATING SYSTEM\'S RUNTIME IN \
+		$(OPERATING_SYSTEM_BUILD_PATH)")
+
+	@gprbuild -P $(OPERATING_SYSTEM_RUNTIME_PROJECT) $(GPR_VARIABLES) \
+		-p -eL --complete-output $(GPR_RUNTIME_FLAGS) -j0 -s \
+		-o "./../../$@"
+
+.PHONY: $(OPERATING_SYSTEM)
+$(OPERATING_SYSTEM): $(OPERATING_SYSTEM_LIBRARY)
+	$(call echo, "BUILDING THE HAVK OPERATING SYSTEM IN \
+		$(OPERATING_SYSTEM_BUILD_PATH)")
+
+	@gprbuild -P $(OPERATING_SYSTEM_PROJECT) $(GPR_VARIABLES) -p -eL \
+		--complete-output $(GPR_FLAGS) -j0 -s -nostdlib -nostdinc
 
 ################################ Image Building ###############################
 
@@ -290,7 +328,7 @@ $(ESP_PARTITION): | $(BUILD_PATH)
 	dd if=/dev/zero of="$@" bs=$(IMAGE_BLOCK_SIZE) count=$(ESP_SECTOR_SIZE)
 	mkfs.fat -v -F $(FAT_SIZE) -s 1 -S $(IMAGE_BLOCK_SIZE) "$@"
 
-$(HAVK_IMAGE): | $(ESP_PARTITION)
+$(IMAGE): | $(ESP_PARTITION)
 	$(call echo, "CREATING BOOTABLE IMAGE AT $@")
 
 	dd if=/dev/zero of="$@" bs=$(IMAGE_BLOCK_SIZE) count=$(IMAGE_SECTORS)
@@ -306,27 +344,27 @@ $(HAVK_IMAGE): | $(ESP_PARTITION)
 		count=$(ESP_SECTOR_SIZE) seek=$(ESP_SECTOR_START) conv=notrunc
 
 .PHONY: image-configuration
-image-configuration: $(HAVK_BOOTLOADER) $(HAVK_KERNEL) $(HAVK_SYSTEM) \
-$(HAVK_IMAGE)
-	$(call echo, "CONFIGURING HAVK ON IMAGE AT $(HAVK_IMAGE)")
+image-configuration: $(UEFI_BOOTLOADER) $(KERNEL) $(OPERATING_SYSTEM) \
+$(IMAGE)
+	$(call echo, "CONFIGURING HAVK ON IMAGE AT $(IMAGE)")
 
 	$(call mtools_create, '/EFI')
 	$(call mtools_create, '/EFI/BOOT')
-	$(call mtools_copy, "$(HAVK_BOOTLOADER)","::/EFI/BOOT/BOOTX64.EFI")
+	$(call mtools_copy, "$(UEFI_BOOTLOADER)","::/EFI/BOOT/BOOTX64.EFI")
 
 	$(call mtools_create, "/$(NAME)")
-	$(call mtools_copy, "$(HAVK_KERNEL)","::/$(NAME)/$(NAME).elf")
+	$(call mtools_copy, "$(KERNEL)","::/$(NAME)/$(NAME).elf")
 
 	$(call mtools_create, "/$(NAME)")
 	$(call mtools_create, "/$(NAME)/system")
 	$(call mtools_copy, \
-		$(HAVK_SYSTEM_BUILD_PATH)*.elf,"::/$(NAME)/system")
+		$(OPERATING_SYSTEM_PROGRAMS),"::/$(NAME)/system")
 
 ########################### Virtual Machine Testing ###########################
 
 # (CTRL + A, C) to exit serial and enter monitor, and vice versa.
 .PHONY: qemu
-qemu: $(HAVK_IMAGE) image-configuration
+qemu: $(IMAGE) image-configuration
 	$(call echo, "LOADING QEMU WITH $<")
 
 	-qemu-system-x86_64 \
@@ -340,14 +378,14 @@ qemu: $(HAVK_IMAGE) image-configuration
 
 	@tput sgr0 # Corrected terminal after serial console usage.
 
-$(HAVK_VMDK): $(HAVK_IMAGE) image-configuration
+$(HAVK_VMDK): $(IMAGE) image-configuration
 	$(call echo, "CREATING VMDK FILE AT $@")
 
 	@qemu-img convert -f raw -O vmdk "$<" "$@"
 
 .PHONY: gdb
 gdb:
-	-@gdb "$(HAVK_KERNEL)" -q \
+	-@gdb "$(KERNEL)" -q \
 		-ex "set confirm off" \
 		-ex "set architecture i386:x86-64:intel" \
 		-ex "set max-value-size 10485760" \
@@ -367,13 +405,13 @@ uefi-gdb:
 		exit 1; \
 	fi
 
-	-@gdb "$(HAVK_BOOTLOADER)" -q \
+	-@gdb "$(UEFI_BOOTLOADER)" -q \
 		-ex "set confirm off" \
 		-ex "set architecture i386:x86-64:intel" \
 		-ex "set max-value-size 10485760" \
 		-ex "set tcp auto-retry on" \
 		-ex "set tcp connect-timeout 300" \
-		-ex "add-symbol-file \"$(HAVK_BOOTLOADER).debug\" \
+		-ex "add-symbol-file \"$(UEFI_BOOTLOADER).debug\" \
 			$(UEFI_TEXT_SECTION) -s .data $(UEFI_DATA_SECTION)" \
 		-ex "target remote :$(GDB_REMOTE_DEBUG_PORT)" \
 		-ex "set gdb_ready=1" \
@@ -382,17 +420,17 @@ uefi-gdb:
 ################################### Proving ###################################
 
 .PHONY: proof
-proof: $(BUILD_PATH)
+proof: $(KERNEL_BUILD_PATH)
 	$(call echo, "PROVING HAVK KERNEL\'S CORRECTNESS")
 
-	@gnatprove -P "$(HAVK_PROJECT)" $(GPR_VARIABLES) $(PROVE_FILES)
+	@gnatprove -P "$(KERNEL_PROJECT)" $(GPR_VARIABLES) $(PROVE_FILES)
 
 .PHONY: stats
 stats:
 	$(call echo, "HAVK KERNEL STATISTICS")
 
 	@echo -n "Makefile kernel image size capacity: $(shell du -sh \
-		"$(HAVK_KERNEL)" | awk -F '\t' '{print $$1}')"
+		"$(KERNEL)" | awk -F '\t' '{print $$1}')"
 
 	@echo -e " / $(shell du -sh "$(ESP_PARTITION)" \
 		| awk -F '\t' '{print $$1}')\n"
@@ -406,35 +444,35 @@ stats:
 clean-kernel: | $(BUILD_PATH) $(HAVK_ADAINCLUDE_PATH) $(HAVK_ADALIB_PATH)
 	$(call echo, "CLEANING ALL KERNEL FILES IN $(BUILD_PATH)")
 
-	@gprclean -P "$(HAVK_RUNTIME)" $(GPR_VARIABLES)
-	@gprclean -P "$(HAVK_PROJECT)" $(GPR_VARIABLES)
-	@rm -vrf "$(HAVK_KERNEL)"
+	@gprclean -P "$(KERNEL_RUNTIME_PROJECT)" $(GPR_VARIABLES)
+	@gprclean -P "$(KERNEL_PROJECT)" $(GPR_VARIABLES)
+	@rm -vrf "$(KERNEL)"
 
 .PHONY: clean-operating-system
-clean-operating-system: | $(BUILD_PATH) $(HAVK_SYSTEM_BUILD_PATH)
+clean-operating-system: | $(BUILD_PATH) $(OPERATING_SYSTEM_BUILD_PATH)
 	$(call echo, "CLEANING ALL OPERATING SYSTEM FILES IN \
-		$(HAVK_SYSTEM_BUILD_PATH)")
+		$(OPERATING_SYSTEM_BUILD_PATH)")
 
-	@rm -vrf $(HAVK_SYSTEM_BUILD_PATH)*
+	@rm -vrf $(OPERATING_SYSTEM_BUILD_PATH)*
 
 .PHONY: clean-bootloader
 clean-bootloader: | $(BUILD_PATH)
 	$(call echo, "CLEANING ALL UEFI BOOTLOADER FILES IN $(BUILD_PATH)")
 
-	@rm -vrf "$(UEFI_O_FILE)" "$(UEFI_SO_FILE)" "$(HAVK_BOOTLOADER)" \
-		"$(HAVK_BOOTLOADER).debug"
+	@rm -vrf "$(UEFI_O_FILE)" "$(UEFI_SO_FILE)" "$(UEFI_BOOTLOADER)" \
+		"$(UEFI_BOOTLOADER).debug"
 
 .PHONY: clean-image
 clean-image: | $(BUILD_PATH)
 	$(call echo, "CLEANING ALL IMAGE FILES IN $(BUILD_PATH)")
 
-	@rm -vrf "$(HAVK_IMAGE)" "$(ESP_PARTITION)"
+	@rm -vrf "$(IMAGE)" "$(ESP_PARTITION)"
 
 .PHONY: clean-proof
 clean-proof: | $(BUILD_PATH) $(HAVK_ADAINCLUDE_PATH)
 	$(call echo, "CLEANING ALL PROOF IN $(BUILD_PATH)")
 
-	@gnatprove -P "$(HAVK_PROJECT)" $(GPR_VARIABLES) --clean
+	@gnatprove -P "$(KERNEL_PROJECT)" $(GPR_VARIABLES) --clean
 
 .PHONY: clean-all
 clean-all: clean-kernel clean-operating-system clean-bootloader clean-image \

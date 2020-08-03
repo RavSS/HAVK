@@ -24,10 +24,10 @@ source/kernel/*
 !source/kernel/spark_runtime/*.ad?
 
 !source/bootloader
-!source/bootloader/*
+!source/bootloader/**
 
 !source/operating_system
-!source/operating_system/*
+!source/operating_system/**
 
 !tools
 tools/*

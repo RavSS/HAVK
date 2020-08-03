@@ -1,0 +1,129 @@
+-------------------------------------------------------------------------------
+-- Program         -- HAVK Kernel Ada Runtime                                --
+-- Filename        -- HAVK_Kernel_Runtime.gpr                                --
+-- License         -- GNU General Public License version 3.0                 --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
+-------------------------------------------------------------------------------
+
+-- Before compiling the runtime, make sure you have copied over the files
+-- to the source directory listed below.
+LIBRARY PROJECT HAVK_Kernel_Runtime
+IS
+   FOR Default_Language    USE "Ada";
+   FOR Languages           USE("Ada");
+   FOR Source_Dirs         USE("./ada_runtime/");
+   FOR Object_Dir          USE "./../../build/kernel/";
+   FOR Exec_Dir            USE HAVK_Kernel_Runtime'Object_Dir;
+   FOR Library_Name        USE "havk_kernel_runtime";
+   FOR Library_Kind        USE "static";
+   FOR Library_Src_Dir     USE
+      HAVK_Kernel_Runtime'Object_Dir & "adainclude/";
+   FOR Library_Dir         USE
+      HAVK_Kernel_Runtime'Object_Dir & "adalib/";
+   FOR Create_Missing_Dirs USE "true";
+
+   TYPE Runtime_Type IS("Final", "Debug");
+   Build : Runtime_Type := EXTERNAL("Build", "Final");
+
+   PACKAGE Builder
+   IS -- `gnatmake`
+      Ada_Basic_Switches :=
+        (-- We're compiling parts of GNAT, so this is necessary.
+         "-gnatg",
+         -- Allows the builder to include external files needed to build the
+         -- runtime.
+         "-x",
+         -- May as well use the latest version of Ada, there is no harm in it.
+         "-gnat2012",
+         -- Disable the style enforcement for the RTS. It's not written by me
+         -- at this stage.
+         "-gnatyN",
+         -- Enable all warnings by default.
+         "-gnatwa",
+         -- Disable exception propagation warnings.
+         "-gnatw.X",
+         -- No standard library since HAVK is a freestanding program
+         -- without "-ffreestanding".
+         "-nostdlib",
+         -- No standard include paths.
+         "-nostdinc");
+
+      Ada_Final_Switches :=
+        (-- No debug information at all for obvious reasons.
+         "-g0",
+         -- Default validity checks. Specified by default regardless.
+         "-gnatVd",
+         -- Speed up compilation by not generating some references in
+         -- the "ali" files. Also saves a little space.
+         "-gnatx");
+
+      Ada_Debug_Switches :=
+        (-- Maximum debug information for GDB specifically.
+         "-ggdb3",
+         -- All validity checks for debugging.
+         "-gnatVa",
+         -- Creates "rep" files showing the bit representation of types etc.
+         "-gnatR2s");
+
+      CASE
+         Build
+      IS
+         WHEN "Final" =>
+            FOR Default_Switches("Ada") USE
+               Ada_Basic_Switches &
+               Ada_Final_Switches;
+         WHEN "Debug" =>
+            FOR Default_Switches("Ada") USE
+               Ada_Basic_Switches &
+               Ada_Debug_Switches;
+      END CASE;
+
+      -- A separate configuration file is used for the runtime system.
+      -- It is not too different.
+      FOR Global_Configuration_Pragmas USE
+         "./ada_runtime/havk_kernel_runtime.adc";
+   END Builder;
+
+   PACKAGE Compiler
+   IS -- `gcc`
+      GCC_Basic_Switches :=
+        (-- Stack protector fully enabled, because why not.
+         "-fstack-protector-all",
+         -- Add some extra instructions that check if we've gone
+         -- over the stack space limit. Usually that just causes an
+         -- intense crash like a general page-fault for example.
+         -- I believe this "enables" the "STORAGE_ERROR" exception to
+         -- be caught or raised, so that means the last chance handler
+         -- might be called instead of the general page-fault by the CPU.
+         "-fstack-check",
+         -- Create a "su" file with information about stack usage (SU).
+         -- Useful for checking if a function exceeds the stack space
+         -- I've allocated in the entry assembly file.
+         "-fstack-usage",
+         -- The x86-64 red zone will be a problem when handling interrupts
+         -- in the future, so just disable it. Search OSDev for more,
+         -- I found it noticed as an issue due to the System V ABI so I
+         -- thought I would get rid of it since it seems to be useless
+         -- for me right now.
+         "-mno-red-zone",
+         -- Allows me to place the kernel anywhere. I can also specify
+         -- "large" instead of "kernel". Not sure if there is a difference.
+         "-mcmodel=kernel", "-fno-PIC",
+         -- No MMX instructions.
+         "-mno-mmx",
+         -- No SSE instructions.
+         "-mno-sse",
+         -- No SSE2 instructions.
+         "-mno-sse2",
+         -- Intel syntax for inline x86-64 assembly, since I like it more
+         -- and it's less messy.
+         "-masm=intel",
+         -- Explicitly mention x86-64, just to be sure.
+         "-march=x86-64",
+         -- Optimize code for no particular CPU family.
+         "-mtune=generic");
+
+      FOR Default_Switches("Ada") USE
+         GCC_Basic_Switches;
+   END Compiler;
+END HAVK_Kernel_Runtime;

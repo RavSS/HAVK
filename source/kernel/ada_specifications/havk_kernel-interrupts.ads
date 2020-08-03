@@ -31,6 +31,19 @@ IS
       SS     AT 32 RANGE 0 .. 63;
    END RECORD;
 
+   -- This type will be used by the interrupt handler stubs to increment the
+   -- respective counters. Note that the value will eventually wrap around, but
+   -- that is acceptable. The stub expects packed 8-byte elements.
+   TYPE interrupt_counters IS ARRAY(number RANGE 0 .. 255) OF number
+   WITH
+      Default_Component_Value => 00,
+      Component_Size          => 64;
+   Counters : ALIASED interrupt_counters := (OTHERS => 0)
+   WITH
+      Export        => true,
+      Convention    => Assembler,
+      External_Name => "ada__interrupt_counters";
+
    PRAGMA Warnings(off, "unused variable ""Interrupt_Frame""",
       Reason => "The ISRs should take the parameter in regardless of usage.");
 

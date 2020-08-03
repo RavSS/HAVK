@@ -58,6 +58,16 @@ IS
    PROCEDURE Deallocate_Mappings
      (Layout : IN OUT page_layout);
 
+   -- Resolves a virtual address to a physical (frame) address. Returns zero if
+   -- it was not mapped to begin with. The size of the frame can be told by the
+   -- alignment of it.
+   FUNCTION Resolve_Address
+     (Layout          : IN page_layout;
+      Virtual_Address : IN address)
+      RETURN address
+   WITH
+      Pre => Virtual_Address MOD address(Page) = 0;
+
    -- Converts a size in bytes to a certain amount of pages (depending on the
    -- page frame variant).
    FUNCTION Size_To_Pages
@@ -66,7 +76,6 @@ IS
       RETURN number
    WITH
       Inline => true,
-      Pre    => Alignment IN Page | Huge_Page | Giant_Page,
       Post   => Size_To_Pages'result <=
                    number(address'last / address(Alignment));
 
@@ -87,8 +96,7 @@ IS
       User_Access      : IN boolean            := false;
       No_Execution     : IN boolean            :=  true)
    WITH -- You can either write or execute. You can also do neither.
-      Pre => Page_Size IN Page | Huge_Page | Giant_Page AND THEN
-            (IF Write_Access THEN No_Execution);
+      Pre => (IF Write_Access THEN No_Execution);
 
    -- Shortcut procedure for mapping a virtual address range to a physical
    -- address range. The range is determined by the size, which is then
@@ -106,8 +114,7 @@ IS
       No_Execution     : IN boolean            :=  true)
    WITH
       Inline => true, -- See `Map_Address` for the explanation about W^X.
-      Pre    => Page_Size IN Page | Huge_Page | Giant_Page AND THEN
-               (IF Write_Access THEN No_Execution);
+      Pre    => (IF Write_Access THEN No_Execution);
 
    -- The same as `Map_Address()`, but for the kernel's page layout.
    PROCEDURE Kernel_Map_Address
@@ -118,8 +125,7 @@ IS
       Write_Access     : IN boolean            := false;
       No_Execution     : IN boolean            :=  true)
    WITH -- See `Map_Address()` for the explanation about W^X.
-      Pre => Page_Size IN Page | Huge_Page | Giant_Page AND THEN
-            (IF Write_Access THEN No_Execution);
+      Pre => (IF Write_Access THEN No_Execution);
 
    -- The same as `Map_Address_Range()`, but for the kernel's page layout.
    PROCEDURE Kernel_Map_Address_Range
@@ -132,8 +138,7 @@ IS
       No_Execution     : IN boolean            :=  true)
    WITH
       Inline => true, -- See `Map_Address()` for the explanation about W^X.
-      Pre    => Page_Size IN Page | Huge_Page | Giant_Page AND THEN
-               (IF Write_Access THEN No_Execution);
+      Pre    => (IF Write_Access THEN No_Execution);
 
    -- This loads the kernel page layout and makes sure external functions
    -- (particularly assembly routines) can load the layout properly.

@@ -66,6 +66,10 @@
 		MOV RAX, [RIP + global__kernel_page_map_base_address]
 		MOV CR3, RAX
 
+		# Now increment the counter used for various statistics.
+		LEA RAX, [RIP + ada__interrupt_counters]
+		LOCK INC QWORD PTR [RAX + 8 * \VECTOR] # 8-byte elements.
+
 		# Now prepare the arguments, with RDI being the pointer
 		# to the interrupt frame and RSI holding the value of
 		# the potential error code. The latter is on top of the

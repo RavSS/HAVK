@@ -623,7 +623,7 @@ IS
             Get_Next_Cluster(FAT_Context, Old_Cluster, Next_Cluster);
 
             IF -- Incorrect path if true.
-               Next_Cluster = No_File_Match
+               Next_Cluster >= invalid_cluster_16'first
             THEN
                Error_Status := path_error;
                RETURN;

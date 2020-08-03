@@ -76,6 +76,14 @@ IS
          =>   Log_Operation_Call
                 (Values.XMM, Values.RAX);
 
+         WHEN irq_statistics_operation
+         =>   IRQ_Statistics_Operation_Call
+                 (Values.RSI, Values.RDX, Values.RAX);
+
+         WHEN io_port_operation
+         =>   IO_Port_Operation_Call
+                (Values.RSI, Values.RDX, Values.R8, Values.R9, Values.RAX);
+
          WHEN framebuffer_access_operation
          =>   Framebuffer_Access_Operation_Call
                 (Values.RSI, Values.RDX, Values.R8, Values.R9, Values.R10,

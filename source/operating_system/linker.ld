@@ -7,6 +7,7 @@
 
 OUTPUT_FORMAT(elf64-x86-64)
 ENTRY(_start)
+STARTUP(start.o)
 
 SECTIONS
 {

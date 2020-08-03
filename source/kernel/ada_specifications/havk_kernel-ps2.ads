@@ -11,6 +11,7 @@
 -- READ: https://wiki.osdev.org/%228042%22_PS/2_Controller
 -- READ: https://wiki.osdev.org/PS/2_Keyboard
 -- READ: https://wiki.osdev.org/PS/2_Mouse
+-- TODO: This package is now deprecated and needs to be moved into user space.
 PACKAGE HAVK_Kernel.PS2
 WITH
    Preelaborate   => true,

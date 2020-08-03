@@ -407,6 +407,91 @@ IS
       END LOOP;
    END Deallocate_Mappings;
 
+   FUNCTION Resolve_Address
+     (Layout          : IN page_layout;
+      Virtual_Address : IN address)
+      RETURN address
+   WITH
+      Refined_Post => Resolve_Address'result MOD address(Page) = 0
+   IS
+      -- See the `Map_Address()` procedure for more information.
+      L4_Offset : CONSTANT page_mask :=
+         number(Shift_Right(Virtual_Address, 39)) AND page_mask'last;
+      L3_Offset : CONSTANT page_mask :=
+         number(Shift_Right(Virtual_Address, 30)) AND page_mask'last;
+      L2_Offset : CONSTANT page_mask :=
+         number(Shift_Right(Virtual_Address, 21)) AND page_mask'last;
+      L1_Offset : CONSTANT page_mask :=
+         number(Shift_Right(Virtual_Address, 12)) AND page_mask'last;
+
+      L3 : access_directory_pointer_table
+      WITH
+         Annotate => (GNATprove, False_Positive, "memory leak *",
+                      "No new allocation or deallocation takes place.");
+      L2 : access_directory_table
+      WITH
+         Annotate => (GNATprove, False_Positive, "memory leak *",
+                      "No new allocation or deallocation takes place.");
+      L1 : access_page_table
+      WITH
+         Annotate => (GNATprove, False_Positive, "memory leak *",
+                      "No new allocation or deallocation takes place.");
+   BEGIN
+      IF -- Canonical address check. See the "HAVK_Kernel.Memory" package.
+         Virtual_Address <= 2**47 - 1 OR ELSE
+         Virtual_Address >= -(2**47)
+      THEN
+         RETURN address'first;
+      END IF;
+
+      IF
+         Layout.L4(L4_Offset).Present
+      THEN
+         L3 := Table_Access(Decode_Table(Layout.L4(L4_Offset).Pointer));
+      ELSE
+         RETURN address'first;
+      END IF;
+
+      IF
+         L3 /= NULL AND THEN
+         L3(L3_Offset).Present
+      THEN
+         IF
+            NOT L3(L3_Offset).Huge
+         THEN
+            L2 := Table_Access(Decode_Table(L3(L3_Offset).Pointer));
+         ELSE
+            RETURN Decode_Table(L3(L3_Offset).Pointer);
+         END IF;
+      ELSE
+         RETURN address'first;
+      END IF;
+
+      IF
+         L2 /= NULL AND THEN
+         L2(L2_Offset).Present
+      THEN
+         IF
+            NOT L2(L2_Offset).Huge
+         THEN
+            L1 := Table_Access(Decode_Table(L2(L2_Offset).Pointer));
+         ELSE
+            RETURN Decode_Table(L2(L2_Offset).Pointer);
+         END IF;
+      ELSE
+         RETURN address'first;
+      END IF;
+
+      IF
+         L1 /= NULL AND THEN
+         L1(L1_Offset).Present
+      THEN
+         RETURN Decode_Table(L1(L1_Offset).Frame);
+      ELSE
+         RETURN address'first;
+      END IF;
+   END Resolve_Address;
+
    FUNCTION Size_To_Pages
      (Size         : IN number;
       Alignment    : IN page_frame_variant := Page)

@@ -7,6 +7,7 @@
 
 WITH
    HAVK_Kernel.UEFI,
+   HAVK_Kernel.Interrupts,
    HAVK_Kernel.Tasking,
    HAVK_Kernel.Tasking.ELF,
    HAVK_Kernel.Tasking.IPC,
@@ -186,6 +187,79 @@ IS
          string(To_Characters(XMM)) & " ||", Tag => System_Call_Tag);
       RAX := no_error'enum_rep;
    END Log_Operation_Call;
+
+   PROCEDURE IRQ_Statistics_Operation_Call
+     (RSI : IN Intrinsics.general_register;
+      RDX : OUT Intrinsics.general_register;
+      RAX : OUT Intrinsics.general_register)
+   IS
+   BEGIN
+      IF
+         number(RSI) IN Interrupts.Counters'range
+      THEN
+         RDX := Intrinsics.general_register(Interrupts.Counters(number(RSI)));
+         RAX := no_error'enum_rep;
+      ELSE
+         RDX := Intrinsics.general_register'first;
+         RAX := index_error'enum_rep;
+      END IF;
+   END IRQ_Statistics_Operation_Call;
+
+   PROCEDURE IO_Port_Operation_Call
+     (RSI : IN Intrinsics.general_register;
+      RDX : IN OUT Intrinsics.general_register;
+      R8  : IN Intrinsics.general_register;
+      R9  : IN Intrinsics.general_register;
+      RAX : OUT Intrinsics.general_register)
+   IS
+      Inputting : CONSTANT boolean := R8 /= 0;
+      Word_Size : CONSTANT boolean := R9 /= 0;
+   BEGIN
+      IF
+         RSI <= 2**16 - 1
+      THEN
+         IF
+            NOT Word_Size
+         THEN
+            IF
+               NOT Inputting
+            THEN
+               IF
+                  RDX <= 2**8 - 1
+               THEN
+                  Intrinsics.Output_Byte(number(RSI), number(RDX));
+               ELSE
+                  RAX := size_error'enum_rep;
+                  RETURN;
+               END IF;
+            ELSE
+               RDX := Intrinsics.general_register
+                 (Intrinsics.Input_Byte(number(RSI)));
+            END IF;
+         ELSE
+            IF
+               NOT Inputting
+            THEN
+               IF
+                  RDX <= 2**16 - 1
+               THEN
+                  Intrinsics.Output_Word(number(RSI), number(RDX));
+               ELSE
+                  RAX := size_error'enum_rep;
+                  RETURN;
+               END IF;
+            ELSE
+               RDX := Intrinsics.general_register
+                 (Intrinsics.Input_Word(number(RSI)));
+            END IF;
+         END IF;
+      ELSE
+         RAX := index_error'enum_rep;
+         RETURN;
+      END IF;
+
+      RAX := no_error'enum_rep;
+   END IO_Port_Operation_Call;
 
    PROCEDURE Framebuffer_Access_Operation_Call
      (RSI : OUT Intrinsics.general_register;
