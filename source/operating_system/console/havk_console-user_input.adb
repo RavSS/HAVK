@@ -1,14 +1,11 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-user_input.adb                             --
+-- Program         -- HAVK Operating System Console                          --
+-- Filename        -- havk_console-user_input.adb                            --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   HAVK_Kernel.Intrinsics;
-
-PACKAGE BODY HAVK_Kernel.User_Input
+PACKAGE BODY HAVK_Console.User_Input
 IS
    FUNCTION Key_String_Format
      (Unformatted : IN string)
@@ -35,9 +32,7 @@ IS
    IS
       Current_Key_State : key_state;
    BEGIN
-      Intrinsics.Disable_Interrupts;
       Current_Key_State := Last_Key_State;
-      Intrinsics.Enable_Interrupts;
 
       IF
          Current_Key_State.Shifted
@@ -53,9 +48,7 @@ IS
    IS
       Current_Key_State : key_state;
    BEGIN
-      Intrinsics.Disable_Interrupts;
       Current_Key_State := Last_Key_State;
-      Intrinsics.Enable_Interrupts;
 
       IF
          Current_Key_State.Shifted
@@ -87,4 +80,4 @@ IS
       Last_Key_State := Null_Key_State;
    END Invalidate_Key_State;
 
-END HAVK_Kernel.User_Input;
+END HAVK_Console.User_Input;

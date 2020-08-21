@@ -21,6 +21,9 @@
 #define FRAMEBUFFER_TESTER_PATH SYSTEM_FOLDER "FRAMEB~1.ELF"
 #define FRAMEBUFFER_TESTER_NAME "Framebuffer Tester"
 
+#define CONSOLE_PATH SYSTEM_FOLDER "console.elf"
+#define CONSOLE_NAME "Console"
+
 // The name can be up to 64 bytes and the path can be up to 192 bytes.
 static syserr_ht load_file(const char *name, const char *path)
 {
@@ -52,6 +55,7 @@ uint64_t main(void)
 	LOADER(IPC_TESTER_NAME, IPC_TESTER_PATH);
 	LOADER(THREAD_TESTER_NAME, THREAD_TESTER_PATH);
 	LOADER(FRAMEBUFFER_TESTER_NAME, FRAMEBUFFER_TESTER_PATH);
+	LOADER(CONSOLE_NAME, CONSOLE_PATH);
 
 	return 0;
 }

@@ -9,7 +9,7 @@
 
 .ALIGN 16 # System V ABI dictates that x86-64 stacks are 16-byte aligned.
 _stack_end:
-	.SPACE 8192 # Just 8 KiB for now.
+	.SPACE 32768 # Just 32 KiB for now.
 _stack_base:
 
 .SECTION .text

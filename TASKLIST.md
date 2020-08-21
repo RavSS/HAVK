@@ -1,5 +1,5 @@
 # Tasklist for the HAVK operating system
-### Last Updated: 2020-08-03
+### Last Updated: 2020-08-22
 #### High priority
 - The kernel crashes on AMD systems (but not Intel systems) during
   some point in which my descriptor tables are prepared and loaded, which
@@ -9,12 +9,16 @@
 - Create a package for better concurrency support e.g. mutexes.
 - Start implementing various system calls so user space can do something.
 - Create a virtual filesystem task.
-- Implement a user-space thread library using `setjmp()` and `longjmp()` or
-  bring back the kernel-space threading from a few commits ago, as I cannot
-  think of a way to do preemptive threading in user-space.
+- Implement user space threading by allowing the kernel to jump to an
+  address specified by the user for scheduling and then restore the instruction
+  pointer via a message to the program. This should be a silly but fun way to
+  do it as opposed to the earlier kernel space threading I had.
+- Fix up the PS/2 driver for polling or figure out a way to better handle IRQs
+  in user space without relying on them signalling EOI.
+- Restore the old graphics packages and rework them for user space so I have
+  worthwhile graphics again instead of a screensaver.
 
 #### Low priority
-- Take the PS/2 driver out of the kernel and into a ring 3 task.
 - Reorganise the bootloader arguments structure and provide
   a consistent format that does away with some of UEFI's oddities.
 - Properly calibrate the LAPIC timer so it's more accurate than the PIT.
@@ -27,4 +31,5 @@
 - Finally start engaging with security concepts centred around user space.
 - Rework the physical frame allocator.
 - Extend the capabilities of the Ada and C runtime files for operating system
-  programs/tasks.
+  programs/tasks. Also turn all of them into libraries as opposed to compiling
+  them separately for each program.

@@ -371,7 +371,7 @@ qemu: $(IMAGE) image-configuration
 	-drive if=pflash,format=raw,unit=0,\
 	file="$(OVMF_PATH)OVMF_CODE-pure-efi.fd",readonly=on \
 	-drive if=pflash,format=raw,unit=1,\
-	file="$(OVMF_PATH)OVMF_VARS-pure-efi.fd",readonly=off \
+	file="$(OVMF_PATH)OVMF_VARS-pure-efi.fd",readonly=on \
 	-drive index=0,format=raw,media=disk,\
 	file="$<",readonly=off \
 	$(QEMU_FLAGS)

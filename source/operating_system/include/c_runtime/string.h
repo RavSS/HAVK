@@ -19,4 +19,13 @@ void *memcpy(void *destination, const void *source, size_t bytes);
 /* Standard libc `strlen()` (C89). */
 size_t strlen(const char *string);
 
+/* Standard libc `strnlen()` (C89). */
+size_t strnlen(const char *string, size_t length);
+
+/* Standard libc `strcpy()` (C89). */
+char *strcpy(char *destination, const char *source);
+
+/* Standard libc `strncpy()` (C89). */
+char *strncpy(char *destination, const char *source, size_t length);
+
 #endif

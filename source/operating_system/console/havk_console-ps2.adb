@@ -1,17 +1,14 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-ps2.adb                                    --
+-- Program         -- HAVK Operating System Console                          --
+-- Filename        -- havk_console-ps2.adb                                   --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 WITH
-   Ada.Unchecked_Conversion,
-   HAVK_Kernel.Intrinsics;
-USE
-   HAVK_Kernel.Intrinsics;
+   Ada.Unchecked_Conversion;
 
-PACKAGE BODY HAVK_Kernel.PS2
+PACKAGE BODY HAVK_Console.PS2
 WITH
    Refined_State => (Controller_State => (Current_Scancode_Set,
                                           Current_Condition,
@@ -20,6 +17,9 @@ WITH
                                           Port_2_Support, Mouse_Support,
                                           Port_1_Device, Port_2_Device))
 IS
+   PRAGMA Warnings(GNAT, off, "types for unchecked conversion *",
+      Reason => "This was checked by `gnatprove` instead to be acceptable.");
+
    PROCEDURE Ready
      (Is_Ready : OUT boolean;
       Sending  : IN boolean := false)
@@ -239,8 +239,8 @@ IS
             NOT Unchecked_Identity'valid
          THEN
             Log("PS/2 port " & Port_Image & " has an unrecognised device - " &
-               Image(Identity(1)) & ' ' & Image(Identity(2)) & '.',
-               Tag => PS2_Tag, Warn => true);
+               integer(Identity(1))'image & ' ' & integer(Identity(2))'image &
+               '.', Tag => PS2_Tag, Warn => true);
             New_Device := unrecognised;
             RETURN;
          END IF;
@@ -268,8 +268,8 @@ IS
                Tag => PS2_Tag);
          WHEN unrecognised         => -- Still technically a valid enumeration.
             Log("PS/2 port " & Port_Image & " has an unrecognised device - " &
-               Image(Identity(1)) & ' ' & Image(Identity(2)) & '.',
-               Tag => PS2_Tag, Warn => true);
+               integer(Identity(1))'image & ' ' & integer(Identity(2))'image &
+               '.', Tag => PS2_Tag, Warn => true);
       END CASE;
 
       New_Device := Identified_Device;
@@ -292,11 +292,6 @@ IS
       Successful             : boolean;
       Message                : response;
    BEGIN
-      -- First, stop any interrupts that'll ruin our expected I/O
-      -- communication. An alternative would be to disable interrupts in the
-      -- configuration, but this is quicker and more reliable.
-      Disable_Interrupts;
-
       -- Flush anything in the output buffer to make sure.
       Flush;
 
@@ -327,8 +322,8 @@ IS
             Critical => true);
          Current_Condition := unreliable;
          RETURN;
-      ELSIF
-         Bit_Test(Old_Configuration_Byte, 5) -- Check for "Port_2_Clock".
+      ELSIF -- Check for "Port_2_Clock".
+         boolean'val(Shift_Right(Old_Configuration_Byte, 5) AND 1)
       THEN
          Send_Device_Command(Successful, reporting_disable, Port_2 => true);
 
@@ -595,8 +590,5 @@ IS
       -- Set the controller's condition as functional as we have hopefully
       -- got to this line without any raised errors.
       Current_Condition := functional;
-
-      -- Finally, re-enable interrupts.
-      Enable_Interrupts;
    END Setup;
-END HAVK_Kernel.PS2;
+END HAVK_Console.PS2;

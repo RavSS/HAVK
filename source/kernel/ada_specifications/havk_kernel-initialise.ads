@@ -41,9 +41,6 @@ IS
    -- Logs arbitrary information about the memory map and its descriptors.
    PROCEDURE Memory_Map_Info;
 
-   -- Initialises the PS/2 controller for keyboard input purposes (as of now).
-   PROCEDURE PS2_Input;
-
    -- Initialises the system call instruction's handler by preparing the MSRs.
    PROCEDURE System_Call_Instruction
    RENAMES System_Call.Handler.Set_MSRs;

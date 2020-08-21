@@ -1,16 +1,14 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-user_input.ads                             --
+-- Program         -- HAVK Operating System Console                          --
+-- Filename        -- havk_console-user_input.ads                            --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 -- This package controls the state of input, regardless of origin.
 -- TODO: Make input buffered by using a stack. Unbuffered input is not as good.
-PACKAGE HAVK_Kernel.User_Input
+PACKAGE HAVK_Console.User_Input
 IS
-   PRAGMA Preelaborate;
-
    -- The name (string) of the keys can only be 32 characters long. This is
    -- a poor man's unbounded string replacement, but it works.
    SUBTYPE key_string IS string(1 .. 32);
@@ -19,9 +17,9 @@ IS
    -- spaces, as using the "OTHER" keyword (loop) requires elaboration code.
    TYPE key_state IS RECORD
       -- The name of a key like "SPACEBAR".
-      Name          : key_string := "                                ";
+      Name          : key_string := (OTHERS => NUL);
       -- Same as the above, but for the shifted version, like "BREAK".
-      Name_Shifted  : key_string := "                                ";
+      Name_Shifted  : key_string := (OTHERS => NUL);
       -- The ASCII format of a key.
       ASCII         : character  := character'val(0);
       -- The shifted version of the key.
@@ -68,4 +66,4 @@ IS
    -- redo a specific key press.
    PROCEDURE Invalidate_Key_State;
 
-END HAVK_Kernel.User_Input;
+END HAVK_Console.User_Input;

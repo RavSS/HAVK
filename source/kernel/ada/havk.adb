@@ -54,9 +54,6 @@ BEGIN
    -- Set up the system call instruction's functionality and options.
    Initialise.System_Call_Instruction;
 
-   -- Prepare primitive forms of input via PS/2.
-   Initialise.PS2_Input;
-
    -- Begin multi-tasking and leave this phase.
    Initialise.Begin_Tasking;
 END HAVK;

@@ -28,7 +28,27 @@ size_t strlen(const char *string)
 {
 	register size_t i;
 
-	for (i = 0; string[i++];);
+	for (i = 0; string[i]; ++i);
 
 	return i;
+}
+
+size_t strnlen(const char *string, size_t length)
+{
+	register size_t i;
+
+	for (i = 0; i < length && string[i]; ++i);
+
+	return i;
+}
+
+char *strcpy(char *destination, const char *source) // TODO: Expand this later.
+{
+	return memcpy(destination, source, strlen(source));
+}
+
+char *strncpy(char *destination, const char *source, size_t length)
+{
+	memset(destination, 0, length);  // TODO: Expand this later.
+	return memcpy(destination, source, strnlen(source, length));
 }

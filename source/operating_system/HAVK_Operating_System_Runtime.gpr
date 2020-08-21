@@ -89,8 +89,8 @@ IS
    PACKAGE Compiler
    IS -- `gcc`
       GCC_Basic_Switches :=
-        (-- Stack protector fully enabled, because why not.
-         "-fstack-protector-all",
+        (-- TODO: See the base program project for more on this.
+         "-fno-stack-protector",
          -- Add some extra instructions that check if we've gone
          -- over the stack space limit. Usually that just causes an
          -- intense crash like a general page-fault for example.

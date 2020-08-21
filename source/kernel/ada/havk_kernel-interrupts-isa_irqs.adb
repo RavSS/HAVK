@@ -6,7 +6,6 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.PS2.Keyboard,
    HAVK_Kernel.PIT;
 
 PACKAGE BODY HAVK_Kernel.Interrupts.ISA_IRQs
@@ -26,7 +25,7 @@ IS
      (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state)
    IS
    BEGIN
-      PS2.Keyboard.Interrupt_Manager;
+      NULL;
    END ISR_033_Handler;
 
    PROCEDURE ISR_034_Handler
@@ -105,7 +104,7 @@ IS
      (Interrupt_Frame : NOT NULL ACCESS CONSTANT interrupted_state)
    IS
    BEGIN
-      PS2.Flush;
+      NULL;
    END ISR_044_Handler;
 
    PROCEDURE ISR_045_Handler

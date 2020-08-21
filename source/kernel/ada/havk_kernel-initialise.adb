@@ -17,7 +17,6 @@ WITH
    HAVK_Kernel.Debug,
    HAVK_Kernel.Drive.GPT,
    HAVK_Kernel.UEFI,
-   HAVK_Kernel.PS2,
    HAVK_Kernel.PIT;
 
 PACKAGE BODY HAVK_Kernel.Initialise
@@ -226,30 +225,6 @@ IS
    BEGIN
       RETURN (Compilation_ISO_Date & 'T' & Compilation_Time); -- 19 characters.
    END HAVK_Build_Datetime;
-
-   PROCEDURE PS2_Input
-   IS
-      USE TYPE
-         HAVK_Kernel.PS2.controller_condition;
-
-      Condition : PS2.controller_condition;
-   BEGIN
-      Log("Attempting to initialise PS/2 controller.", Tag => Initialise_Tag);
-      PS2.Setup;
-      Condition := PS2.Check_Condition;
-
-      IF
-         Condition /= PS2.functional
-      THEN
-         RAISE Panic
-         WITH
-            Source_Location & " - Non-working PS/2 controller detected.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "HAVK needs a PS/2 controller for any and all input as of now.");
-      ELSE
-         Log("PS/2 controller is initialised.", Tag => Initialise_Tag);
-      END IF;
-   END PS2_Input;
 
    PROCEDURE Memory_Map_Info
    IS

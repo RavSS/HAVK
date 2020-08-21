@@ -1,22 +1,20 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-ps2-keyboard.ads                           --
+-- Program         -- HAVK Operating System Console                          --
+-- Filename        -- havk_console-ps2-keyboard.ads                          --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.User_Input;
+   HAVK_Console.User_Input;
 USE
-   HAVK_Kernel.User_Input;
+   HAVK_Console.User_Input;
 
 -- This package revolves around the PS/2 keyboard. Anything specific to it
 -- instead of generic PS/2 logic should be here.
 -- TODO: This package is now deprecated and needs to be moved into user space.
-PACKAGE HAVK_Kernel.PS2.Keyboard
+PACKAGE HAVK_Console.PS2.Keyboard
 IS
-   PRAGMA Preelaborate;
-
    -- Becomes true when either shift key is held down.
    Shift_State     : boolean := false;
 
@@ -39,4 +37,4 @@ PRIVATE
       Inline => true,
       Pre    => Scancode <= 16#FF#;
 
-END HAVK_Kernel.PS2.Keyboard;
+END HAVK_Console.PS2.Keyboard;

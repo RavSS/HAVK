@@ -1,17 +1,14 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-ps2-keyboard.adb                           --
+-- Program         -- HAVK Operating System Console                          --
+-- Filename        -- havk_console-ps2-keyboard.adb                          --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   HAVK_Kernel.Intrinsics;
-USE
-   HAVK_Kernel.Intrinsics;
-
-PACKAGE BODY HAVK_Kernel.PS2.Keyboard
+PACKAGE BODY HAVK_Console.PS2.Keyboard
 IS
+   -- TODO: This was prepared in mind for an interrupt handler, not a polling
+   -- style of handling input.
    PROCEDURE Interrupt_Manager
    IS
       -- Remember that this procedure handles a single byte. A raised IRQ
@@ -20,7 +17,13 @@ IS
       -- handle key breaks, but only a single one will be raised for a press.
       Scancode : CONSTANT number RANGE 0 .. 2**8 - 1 :=
          Input_Byte(data_port'enum_rep);
+      Is_Ready : boolean;
    BEGIN
+      LOOP -- Blocking.
+         Ready(Is_Ready);
+         EXIT WHEN Is_Ready;
+      END LOOP;
+
       IF -- TODO: This only supports a PS/2 keyboard on port 1.
          PS2.Port_1_Device /= standard_keyboard OR ELSE
          Scancode = 16#FA# -- Data is not for the keyboard.
@@ -383,4 +386,4 @@ IS
       RETURN Key;
    END Scancode_Set_2;
 
-END HAVK_Kernel.PS2.Keyboard;
+END HAVK_Console.PS2.Keyboard;

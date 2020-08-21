@@ -162,4 +162,30 @@ inline syserr_ht syscall_data(sysargs_ht *arguments, void *data)
 	return status;
 }
 
+inline void output_byte(uint16_t port, uint8_t value)
+{
+        sysargs_ht arguments =
+        {
+                .operation = IO_PORT_OPERATION,
+                .argument_1 = port,
+                .argument_2 = value
+        };
+
+        syscall(&arguments);
+}
+
+inline uint8_t input_byte(uint16_t port)
+{
+        sysargs_ht arguments =
+        {
+                .operation = IO_PORT_OPERATION,
+                .argument_1 = port,
+                .argument_3 = true // Input, not output.
+        };
+
+        syscall(&arguments);
+        return arguments.argument_2;
+}
+
+
 #endif

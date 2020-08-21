@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-ps2.ads                                    --
+-- Program         -- HAVK Operating System Console                          --
+-- Filename        -- havk_console-ps2.ads                                   --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -11,10 +11,8 @@
 -- READ: https://wiki.osdev.org/%228042%22_PS/2_Controller
 -- READ: https://wiki.osdev.org/PS/2_Keyboard
 -- READ: https://wiki.osdev.org/PS/2_Mouse
--- TODO: This package is now deprecated and needs to be moved into user space.
-PACKAGE HAVK_Kernel.PS2
+PACKAGE HAVK_Console.PS2
 WITH
-   Preelaborate   => true,
    Abstract_State =>
    (
       Controller_State
@@ -391,4 +389,4 @@ PRIVATE
    WITH
       Part_Of => Controller_State;
 
-END HAVK_Kernel.PS2;
+END HAVK_Console.PS2;
