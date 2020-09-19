@@ -22,7 +22,8 @@ IS
          Sender NOT IN Tasks'range   OR ELSE
          Receiver NOT IN Tasks'range OR ELSE
          Tasks(Sender) = NULL        OR ELSE
-         Tasks(Receiver) = NULL
+         Tasks(Receiver) = NULL      OR ELSE
+         NOT Tasks(Receiver).Alive
       THEN
          Error_Status := index_error;
          RETURN;

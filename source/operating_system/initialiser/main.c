@@ -21,8 +21,11 @@
 #define FRAMEBUFFER_TESTER_PATH SYSTEM_FOLDER "FRAMEB~1.ELF"
 #define FRAMEBUFFER_TESTER_NAME "Framebuffer Tester"
 
-#define CONSOLE_PATH SYSTEM_FOLDER "console.elf"
-#define CONSOLE_NAME "Console"
+#define TERMINAL_PATH SYSTEM_FOLDER "terminal.elf"
+#define TERMINAL_NAME "Terminal"
+
+#define PS2_PATH SYSTEM_FOLDER "ps2.elf"
+#define PS2_NAME "PS/2 Driver"
 
 // The name can be up to 64 bytes and the path can be up to 192 bytes.
 static syserr_ht load_file(const char *name, const char *path)
@@ -52,10 +55,15 @@ uint64_t main(void)
 	const char *start_log = "Starting initialisation from user space.";
 	log_string(start_log);
 
+	// Enabled tasks.
 	LOADER(IPC_TESTER_NAME, IPC_TESTER_PATH);
 	LOADER(THREAD_TESTER_NAME, THREAD_TESTER_PATH);
+	LOADER(TERMINAL_NAME, TERMINAL_PATH);
+	LOADER(PS2_NAME, PS2_PATH);
+
+	/* Disabled tasks.
 	LOADER(FRAMEBUFFER_TESTER_NAME, FRAMEBUFFER_TESTER_PATH);
-	LOADER(CONSOLE_NAME, CONSOLE_PATH);
+	*/
 
 	return 0;
 }

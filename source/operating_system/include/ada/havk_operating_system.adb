@@ -91,4 +91,92 @@ IS
       System_Call(Call_Arguments, Call_String);
    END Log;
 
+   FUNCTION Bit_Test
+     (Value : IN number;
+      Bit   : IN number)
+      RETURN boolean
+   IS
+     (boolean'val(Shift_Right(Value, natural(Bit)) AND 1));
+
+   FUNCTION Image
+     (Value   : IN number;
+      Base    : IN number   := 10;
+      Padding : IN positive := 01)
+      RETURN image_string
+   IS
+      Base_16   : CONSTANT ARRAY(number RANGE 16#0# .. 16#0F#) OF character :=
+        ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+         'A', 'B', 'C', 'D', 'E', 'F');
+      Imaged    : image_string := (OTHERS => NUL);
+      Temporary : number  := Value;
+      Pad_Count : natural := Padding;
+   BEGIN
+      IF
+         Base = 10
+      THEN
+         FOR
+            Index IN REVERSE Imaged'range
+         LOOP
+            IF
+               Temporary = 0
+            THEN
+               EXIT WHEN Pad_Count = 0;
+               Pad_Count := Pad_Count - 1;
+            ELSE
+               Pad_Count := (IF Pad_Count /= 0 THEN
+                  Pad_Count - 1 ELSE Pad_Count);
+            END IF;
+
+            Imaged(Index) :=
+               character'val((Temporary MOD Base) + character'pos('0'));
+            Temporary     := Temporary / Base;
+         END LOOP;
+      ELSIF
+         Base = 16
+      THEN
+         FOR
+            Index IN REVERSE Imaged'range
+         LOOP
+            IF
+               Temporary = 0
+            THEN
+               EXIT WHEN Pad_Count = 0;
+               Pad_Count := Pad_Count - 1;
+            ELSE
+               Pad_Count := (IF Pad_Count /= 0 THEN
+                  Pad_Count - 1 ELSE Pad_Count);
+            END IF;
+
+            Imaged(Index) := Base_16(Temporary AND Base - 1);
+            Temporary     := Shift_Right(Temporary, 4);
+         END LOOP;
+      END IF;
+
+      RETURN Imaged;
+   END Image;
+
+   PROCEDURE Task_Finder
+     (Task_Name : IN string;
+      Status    : OUT task_status)
+   IS
+      Identity_Data   : arguments := (identify_task_operation, OTHERS => 0);
+      Identity_String : XMM_string := (OTHERS => NUL);
+   BEGIN
+      FOR
+         Identity_Index IN number RANGE 1 .. 255
+      LOOP
+         Identity_Data.Argument_1 := general_register(Identity_Index);
+
+         IF -- Check its name and if it's a living task.
+            System_Call(Identity_Data, Identity_String) = no_error AND THEN
+            To_Status(Identity_String).Data.Name(Task_Name'range) = Task_Name
+         THEN
+            Status := To_Status(Identity_String).Data;
+            RETURN;
+         END IF;
+      END LOOP;
+
+      Status := (Index => 0, OTHERS => <>);
+   END Task_Finder;
+
 END HAVK_Operating_System;

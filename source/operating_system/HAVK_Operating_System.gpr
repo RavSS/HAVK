@@ -14,7 +14,8 @@ IS
    FOR Project_Files  USE
      ("./initialiser/HAVK_Initialiser.gpr",
       "./ipc_tester/HAVK_IPC_Tester.gpr",
-      "./console/HAVK_Console.gpr",
+      "./terminal/HAVK_Terminal.gpr",
+      "./ps2/HAVK_PS2.gpr",
       "./framebuffer_tester/HAVK_Framebuffer_Tester.gpr",
       "./thread_tester/HAVK_Thread_Tester.gpr");
 

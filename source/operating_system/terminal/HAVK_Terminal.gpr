@@ -1,14 +1,14 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System Console                          --
--- Filename        -- HAVK_Console.gpr                                       --
+-- Program         -- HAVK Operating System Terminal                         --
+-- Filename        -- HAVK_Terminal.gpr                                      --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
-PROJECT HAVK_Console EXTENDS "../HAVK_Operating_System_Program.gpr"
+PROJECT HAVK_Terminal EXTENDS "../HAVK_Operating_System_Program.gpr"
 IS
    -- The name of the ELF and internal build directory.
-   Name := "console";
+   Name := "terminal";
 
    FOR Object_Dir          USE HAVK_Operating_System_Program'Object_Dir &
       Name & "/";
@@ -23,4 +23,4 @@ IS
       FOR Executable("main.adb") USE Name;
    END Builder;
 
-END HAVK_Console;
+END HAVK_Terminal;

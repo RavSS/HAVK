@@ -127,7 +127,7 @@ uint64_t main(void)
 	framebuffer = (uint32_t *)arguments.argument_1;
 	framebuffer_size = arguments.argument_2;
 	framebuffer_width = arguments.argument_3 >> 32;
-	framebuffer_height = arguments.argument_3 & UINT16_MAX;
+	framebuffer_height = arguments.argument_3 & UINT32_MAX;
 	scanline_width = arguments.argument_4;
 	pixel_width = scanline_width / framebuffer_width;
 	pixel_type = arguments.argument_5;

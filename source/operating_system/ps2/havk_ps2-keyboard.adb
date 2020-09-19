@@ -1,11 +1,11 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System Console                          --
--- Filename        -- havk_console-ps2-keyboard.adb                          --
+-- Program         -- HAVK Operating System PS/2 Driver                      --
+-- Filename        -- havk_ps2-keyboard.adb                                  --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-PACKAGE BODY HAVK_Console.PS2.Keyboard
+PACKAGE BODY HAVK_PS2.Keyboard
 IS
    -- TODO: This was prepared in mind for an interrupt handler, not a polling
    -- style of handling input.
@@ -25,14 +25,14 @@ IS
       END LOOP;
 
       IF -- TODO: This only supports a PS/2 keyboard on port 1.
-         PS2.Port_1_Device /= standard_keyboard OR ELSE
+         Port_1_Device /= standard_keyboard OR ELSE
          Scancode = 16#FA# -- Data is not for the keyboard.
       THEN
          RETURN;
       END IF;
 
       CASE
-         PS2.Current_Scancode_Set -- TODO Set 1 and 3 are unimplemented.
+         Current_Scancode_Set -- TODO Set 1 and 3 are unimplemented.
       IS
          WHEN set_1 =>
             Log("PS/2 scancode set 1 is not supported.", Warn => true);
@@ -386,4 +386,4 @@ IS
       RETURN Key;
    END Scancode_Set_2;
 
-END HAVK_Console.PS2.Keyboard;
+END HAVK_PS2.Keyboard;

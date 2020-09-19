@@ -1,19 +1,19 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System Console                          --
--- Filename        -- havk_console-ps2-keyboard.ads                          --
+-- Program         -- HAVK Operating System PS/2 Driver                      --
+-- Filename        -- havk_ps2-keyboard.ads                                  --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Console.User_Input;
+   HAVK_PS2.User_Input;
 USE
-   HAVK_Console.User_Input;
+   HAVK_PS2.User_Input;
 
 -- This package revolves around the PS/2 keyboard. Anything specific to it
 -- instead of generic PS/2 logic should be here.
 -- TODO: This package is now deprecated and needs to be moved into user space.
-PACKAGE HAVK_Console.PS2.Keyboard
+PACKAGE HAVK_PS2.Keyboard
 IS
    -- Becomes true when either shift key is held down.
    Shift_State     : boolean := false;
@@ -26,6 +26,8 @@ IS
 
    -- Handles the PS/2 keyboard logic for all scancode sets. This should be
    -- called from the ISR handler so it occurs on an IRQ.
+   -- TODO: I am currently polling, as I've moved this out of the kernel and
+   -- into user-space.
    PROCEDURE Interrupt_Manager;
 
 PRIVATE
@@ -37,4 +39,4 @@ PRIVATE
       Inline => true,
       Pre    => Scancode <= 16#FF#;
 
-END HAVK_Console.PS2.Keyboard;
+END HAVK_PS2.Keyboard;

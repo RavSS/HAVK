@@ -1,11 +1,11 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System Console                          --
--- Filename        -- havk_console-user_input.adb                            --
+-- Program         -- HAVK Operating System PS/2 Driver                      --
+-- Filename        -- havk_ps2-user_input.adb                                --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-PACKAGE BODY HAVK_Console.User_Input
+PACKAGE BODY HAVK_PS2.User_Input
 IS
    FUNCTION Key_String_Format
      (Unformatted : IN string)
@@ -80,4 +80,4 @@ IS
       Last_Key_State := Null_Key_State;
    END Invalidate_Key_State;
 
-END HAVK_Console.User_Input;
+END HAVK_PS2.User_Input;

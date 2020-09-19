@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System Console                          --
--- Filename        -- havk_console-ps2.adb                                   --
+-- Program         -- HAVK Operating System PS/2 Driver                      --
+-- Filename        -- havk_ps2.adb                                           --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -8,7 +8,7 @@
 WITH
    Ada.Unchecked_Conversion;
 
-PACKAGE BODY HAVK_Console.PS2
+PACKAGE BODY HAVK_PS2
 WITH
    Refined_State => (Controller_State => (Current_Scancode_Set,
                                           Current_Condition,
@@ -591,4 +591,4 @@ IS
       -- got to this line without any raised errors.
       Current_Condition := functional;
    END Setup;
-END HAVK_Console.PS2;
+END HAVK_PS2;

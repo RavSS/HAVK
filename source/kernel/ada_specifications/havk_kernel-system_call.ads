@@ -108,7 +108,8 @@ PRIVATE
    -- Returns the task index/identity and the task's string name.
    -- @param RSI The task index/identity. If this is zero, then the status of
    -- the calling task is returned.
-   -- @param XMM The task's string name.
+   -- @param XMM The task's status. See the "task_status" type in the
+   -- "HAVK_Kernel.Tasking" package for its representation.
    -- @param RAX An error status.
    PROCEDURE Identify_Task_Operation_Call
      (RSI : IN Intrinsics.general_register;

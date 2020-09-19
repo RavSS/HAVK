@@ -1,5 +1,5 @@
 # Tasklist for the HAVK operating system
-### Last Updated: 2020-08-22
+### Last Updated: 2020-09-20
 #### High priority
 - The kernel crashes on AMD systems (but not Intel systems) during
   some point in which my descriptor tables are prepared and loaded, which
@@ -7,16 +7,14 @@
 - Add dynamic priority functionality to the round-robin scheduler, as it
   currently gives all tasks an identical time slice.
 - Create a package for better concurrency support e.g. mutexes.
-- Start implementing various system calls so user space can do something.
+- Let the kernel run its own tasks and let user tasks order system operations
+  using IPC instead of relying upon doing system calls immediately.
 - Create a virtual filesystem task.
-- Implement user space threading by allowing the kernel to jump to an
-  address specified by the user for scheduling and then restore the instruction
-  pointer via a message to the program. This should be a silly but fun way to
-  do it as opposed to the earlier kernel space threading I had.
-- Fix up the PS/2 driver for polling or figure out a way to better handle IRQs
-  in user space without relying on them signalling EOI.
-- Restore the old graphics packages and rework them for user space so I have
-  worthwhile graphics again instead of a screensaver.
+- Implement user-space signal handling so user tasks can handle interrupts.
+  Currently needed for better PS/2 operability.
+- Rework the message passing system. Instead of having a single queue which
+  drops the oldest messages, do it the L4 way and give each task a limited
+  number of message slots i.e. 64.
 
 #### Low priority
 - Reorganise the bootloader arguments structure and provide
@@ -33,3 +31,5 @@
 - Extend the capabilities of the Ada and C runtime files for operating system
   programs/tasks. Also turn all of them into libraries as opposed to compiling
   them separately for each program.
+- Make the build system better and more convenient for proving operating
+  system tasks programmed in SPARK.

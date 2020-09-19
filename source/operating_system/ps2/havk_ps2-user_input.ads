@@ -1,13 +1,13 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System Console                          --
--- Filename        -- havk_console-user_input.ads                            --
+-- Program         -- HAVK Operating System PS/2 Driver                      --
+-- Filename        -- havk_ps2-user_input.ads                                --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 -- This package controls the state of input, regardless of origin.
 -- TODO: Make input buffered by using a stack. Unbuffered input is not as good.
-PACKAGE HAVK_Console.User_Input
+PACKAGE HAVK_PS2.User_Input
 IS
    -- The name (string) of the keys can only be 32 characters long. This is
    -- a poor man's unbounded string replacement, but it works.
@@ -66,4 +66,4 @@ IS
    -- redo a specific key press.
    PROCEDURE Invalidate_Key_State;
 
-END HAVK_Console.User_Input;
+END HAVK_PS2.User_Input;

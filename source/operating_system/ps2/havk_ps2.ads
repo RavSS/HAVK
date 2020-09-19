@@ -1,9 +1,14 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System Console                          --
--- Filename        -- havk_console-ps2.ads                                   --
+-- Program         -- HAVK Operating System PS/2 Driver                      --
+-- Filename        -- havk_ps2.ads                                           --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
+
+WITH
+   HAVK_Operating_System;
+USE
+   HAVK_Operating_System;
 
 -- This package handles all aspects of the PS/2 controller with error checking.
 -- All specific logic that does not interact specifically with the PS/2
@@ -11,7 +16,7 @@
 -- READ: https://wiki.osdev.org/%228042%22_PS/2_Controller
 -- READ: https://wiki.osdev.org/PS/2_Keyboard
 -- READ: https://wiki.osdev.org/PS/2_Mouse
-PACKAGE HAVK_Console.PS2
+PACKAGE HAVK_PS2
 WITH
    Abstract_State =>
    (
@@ -389,4 +394,4 @@ PRIVATE
    WITH
       Part_Of => Controller_State;
 
-END HAVK_Console.PS2;
+END HAVK_PS2;
