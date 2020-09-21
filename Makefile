@@ -81,16 +81,24 @@ UEFI_SOURCE_PATH=$(SOURCE_PATH)bootloader/
 UEFI_CRT0=$(UEFI_SOURCE_PATH)crt0-efi-x86_64.o
 UEFI_LINK=$(UEFI_SOURCE_PATH)elf_x86_64_efi.lds
 
+# This controls the bootloader configuration file on our disk and the location
+# in the generated image.
+# TODO: The location to seek is found in the bootloader source code itself, as
+# it's annoying to define the symbol from here due to backslashes.
+UEFI_BOOTLOADER_CONFIGURATION=$(UEFI_SOURCE_PATH)boot.cfg
+UEFI_BOOTLOADER_LOCATION=/EFI/BOOT/BOOT.CFG # Same UEFI naming style.
+
 # Note that I create two UEFI files, but one still has the debug symbols kept
 # in it. For better analyzing, it's wise to use the same optimisation level
 # for both of the bootloader application's files. Global Intel assembly syntax
 # does not work with the GNU-EFI library. Also note that UEFI and EFI refer to
 # the same concept, with the latter being the old name kept for compatibility.
-UEFI_CC_STD=-std=c11
+UEFI_CC_STD=-std=c17
 UEFI_CC_WARN=-Wall -Wextra -Werror
 UEFI_CC_OPT=-nostdlib -fpic -fno-stack-protector -fno-strict-aliasing \
 	-fno-builtin -fshort-wchar -mno-red-zone -funsigned-char
-UEFI_CC_INC=-I $(UEFI_PATH) -I $(UEFI_PATH)x86_64 -I $(UEFI_PATH)protocol
+UEFI_CC_INC=-I $(UEFI_PATH) -I $(UEFI_PATH)x86_64 -I $(UEFI_PATH)protocol \
+	-I $(UEFI_SOURCE_PATH)
 UEFI_CC_LIB=-l efi -l gnuefi
 UEFI_CC_DEF=-D EFI_FUNCTION_WRAPPER -D HAVK_VERSION=u\"$(VERSION)\"
 UEFI_CC_FLAGS=$(UEFI_CC_STD) $(UEFI_CC_WARN) $(UEFI_CC_OPT) $(UEFI_CC_INC) \
@@ -354,6 +362,8 @@ $(IMAGE)
 
 	$(call mtools_create, "/$(NAME)")
 	$(call mtools_copy, "$(KERNEL)","::/$(NAME)/$(NAME).elf")
+	$(call mtools_copy, \
+	"$(UEFI_BOOTLOADER_CONFIGURATION)","::$(UEFI_BOOTLOADER_LOCATION)")
 
 	$(call mtools_create, "/$(NAME)")
 	$(call mtools_create, "/$(NAME)/system")

@@ -42,6 +42,22 @@ size_t strnlen(const char *string, size_t length)
 	return i;
 }
 
+int strncmp(const char* string_1, const char* string_2, size_t bytes)
+{
+	while (bytes-- && *string_1++ == *string_2++);
+
+	return bytes ? *string_1 - *string_2 : 0;
+}
+
+int strcmp(const char* string_1, const char* string_2)
+{
+	const int length_1 = strlen(string_1);
+	const int length_2 = strlen(string_2);
+
+	return strncmp(string_1, string_2, // TODO: Expand this later.
+		length_1 < length_2 ? length_1 : length_2);
+}
+
 char *strcpy(char *destination, const char *source) // TODO: Expand this later.
 {
 	return memcpy(destination, source, strlen(source));

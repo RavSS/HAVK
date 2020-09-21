@@ -12,12 +12,12 @@ IS
    FOR Runtime("Ada") USE HAVK_Operating_System'Object_Dir;
    -- Operating system program projects go below.
    FOR Project_Files  USE
-     ("./initialiser/HAVK_Initialiser.gpr",
-      "./ipc_tester/HAVK_IPC_Tester.gpr",
-      "./terminal/HAVK_Terminal.gpr",
-      "./ps2/HAVK_PS2.gpr",
-      "./framebuffer_tester/HAVK_Framebuffer_Tester.gpr",
-      "./thread_tester/HAVK_Thread_Tester.gpr");
+     ("./programs/initialiser/HAVK_Initialiser.gpr",
+      "./programs/ipc_tester/HAVK_IPC_Tester.gpr",
+      "./programs/terminal/HAVK_Terminal.gpr",
+      "./programs/ps2/HAVK_PS2.gpr",
+      "./programs/framebuffer_tester/HAVK_Framebuffer_Tester.gpr",
+      "./programs/thread_tester/HAVK_Thread_Tester.gpr");
 
    TYPE Operating_System_Type IS("Final", "Debug");
    Build : Operating_System_Type := EXTERNAL("Build", "Final");

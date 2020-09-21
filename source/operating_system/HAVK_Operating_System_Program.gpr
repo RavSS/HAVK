@@ -15,11 +15,12 @@ IS
       "./include/ada_specifications/**",
       "./include/assembly/**",
       "./include/c_runtime/**");
-   FOR Object_Dir          USE "./../../../build/operating_system/";
+   FOR Object_Dir          USE "./../../../../build/operating_system/";
    FOR Exec_Dir            USE HAVK_Operating_System_Program'Object_Dir;
    FOR Main                USE("main.adb"); -- Default main file.
    -- Object directory must contain "adainclude" (RTS files) and "adalib".
-   FOR Runtime("Ada")      USE HAVK_Operating_System_Program'Object_Dir;
+   FOR Runtime("Ada")      USE
+      "./../" & HAVK_Operating_System_Program'Object_Dir;
    FOR Create_Missing_Dirs USE "true";
 
    TYPE Operating_System_Type IS("Final", "Debug");

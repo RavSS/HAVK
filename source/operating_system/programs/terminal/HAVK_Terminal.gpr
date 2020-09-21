@@ -1,14 +1,16 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System PS/2 Driver                      --
--- Filename        -- HAVK_PS2.gpr                                           --
+-- Program         -- HAVK Operating System Terminal                         --
+-- Filename        -- HAVK_Terminal.gpr                                      --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
-PROJECT HAVK_PS2 EXTENDS "../HAVK_Operating_System_Program.gpr"
+PROJECT HAVK_Terminal
+EXTENDS
+   "./../../HAVK_Operating_System_Program.gpr"
 IS
    -- The name of the ELF and internal build directory.
-   Name := "ps2";
+   Name := "terminal";
 
    FOR Object_Dir          USE HAVK_Operating_System_Program'Object_Dir &
       Name & "/";
@@ -17,10 +19,12 @@ IS
    FOR Main                USE("main.adb");
    FOR Create_Missing_Dirs USE "true";
 
-   PACKAGE Builder EXTENDS HAVK_Operating_System_Program.Builder
+   PACKAGE Builder
+   EXTENDS
+      HAVK_Operating_System_Program.Builder
    IS
       -- The name of the generated ELF file placed in the executable directory.
       FOR Executable("main.adb") USE Name;
    END Builder;
 
-END HAVK_PS2;
+END HAVK_Terminal;

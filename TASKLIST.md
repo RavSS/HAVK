@@ -1,5 +1,5 @@
 # Tasklist for the HAVK operating system
-### Last Updated: 2020-09-20
+### Last Updated: 2020-09-21
 #### High priority
 - The kernel crashes on AMD systems (but not Intel systems) during
   some point in which my descriptor tables are prepared and loaded, which
@@ -15,6 +15,9 @@
 - Rework the message passing system. Instead of having a single queue which
   drops the oldest messages, do it the L4 way and give each task a limited
   number of message slots i.e. 64.
+- Move my ATA PIO driver into user-space as a task and implement functionality
+  into the kernel to handle the initialisation files or "modules" my
+  bootloader puts into memory.
 
 #### Low priority
 - Reorganise the bootloader arguments structure and provide
@@ -33,3 +36,5 @@
   them separately for each program.
 - Make the build system better and more convenient for proving operating
   system tasks programmed in SPARK.
+- Let the bootloader configuration file exert more control over boot-time
+  options i.e. the display resolution.

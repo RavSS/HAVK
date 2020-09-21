@@ -22,6 +22,12 @@ size_t strlen(const char *string);
 /* Standard libc `strnlen()` (C89). */
 size_t strnlen(const char *string, size_t length);
 
+/* Standard libc `strcmp()` (C89). */
+int strcmp(const char* string_1, const char* string_2);
+
+/* Standard libc `strncmp()` (C89). */
+int strncmp(const char* string_1, const char* string_2, size_t bytes);
+
 /* Standard libc `strcpy()` (C89). */
 char *strcpy(char *destination, const char *source);
 

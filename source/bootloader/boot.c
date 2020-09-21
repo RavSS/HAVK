@@ -9,8 +9,9 @@
 // The purpose of this file is to boot HAVK. It utilizes GNU EFI.
 // If you're reading this to figure out how to create a UEFI application
 // that loads an ELF file to memory, then create a random freestanding
-// program via e.g. C and change the "HAVK_LOCATION" to point towards your
-// program. There is no guarantee it will work, as I may have parsed it wrong.
+// program via e.g. C and modify the configuration file to point towards it, as
+// the bootloader uses the configuration file to start the kernel up.
+// TODO: This file is becoming a mess. A rewrite in Ada might be a good idea.
 #include <efi.h>
 #include <efilib.h>
 
@@ -22,10 +23,9 @@
 	#define HAVK_VERSION u"\?\?-\?\?-\?\?" // Avoid the silly C trigraphs.
 #endif
 
-// If the Makefile forgets to define the location of HAVK's ELF file
-// when passing it to GCC, then define it to a default location.
-#ifndef HAVK_LOCATION
-	#define HAVK_LOCATION u"\\HAVK\\HAVK.elf"
+// This will be the default location of the configuration file.
+#ifndef CONFIGURATION_LOCATION
+	#define CONFIGURATION_LOCATION "\\EFI\\BOOT\\BOOT.CFG"
 #endif
 
 // These are not required to be present, but they're just for sanity checking.
@@ -49,14 +49,14 @@ BOOLEAN have_uefi_boot_services = TRUE; // False after the boot services end.
 
 // EFI protocol variables.
 EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *simple_file_system;
-EFI_FILE_PROTOCOL *root_directory;
 EFI_FILE_PROTOCOL *havk;
 EFI_GRAPHICS_OUTPUT_PROTOCOL *graphics_output_protocol;
 
-// Syntactic sugar for declaring macros and the packed attribute.
+// Syntactic sugar for declaring macros and other helper macros.
 #define MACRO_BEGIN do{
 #define MACRO_END }while(0)
 #define PACKED __attribute__((packed))
+#define ARRAY_LENGTH(x) (sizeof((x)) / sizeof((x)[0]))
 
 // Redefine inline so it's not just a hint. I've defined this now so it won't
 // cause a problem later on when it's doing something opposite to what we want.
@@ -73,8 +73,8 @@ MACRO_BEGIN\
 			ST->ConOut,\
 			EFI_TEXT_ATTR(EFI_WHITE, EFI_RED));\
 		Print(x, ## __VA_ARGS__);\
-		Print(u"FAILED TO BOOT HAVK\r\n");\
-		Print(u"PRESS ANY KEY TO HARD RESTART...\r\n");\
+		Print(u"%E" "FAILED TO BOOT HAVK\r\n");\
+		Print(u"%E" "PRESS ANY KEY TO HARD RESTART...\r\n");\
 		uefi_call_wrapper(ST->ConOut->SetAttribute, 2,\
 			ST->ConOut,\
 			EFI_TEXT_ATTR(EFI_LIGHTRED, EFI_BLACK));\
@@ -95,7 +95,8 @@ MACRO_END
 MACRO_BEGIN\
 	if ((x) != EFI_SUCCESS || EFI_ERROR((x)))\
 	{\
-		CRITICAL_FAILURE(u"UEFI ERROR: %d - \"%r\" (LINE %d)\r\n",\
+		CRITICAL_FAILURE(\
+			u"%E" "UEFI ERROR: %d - \"%r\" (LINE %d)\r\n",\
 			x, x, __LINE__);\
 	}\
 MACRO_END
@@ -145,16 +146,12 @@ MACRO_END
 #endif
 
 // A macro for debugging. It indicates if a point was reached before any
-// system crash etc. Note that I couldn't figure out how to prefix the
-// `__func__` macro with an "L" or a "u", nor do I think it's possible.
-// If one could get it to expand into a string first and then use the "##"
-// operator, then it could work, but I don't see how.
+// system crash etc.
 #define CHECKPOINT()\
 MACRO_BEGIN\
 	if (have_uefi_boot_services)\
 	{\
-		Print(u"PASSED CHECKPOINT (%hs:%d)\r\n",\
-			ansi_to_wide((CHAR8 *)__func__), __LINE__);\
+		Print(u"PASSED CHECKPOINT (%a:%d)\r\n", __func__, __LINE__);\
 	}\
 MACRO_END
 
@@ -237,10 +234,17 @@ struct elf64_file
 	CHAR8 *symbol_string_table;
 } PACKED;
 
+// I made this little library to parse key-value pair files. See the header for
+// more details.
+#define KVP_ENTRY_DATA_FIELDS UINTN data[32];
+#define KVP_ENTRY_ATTRIBUTE PACKED
+#define KVP_NO_STDDEF // Force usage of "unsigned long" instead of "size_t".
+#include <key_value_pair.h>
+
 // This gets passed to HAVK's entry function later on. I've just made it
 // into a structure for the sake of less parameters needing to be passed.
 // All "UINTN" types should be changed to "UINT64" to avoid ambiguity.
-struct uefi_arguments
+struct bootloader_arguments
 {
 	UINT32 graphics_mode_current;
 	UINT32 graphics_mode_max;
@@ -258,6 +262,9 @@ struct uefi_arguments
 	UINT32 memory_map_descriptor_version;
 	EFI_PHYSICAL_ADDRESS root_system_description_pointer;
 	EFI_PHYSICAL_ADDRESS physical_base;
+	kvp_entry *options;
+	CHAR8 *options_string;
+	UINT16 options_count;
 } PACKED;
 
 // Can't modify the default page structure, so I need to make my own.
@@ -281,31 +288,43 @@ struct uefi_page_structure
 	VOLATILE UINT64 table[512][512] ALIGN(EFI_PAGE_SIZE);
 };
 
-// Since I am unable to give a prefix to the `__func__` macro, I think I have
-// to convert it at runtime. UEFI is too Microsoft-centric. This only respects
-// EASCII, it merely pads out the rest of the 16-bit character's size. The
-// "efilib.h" header could at least provide a real method for this conversion.
-// I couldn't figure out how to do this with the many print functions in there.
-// This passes back an internal static buffer to avoid the need for freeing.
-CHAR16 *ansi_to_wide(CHAR8 *ansi_string)
+// Basic `malloc()` function which also takes in a memory type/tag, which will
+// be seen by HAVK later on. This stores the page size allocation behind the
+// returned address. Currently, this halts the entire bootloader if an
+// allocation fails.
+VOID *malloc(CONST UINT64 size, CONST EFI_MEMORY_TYPE memory_type)
 {
-	CONST UINT64 ansi_length = strlena(ansi_string);
-	static CHAR8 wide_string[128 * sizeof(CHAR16)]; // Max 128 characters.
+	// I believe this won't change on a failed allocation.
+	EFI_PHYSICAL_ADDRESS address = (EFI_PHYSICAL_ADDRESS) NULL;
+	CONST UINTN page_size = EFI_SIZE_TO_PAGES(size + sizeof(UINTN));
 
-	if (ansi_length * sizeof(CHAR16) > 128 * sizeof(CHAR16))
+	attempt = uefi_call_wrapper(BS->AllocatePages, 4,
+		AllocateAnyPages,
+		memory_type,
+		page_size,
+		&address); // Input does not matter for "AllocateAnyPages".
+
+	if (!address)
 	{
-		wide_string[0] = (UINT32) 0U;
-	}
-	else
-	{
-		for (UINT64 a = 0, w = 0; a < ansi_length; ++a, ++w)
-		{
-			wide_string[w] = ansi_string[a];
-			wide_string[++w] = 0;
-		}
+		Print(u"MEMORY ALLOCATION FAILED\r\n");
+		ERROR_CHECK(attempt);
 	}
 
-	return (CHAR16 *)wide_string;
+	*(UINTN *)address = page_size;
+	address += sizeof(UINTN);
+	ZeroMem((VOID *)address, size);
+
+	return (VOID *)address;
+}
+
+// Frees an address allocated by my `malloc()`. Do note that it only works with
+// addresses returned by that function, not with any other memory allocation
+// function I've made so far.
+VOID free(CONST VOID *CONST address)
+{
+	UEFI(BS->FreePages, 2,
+		address - sizeof(UINTN),
+		*(UINTN *)(address - sizeof(UINTN)));
 }
 
 // This function allocates at the lowest possible address and it works up from
@@ -314,22 +333,35 @@ CHAR16 *ansi_to_wide(CHAR8 *ansi_string)
 // TODO: I'm currently not making any attempts to reclaim the memory that this
 // returns, but with better usage of the memory types (along with a custom
 // one), the kernel itself could do that.
-VOID *low_malloc(UINT64 size)
+VOID *low_malloc(CONST UINT64 size)
 {
 	static EFI_PHYSICAL_ADDRESS lowest_address;
 	EFI_STATUS allocation;
+	CONST UINTN page_size = EFI_SIZE_TO_PAGES(size);
 
 	do
 	{
+		Print(u"ALLOCATING MEMORY: TRYING 0x%llX\r", lowest_address);
 		allocation = uefi_call_wrapper(BS->AllocatePages, 4,
 			AllocateAddress,
 			EfiLoaderData,
-			EFI_SIZE_TO_PAGES(size),
+			page_size,
 			&lowest_address);
+
 		lowest_address += size;
+
+		if (lowest_address >= UINT32_MAX)
+		{
+			CRITICAL_FAILURE(u"NO FREE MEMORY LEFT UNDER "
+				"4 GiB\r\n");
+		}
 	}
 	while (allocation != EFI_SUCCESS);
 
+	// Clear the allocation wait message with a large space string.
+	Print(u"\r                                                        \r");
+
+	ZeroMem((VOID *)lowest_address, size);
 	return (VOID *)lowest_address;
 }
 
@@ -339,16 +371,17 @@ VOID *low_malloc(UINT64 size)
 // is the highest level (the map/PML4). `AllocatePool()` and its zeroed
 // shortcut variant both return an 8 KiB aligned value if I remember correctly,
 // but I'm using `AllocateAddress()` instead.
-VOID *page_malloc(UINT64 size)
+VOID *page_malloc(CONST UINT64 size)
 {
-	CONST EFI_PHYSICAL_ADDRESS zeroed_pool
+	CONST EFI_PHYSICAL_ADDRESS zeroed_memory
 		= (EFI_PHYSICAL_ADDRESS) low_malloc(size + EFI_PAGE_SIZE);
 
-	return (VOID *)((zeroed_pool + 1 + EFI_PAGE_MASK) & ~EFI_PAGE_MASK);
+	return (VOID *)((zeroed_memory + 1 + EFI_PAGE_MASK) & ~EFI_PAGE_MASK);
 }
 
 // A function that prints some welcome information and sets up the environment.
-VOID welcome(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
+VOID welcome(CONST EFI_HANDLE CONST image_handle,
+	EFI_SYSTEM_TABLE *system_table)
 {
 	// Set up both "system table" and "boot services" access shortcuts.
 	// Note that you will encounter both UEFI function calls with my
@@ -379,13 +412,13 @@ VOID welcome(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		&image);
 
 	// Print the version notification in the centre of the screen.
-	// TODO: Do the minor revision values as well, they're encoded in BCD
-	// and are in the lower 16-bits of "FirmwareRevision".
 	PrintAt(40 - 8, 1, u"NOW BOOTING HAVK\r\n");
 	PrintAt(40 - 8, 2, u"VERSION %s\r\n\n", HAVK_VERSION);
-	Print(u"UEFI FIRMWARE VENDOR: %s (REVISION %u)\r\n",
+	Print(u"UEFI FIRMWARE VENDOR: %s (REVISION %u.%u%u)\r\n",
 		system_table->FirmwareVendor,
-		system_table->FirmwareRevision >> 16);
+		system_table->FirmwareRevision >> 16,
+		BCDtoDecimal((system_table->FirmwareRevision >> 8) & 0xFF),
+		BCDtoDecimal(system_table->FirmwareRevision & 0xFF));
 
 	#ifdef HAVK_GDB_DEBUG
 		Print(u"! COMPILED WITH GDB SPECIFIC DEBUGGING FUNCTIONS\r\n");
@@ -436,10 +469,11 @@ EFI_HANDLE get_sfs_handle(VOID)
 	return handles[handle_selected];
 }
 
-VOID open_havk(EFI_HANDLE drive_handle)
+EFI_FILE_PROTOCOL *open_root_directory(CONST EFI_HANDLE CONST drive_handle)
 {
 	CONST EFI_GUID simple_file_system_guid
 		= EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
+	EFI_FILE_PROTOCOL *root_directory = NULL;
 
 	// Use the simple file system protocol to explore the FAT volume.
 	UEFI(BS->HandleProtocol, 3,
@@ -452,25 +486,110 @@ VOID open_havk(EFI_HANDLE drive_handle)
 		simple_file_system,
 		&root_directory);
 
-	// Open HAVK's ELF file in read only mode.
-	UEFI(root_directory->Open, 5,
+	return root_directory;
+}
+
+// TODO: Only opens files in read-only mode.
+EFI_FILE_PROTOCOL *open_file(CONST EFI_FILE_PROTOCOL *CONST root_directory,
+	CONST CHAR8 *CONST file_path)
+{
+	EFI_FILE_PROTOCOL *file = NULL;
+
+	CHAR16 wide_file_path[256 + 1]; // Max FAT(32) path length.
+	wide_file_path[ARRAY_LENGTH(wide_file_path) - 1] = u'\0';
+	SPrint(wide_file_path, ARRAY_LENGTH(wide_file_path) - 1,
+		u"%a\0", file_path);
+
+	attempt = uefi_call_wrapper(root_directory->Open, 5,
 		root_directory,
-		&havk,
-		HAVK_LOCATION,
+		&file,
+		wide_file_path,
 		EFI_FILE_MODE_READ,
 		EFI_FILE_READ_ONLY);
 
-	Print(u"HAVK OPENED AT \"%s\"\r\n", HAVK_LOCATION);
-	Print(u"HAVK KERNEL FILE SIZE: %llu KIBIBYTES\r\n",
-		LibFileInfo(havk)->FileSize / 1024);
+	if (attempt == EFI_NOT_FOUND)
+	{
+		CRITICAL_FAILURE(u"FILE NOT FOUND: \"%s\"\r\n",
+			wide_file_path);
+	}
+	else
+	{
+		ERROR_CHECK(attempt);
+	}
 
-	// Reset the HAVK file's position just to be sure.
-	UEFI(havk->SetPosition, 2,
-		havk,
+	// Reset the file's position just to be sure.
+	UEFI(file->SetPosition, 2,
+		file,
 		0);
+
+	return file;
 }
 
-VOID read_file_header(struct elf64_file *havk_elf)
+// TODO: The logic here is not robust, as with most C code that deals with
+// parsing raw files. Check it over more finely, as a badly formatted key-value
+// pair file will without a doubt make the bootloader crash.
+VOID parse_configuration(EFI_FILE_PROTOCOL *CONST root_directory,
+	struct bootloader_arguments *CONST arguments)
+{
+	Print(u"CONFIGURATION FILE: \"%a\"\r\n", CONFIGURATION_LOCATION);
+
+	EFI_FILE_PROTOCOL *CONST configuration
+		= open_file(root_directory,
+		(CONST CHAR8 *)CONFIGURATION_LOCATION);
+
+	CONST UINTN size = LibFileInfo(configuration)->FileSize; // One-based.
+
+	// Since it will be stored as a string, we need an extra null byte.
+	CHAR8 *CONST options_string = malloc(size + 1, EfiLoaderData);
+
+	UEFI(configuration->Read, 3,
+		configuration,
+		&size,
+		options_string);
+	options_string[size] = '\0'; // Just to be sure.
+
+	CONST UINTN options_count = kvp_count((char *)options_string, size);
+
+	if (!options_count)
+	{
+		CRITICAL_FAILURE(u"THE BOOT CONFIGURATION FILE IS EMPTY\r\n");
+	}
+
+	arguments->options = malloc(options_count * sizeof(kvp_entry),
+		EfiLoaderData);
+
+	kvp_parse((char *)options_string, size, arguments->options,
+		options_count);
+
+	UEFI(configuration->Close, 1,
+		configuration);
+
+	CONST CHAR8 *spacing = (CONST CHAR8 *)"    "; // For display purposes.
+	for (UINTN i = 0; i < options_count; ++i)
+	{
+		CHAR8 old_end;
+		Print(u"OPTION %u:\r\n", i + 1);
+
+		Print(u"%aKEY:   \"", spacing);
+		old_end = options_string[arguments->options[i].key_end + 1];
+		options_string[arguments->options[i].key_end + 1] = '\0';
+		Print(u"%a\"\r\n",
+			&options_string[arguments->options[i].key_start]);
+		options_string[arguments->options[i].key_end + 1] = old_end;
+
+		Print(u"%aVALUE: \"", spacing);
+		old_end = options_string[arguments->options[i].value_end + 1];
+		options_string[arguments->options[i].value_end + 1] = '\0';
+		Print(u"%a\"\r\n",
+			&options_string[arguments->options[i].value_start]);
+		options_string[arguments->options[i].value_end + 1] = old_end;
+	}
+
+	arguments->options_string = options_string;
+	arguments->options_count = options_count;
+}
+
+VOID read_file_header(struct elf64_file *CONST havk_elf)
 {
 	CONST UINTN elf64_file_header_size = sizeof(struct elf64_file_header);
 
@@ -481,7 +600,8 @@ VOID read_file_header(struct elf64_file *havk_elf)
 		&havk_elf->file_header);
 
 	// Check for the ELF magic numbers.
-	if (strncmpa(havk_elf->file_header.identity, (CHAR8 *)"\x7F" "ELF", 3))
+	if (strncmpa(havk_elf->file_header.identity,
+		(CONST CHAR8 *)("\x7F" "ELF"), 4))
 	{
 		CRITICAL_FAILURE(u"HAVK ELF FILE'S MAGIC "
 			"NUMBERS ARE CORRUPT\r\n");
@@ -499,7 +619,7 @@ VOID read_file_header(struct elf64_file *havk_elf)
 		havk_elf->file_header.entry_address);
 }
 
-VOID read_program_headers(struct elf64_file *havk_elf)
+VOID read_program_headers(struct elf64_file *CONST havk_elf)
 {
 	// Now it's time to load HAVK's ELF program headers.
 	CONST UINTN havk_program_headers_size
@@ -511,11 +631,9 @@ VOID read_program_headers(struct elf64_file *havk_elf)
 		havk,
 		havk_elf->file_header.program_header_offset);
 
-	// Allocate pool memory for all of the program headers.
-	UEFI(BS->AllocatePool, 3,
-		EfiLoaderData,
-		havk_program_headers_size,
-		&havk_elf->program_headers);
+	// Allocate memory for all of the program headers.
+	havk_elf->program_headers
+		= malloc(havk_program_headers_size, EfiLoaderData);
 
 	// Now get all of the program headers.
 	UEFI(havk->Read, 3,
@@ -524,7 +642,7 @@ VOID read_program_headers(struct elf64_file *havk_elf)
 		havk_elf->program_headers);
 }
 
-VOID read_section_headers(struct elf64_file *havk_elf)
+VOID read_section_headers(struct elf64_file *CONST havk_elf)
 {
 	// I'm also going to get the section headers for finding symbols.
 	UINTN havk_section_headers_size
@@ -536,11 +654,9 @@ VOID read_section_headers(struct elf64_file *havk_elf)
 		havk,
 		havk_elf->file_header.section_header_offset);
 
-	// Allocate pool memory for all of the section headers.
-	UEFI(BS->AllocatePool, 3,
-		EfiLoaderData,
-		havk_section_headers_size,
-		&havk_elf->section_headers);
+	// Allocate memory for all of the section headers.
+	havk_elf->section_headers
+		= malloc(havk_section_headers_size, EfiLoaderData);
 
 	// Now get all of the section headers.
 	UEFI(havk->Read, 3,
@@ -549,7 +665,7 @@ VOID read_section_headers(struct elf64_file *havk_elf)
 		havk_elf->section_headers);
 }
 
-VOID read_symbols(struct elf64_file *havk_elf)
+VOID read_symbols(struct elf64_file *CONST havk_elf)
 {
 	for (UINT64 i = 0;
 		i < havk_elf->file_header.section_header_entries; ++i)
@@ -564,10 +680,8 @@ VOID read_symbols(struct elf64_file *havk_elf)
 			havk,
 			havk_elf->section_headers[i].offset);
 
-		UEFI(BS->AllocatePool, 3,
-			EfiLoaderData,
-			havk_elf->section_headers[i].size,
-			&havk_elf->symbols);
+		havk_elf->symbols = malloc(havk_elf->section_headers[i].size,
+			EfiLoaderData);
 
 		UEFI(havk->Read, 3,
 			havk,
@@ -599,11 +713,9 @@ VOID read_symbols(struct elf64_file *havk_elf)
 			havk,
 			havk_elf->section_headers[i].offset);
 
-		// Allocate pool memory for all of the section headers.
-		UEFI(BS->AllocatePool, 3,
-			EfiLoaderData,
-			havk_elf->section_headers[i].size,
-			&havk_elf->symbol_string_table);
+		// Allocate memory for all of the section headers.
+		havk_elf->symbol_string_table = malloc(
+			havk_elf->section_headers[i].size, EfiLoaderData);
 
 		// Obtain the symbol string table.
 		UEFI(havk->Read, 3,
@@ -616,8 +728,8 @@ VOID read_symbols(struct elf64_file *havk_elf)
 	}
 }
 
-EFI_VIRTUAL_ADDRESS symbol_address(struct elf64_file *havk_elf,
-	CHAR8 *symbol_name, BOOLEAN required)
+EFI_VIRTUAL_ADDRESS symbol_address(struct elf64_file *CONST havk_elf,
+	CONST CHAR8 *CONST symbol_name, CONST BOOLEAN required)
 {
 	for (UINT64 i = 0; i < havk_elf->symbol_entries; ++i)
 	{
@@ -637,14 +749,14 @@ EFI_VIRTUAL_ADDRESS symbol_address(struct elf64_file *havk_elf,
 
 	if (required)
 	{
-		CRITICAL_FAILURE(u"UNKNOWN SYMBOL REQUESTED: %s\r\n",
-			ansi_to_wide(symbol_name));
+		CRITICAL_FAILURE(u"UNKNOWN SYMBOL REQUESTED: \"%a\"\r\n",
+			symbol_name);
 	}
 
 	return 0;
 }
 
-VOID load_havk(struct elf64_file *havk_elf)
+VOID load_havk(struct elf64_file *CONST havk_elf)
 {
 	// Since the physical base can be everywhere as long as the data is
 	// loaded in a consecutive manner, we will have to check if the
@@ -668,7 +780,7 @@ VOID load_havk(struct elf64_file *havk_elf)
 	}
 
 	// Set a default value without using designated initialisers.
-	for (UINT8 i = 0; i < UINT8_MAX; ++i)
+	for (UINTN i = 0; i < ARRAY_LENGTH(allocated); ++i)
 	{
 		allocated[i] = FALSE;
 	}
@@ -781,22 +893,6 @@ VOID load_havk(struct elf64_file *havk_elf)
 		havk_memory_size / 1024 / 1024);
 }
 
-EFI_VIRTUAL_ADDRESS prepare_entry(struct elf64_file *havk_elf)
-{
-	CONST VOLATILE EFI_VIRTUAL_ADDRESS entry
-		= havk_elf->file_header.entry_address;
-
-	// Close the files, as we (should) already have HAVK in memory at our
-	// specified physical address now.
-	UEFI(havk->Close, 1,
-		havk);
-
-	UEFI(root_directory->Close, 1,
-		root_directory);
-
-	return entry;
-}
-
 EFI_HANDLE get_gop_handle(VOID)
 {
 	// Now to get the framebuffer. GOP is the new version of UGP.
@@ -826,7 +922,7 @@ EFI_HANDLE get_gop_handle(VOID)
 	return handles[0]; // TODO: Return the first handle for now.
 }
 
-UINTN read_screen_resolutions(EFI_HANDLE gop_handle)
+UINTN read_screen_resolutions(CONST EFI_HANDLE CONST gop_handle)
 {
 	CONST EFI_GUID graphics_output_protocol_guid
 		= EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
@@ -891,7 +987,7 @@ UINTN read_screen_resolutions(EFI_HANDLE gop_handle)
 	return max_graphics_mode;
 }
 
-VOID set_screen_resolution(UINTN max_graphics_mode)
+VOID set_screen_resolution(CONST UINTN max_graphics_mode)
 {
 	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *selected_mode_information;
 	UINTN selected_mode = 0;
@@ -980,7 +1076,7 @@ VOID set_screen_resolution(UINTN max_graphics_mode)
 	SPIN_DELAY(10); // Wait for the graphics mode to finish switching.
 }
 
-VOID get_graphics_information(VOLATILE struct uefi_arguments *arguments)
+VOID get_graphics_information(struct bootloader_arguments *CONST arguments)
 {
 	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *graphics_information;
 
@@ -1012,16 +1108,16 @@ VOID get_graphics_information(VOLATILE struct uefi_arguments *arguments)
 	switch (arguments->pixel_format)
 	{
 		case PixelBlueGreenRedReserved8BitPerColor:
-			arguments->pixel_bitmask.RedMask = 0xFF0000;
-			arguments->pixel_bitmask.GreenMask = 0xFF00;
 			arguments->pixel_bitmask.BlueMask = 0xFF;
-			arguments->pixel_bitmask.ReservedMask = 0;
+			arguments->pixel_bitmask.GreenMask = 0xFF00;
+			arguments->pixel_bitmask.RedMask = 0xFF0000;
+			arguments->pixel_bitmask.ReservedMask = 0xFF000000;
 			break;
 		case PixelRedGreenBlueReserved8BitPerColor:
 			arguments->pixel_bitmask.RedMask = 0xFF;
 			arguments->pixel_bitmask.GreenMask = 0xFF00;
 			arguments->pixel_bitmask.BlueMask = 0xFF0000;
-			arguments->pixel_bitmask.ReservedMask = 0;
+			arguments->pixel_bitmask.ReservedMask = 0xFF000000;
 			break;
 		case PixelBitMask:
 			arguments->pixel_bitmask
@@ -1047,7 +1143,7 @@ VOID get_graphics_information(VOLATILE struct uefi_arguments *arguments)
 
 // Retrieves the RSDP for ACPI 2.0. ACPI 1.0 is not supported, as it is
 // too old and it does not even support x86-64 due to it lacking the XSDT.
-EFI_PHYSICAL_ADDRESS get_rsdp(EFI_SYSTEM_TABLE *system_table)
+EFI_PHYSICAL_ADDRESS get_rsdp(CONST EFI_SYSTEM_TABLE *CONST system_table)
 {
 	CONST EFI_GUID acpi_guid = ACPI_20_TABLE_GUID;
 
@@ -1075,8 +1171,8 @@ EFI_PHYSICAL_ADDRESS get_rsdp(EFI_SYSTEM_TABLE *system_table)
 
 // This also exits boot services, or else the memory map would quickly become
 // invalid for exiting boot services and also inaccurate.
-VOID get_memory_map(VOLATILE struct uefi_arguments *arguments,
-	EFI_HANDLE image_handle)
+VOID get_memory_map(struct bootloader_arguments *CONST arguments,
+	CONST EFI_HANDLE CONST image_handle)
 {
 	// From here on out, do not call anything if it is not compulsory.
 	// Otherwise it can mess with the memory map and whatnot.
@@ -1136,7 +1232,7 @@ VOID get_memory_map(VOLATILE struct uefi_arguments *arguments,
 	if (arguments->memory_map_descriptor_version != 1)
 	{
 		CRITICAL_FAILURE(u"UNSUPPORTED MEMORY MAP DESCRIPTOR VERSION "
-			"(%d).\r\n", arguments->memory_map_descriptor_version);
+			"(%u).\r\n", arguments->memory_map_descriptor_version);
 	}
 
 	// Iterate over the memory map and check the types just to be sure.
@@ -1164,7 +1260,7 @@ VOID get_memory_map(VOLATILE struct uefi_arguments *arguments,
 // This maps the kernel's virtual space. Instead of creating a new dictionary,
 // I've just reused the UEFI dictionary. This must be called after the boot
 // services have ended, not before. Will always map the base address.
-VOID map_address_range(VOLATILE struct uefi_page_structure *structure,
+VOID map_address_range(struct uefi_page_structure *CONST structure,
 	EFI_VIRTUAL_ADDRESS virtual, EFI_PHYSICAL_ADDRESS physical,
 	UINT64 size)
 {
@@ -1215,17 +1311,17 @@ VOID map_address_range(VOLATILE struct uefi_page_structure *structure,
 // write to (modify), at least for x86-64 on OVMF with QEMU.
 // These are the default mappings for now. Not bothered to precisely
 // map UEFI loader data, the kernel will do it soon enough.
-VOID default_mappings(struct elf64_file *havk_elf,
-	VOLATILE struct uefi_page_structure *structure)
+VOID default_mappings(struct elf64_file *CONST havk_elf,
+	struct uefi_page_structure *CONST structure)
 {
 	CONST EFI_VIRTUAL_ADDRESS havk_virtual_base_check
 		= symbol_address(havk_elf,
-		(CHAR8 *)VIRTUAL_BASE_SYMBOL, FALSE);
+		(CONST CHAR8 *)VIRTUAL_BASE_SYMBOL, FALSE);
 	#undef VIRTUAL_BASE_SYMBOL
 
 	CONST UINT64 havk_size // Will almost never be aligned to 2-MiB.
 		= HUGE_PAGE_ALIGN(symbol_address(havk_elf,
-		(CHAR8 *)KERNEL_SIZE_SYMBOL, FALSE)) + HUGE_PAGE_SIZE;
+		(CONST CHAR8 *)KERNEL_SIZE_SYMBOL, FALSE)) + HUGE_PAGE_SIZE;
 	#undef KERNEL_SIZE_SYMBOl
 
 	// The symbol value is zero if it's not found; however, that's
@@ -1262,7 +1358,7 @@ VOID default_mappings(struct elf64_file *havk_elf,
 }
 
 // Enables some necessary CPU features and switches to the new page structure.
-VOID switch_page_layout(VOLATILE struct uefi_page_structure *page_structure)
+VOID switch_page_layout(struct uefi_page_structure *CONST page_structure)
 {
 	// For some reason, on some (even recent) machines, the ability for NX
 	// page mappings is not enabled by default, even when it has been
@@ -1279,20 +1375,156 @@ VOID switch_page_layout(VOLATILE struct uefi_page_structure *page_structure)
 		"RDMSR;" // The MSR's value is now in EDX:EAX (high:low).
 		"OR EAX, 0x800;" // Set bit 11 (2048) to enable NXE.
 		"WRMSR;" // Write EDX:EAX to the EFER.
-		"MOV CR3, %0;" //Load the temporary page structure.
-		".ATT_SYNTAX noprefix"
+		"MOV CR3, %0;" // Load the temporary page structure.
+		".ATT_SYNTAX"
 		:
 		: "r" (page_structure)
 		: "eax", "ecx", "edx", "cc", "memory"
 	);
 }
 
+// Note that the tasks/modules are not actually mapped upon entry into the
+// kernel. It will figure out how to map them later on its own.
+VOID load_modules(CONST EFI_FILE_PROTOCOL *CONST root_directory,
+	struct bootloader_arguments *CONST arguments)
+{
+	// If the key is smaller than or equal to the module prefix indicator I
+	// use, then it's not a module or the module name itself is not
+	// specified.
+	for (UINTN i = 0; i < arguments->options_count; ++i)
+	{
+		CHAR8 *CONST key = &arguments->options_string
+			[arguments->options[i].key_start];
+		CONST UINTN key_length = arguments->options[i].key_end
+			- arguments->options[i].key_start;
+		CHAR8 *CONST value = &arguments->options_string
+			[arguments->options[i].value_start];
+		CONST UINTN value_length = arguments->options[i].value_end
+			- arguments->options[i].value_start;
+
+		// For reasons unknown, GNU-EFI's `strncmpa()` (`strncmp()` for
+		// ASCII strings) returns an unsigned integer and thus is not
+		// an accurate implementation of `strncmp()` or the similiar
+		// `strcmp()`. Thankfully, I can just cast the bug away. This
+		// will however break if "UINTN" does not match the bit size of
+		// "INTN" anymore.
+		if ((INTN) strncmpa(key, (CONST CHAR8 *)"MODULE.",
+			key_length < 8 ? key_length : 8) <= 0)
+		{
+			continue;
+		}
+
+		// Change the end of the value string to a null terminator so
+		// we can pass it around more easily. Need to change it back
+		// when we're done.
+		CHAR8 old_end = value[value_length + 1];
+		value[value_length + 1] = '\0';
+
+		EFI_FILE_PROTOCOL *CONST module = open_file(root_directory,
+			value);
+
+		if (!module)
+		{
+			CRITICAL_FAILURE(u"FAILED TO OPEN MODULE FILE: "
+				"\"%a\"\r\n", value);
+		}
+
+		CONST UINT64 module_size = LibFileInfo(module)->FileSize;
+
+		Print(u"MODULE OPENED AT \"%a\"\r\n"
+			"MODULE FILE SIZE: %llu KIBIBYTES\r\n",
+			value,
+			module_size / 1024);
+
+		value[value_length + 1] = old_end; // Restore the end.
+
+		UEFI(module->SetPosition, 2,
+			module,
+			0);
+
+		CONST EFI_PHYSICAL_ADDRESS module_area
+			= (EFI_PHYSICAL_ADDRESS)
+			malloc(module_size, EfiLoaderData);
+
+		UEFI(module->Read, 3,
+			module,
+			&module_size,
+			module_area);
+
+		// The data field will carry the address and size for the
+		// loadable files.
+		CopyMem(arguments->options[i].data,
+			(CONST VOID *)module_area, sizeof(module_area));
+		CopyMem(arguments->options[i].data + sizeof(module_area),
+			(CONST VOID *)module_size, sizeof(module_size));
+
+		// Do the same trick as I did for the value string.
+		old_end = key[key_length + 1];
+		key[key_length + 1] = '\0';
+		Print(u"MODULE \"%a\" LOADED AT: 0x%llX\r\n",
+			key, module_area);
+		key[key_length + 1] = old_end;
+
+		UEFI(module->Close, 1,
+			module);
+	}
+}
+
+// Similiar logic to `open_modules()`, but specialised for the kernel ELF.
+// Same comments and notes mostly apply.
+EFI_FILE_PROTOCOL *open_havk(CONST EFI_FILE_PROTOCOL *CONST root_directory,
+	CONST struct bootloader_arguments *CONST arguments)
+{
+	EFI_FILE_PROTOCOL *open_attempt = NULL;
+
+	for (UINT16 i = 0; i < arguments->options_count; ++i)
+	{
+		CHAR8 *CONST key = &arguments->options_string
+			[arguments->options[i].key_start];
+		CONST UINTN key_length = arguments->options[i].key_end
+			- arguments->options[i].key_start;
+		CHAR8 *CONST value = &arguments->options_string
+			[arguments->options[i].value_start];
+		CONST UINTN value_length = arguments->options[i].value_end
+			- arguments->options[i].value_start;
+
+		if ((INTN) strncmpa(key, (CONST CHAR8 *)"HAVK",
+			key_length < 5 ? key_length : 5))
+		{
+			continue;
+		}
+
+		CONST CHAR8 old_end = value[value_length + 1];
+		value[value_length + 1] = '\0';
+
+		open_attempt = open_file(root_directory, value);
+		Print(u"HAVK OPENED AT \"%a\"\r\n"
+			"HAVK KERNEL FILE SIZE: %llu KIBIBYTES\r\n", value,
+			LibFileInfo(open_attempt)->FileSize / 1024);
+
+		value[value_length + 1] = old_end;
+
+		// Only load the first kernel ELF file specified in case it
+		// appears more than once.
+		break;
+	}
+
+	if (!open_attempt)
+	{
+		CRITICAL_FAILURE(u"HAVK WAS NOT SPECIFIED IN THE BOOT "
+			"CONFIGURATION FILE\r\n");
+	}
+
+	return open_attempt;
+}
+
 EFIAPI
 EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 {
 	struct elf64_file havk_elf = {0};
-	VOLATILE struct uefi_arguments *arguments = NULL;
-	VOLATILE struct uefi_page_structure *page_structure = NULL;
+	struct bootloader_arguments *arguments = NULL;
+	struct uefi_page_structure *page_structure = NULL;
+	EFI_FILE_PROTOCOL *root_directory = NULL;
 
 	welcome(image_handle, system_table);
 
@@ -1300,13 +1532,26 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 		setup_debug_session();
 	#endif
 
-	set_screen_resolution(read_screen_resolutions(get_gop_handle()));
-
 	// TODO: For now, just find the device where the bootloader is
 	// also located. This should save a lot of time guessing, but I aim
 	// to revise this in the future for more user options.
 	/* open_havk(get_sfs_handle()); */
-	open_havk(image->DeviceHandle);
+	// Open the root directory of the ESP.
+	root_directory = open_root_directory(image->DeviceHandle);
+
+	// Parse the configuration file, which contains the location of the
+	// kernel ELF and other modules.
+	arguments = malloc(sizeof(arguments), EfiLoaderData);
+	parse_configuration(root_directory, arguments);
+
+	// Let the user set the screen resolution. I just find the first GOP
+	// handle.
+	// TODO: Is it possible to use multiple GOP handles for multiple
+	// monitor setups?
+	set_screen_resolution(read_screen_resolutions(get_gop_handle()));
+
+	// Open the kernel's ELF file.
+	havk = open_havk(root_directory, arguments);
 
 	// Process the ELF headers.
 	read_file_header(&havk_elf);
@@ -1314,11 +1559,10 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	read_section_headers(&havk_elf);
 	read_symbols(&havk_elf);
 
-	// Load HAVK to memory.
+	// Load HAVK to memory so it's ready to be entered.
 	load_havk(&havk_elf);
 
-	arguments = low_malloc(sizeof(arguments));
-
+	// Store framebuffer information in the argument's structure.
 	get_graphics_information(arguments);
 
 	// Get the RSDP, as HAVK will need ACPI info for PCIe enumeration etc.
@@ -1335,13 +1579,31 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	page_structure = page_malloc(sizeof(page_structure));
 	default_mappings(&havk_elf, page_structure);
 
+	// Load the initialisation tasks or "modules" into memory.
+	load_modules(root_directory, arguments);
+
 	// I want to pass the memory map etc. to HAVK, so instead of using
 	// inline assembly, I can just tell GCC to use the System V ABI way
 	// of passing arguments to our assembly entry function which is
 	// using the ELF format and adheres to the System V ABI.
 	__attribute__((sysv_abi))
-	VOID (*enter_havk) (VOLATILE struct uefi_arguments *arguments,
-		UINT64 magic) = (VOLATILE VOID *)prepare_entry(&havk_elf);
+	VOID (*enter_havk) (struct bootloader_arguments *arguments,
+		UINT64 magic) = (VOID *)havk_elf.file_header.entry_address;
+
+	// We're done reading all the files we need.
+	UEFI(havk->Close, 1,
+		havk);
+	UEFI(root_directory->Close, 1,
+		root_directory);
+
+	// Deallocate the ELF headers and symbol-related structures, as we do
+	// not need them anymore. Note that they must be allocated by my
+	// `malloc()` wrapper, as the page size is stored behind/below the
+	// returned base address.
+	free(havk_elf.program_headers);
+	free(havk_elf.section_headers);
+	free(havk_elf.symbols);
+	free(havk_elf.symbol_string_table);
 
 	Print(u"EXITING UEFI BOOT SERVICES\r\n");
 

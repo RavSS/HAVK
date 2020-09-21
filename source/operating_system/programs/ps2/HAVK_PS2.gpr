@@ -1,26 +1,30 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System Thread Tester                    --
--- Filename        -- HAVK_Thread_Tester.gpr                                 --
+-- Program         -- HAVK Operating System PS/2 Driver                      --
+-- Filename        -- HAVK_PS2.gpr                                           --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
-PROJECT HAVK_Thread_Tester EXTENDS "../HAVK_Operating_System_Program.gpr"
+PROJECT HAVK_PS2
+EXTENDS
+   "./../../HAVK_Operating_System_Program.gpr"
 IS
    -- The name of the ELF and internal build directory.
-   Name := "thread_tester";
+   Name := "ps2";
 
    FOR Object_Dir          USE HAVK_Operating_System_Program'Object_Dir &
       Name & "/";
    FOR Exec_Dir            USE HAVK_Operating_System_Program'Object_Dir &
       "programs/";
-   FOR Main                USE("main.c");
+   FOR Main                USE("main.adb");
    FOR Create_Missing_Dirs USE "true";
 
-   PACKAGE Builder EXTENDS HAVK_Operating_System_Program.Builder
+   PACKAGE Builder
+   EXTENDS
+      HAVK_Operating_System_Program.Builder
    IS
       -- The name of the generated ELF file placed in the executable directory.
-      FOR Executable("main.c") USE Name;
+      FOR Executable("main.adb") USE Name;
    END Builder;
 
-END HAVK_Thread_Tester;
+END HAVK_PS2;

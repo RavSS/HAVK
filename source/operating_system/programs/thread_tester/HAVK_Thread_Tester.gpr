@@ -1,14 +1,16 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System Framebuffer Tester               --
--- Filename        -- HAVK_Framebuffer_Tester.gpr                            --
+-- Program         -- HAVK Operating System Thread Tester                    --
+-- Filename        -- HAVK_Thread_Tester.gpr                                 --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
-PROJECT HAVK_Framebuffer_Tester EXTENDS "../HAVK_Operating_System_Program.gpr"
+PROJECT HAVK_Thread_Tester
+EXTENDS
+   "../../HAVK_Operating_System_Program.gpr"
 IS
    -- The name of the ELF and internal build directory.
-   Name := "framebuffer_tester";
+   Name := "thread_tester";
 
    FOR Object_Dir          USE HAVK_Operating_System_Program'Object_Dir &
       Name & "/";
@@ -17,10 +19,12 @@ IS
    FOR Main                USE("main.c");
    FOR Create_Missing_Dirs USE "true";
 
-   PACKAGE Builder EXTENDS HAVK_Operating_System_Program.Builder
+   PACKAGE Builder
+   EXTENDS
+      HAVK_Operating_System_Program.Builder
    IS
       -- The name of the generated ELF file placed in the executable directory.
       FOR Executable("main.c") USE Name;
    END Builder;
 
-END HAVK_Framebuffer_Tester;
+END HAVK_Thread_Tester;
