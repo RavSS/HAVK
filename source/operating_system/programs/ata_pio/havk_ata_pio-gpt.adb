@@ -1,15 +1,14 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-drive-gpt.adb                              --
+-- Program         -- HAVK Operating System ATA PIO Driver                   --
+-- Filename        -- havk_ata_pio-gpt.adb                                   --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 WITH
-   Ada.Unchecked_Deallocation,
-   HAVK_Kernel.Intrinsics;
+   Ada.Unchecked_Deallocation;
 
-PACKAGE BODY HAVK_Kernel.Drive.GPT
+PACKAGE BODY HAVK_ATA_PIO.GPT
 IS
    FUNCTION Resolve_UUID
      (UUID : IN unique_identifier)
@@ -19,9 +18,9 @@ IS
       Time_Middle           => UUID.Time_Middle,
       Time_High_And_Version => UUID.Time_High_And_Version,
       Sequence_And_Variant  =>
-         Shift_Right(Intrinsics.Byte_Swap(UUID.Sequence_And_Variant), 48),
+         Shift_Right(Byte_Swap(UUID.Sequence_And_Variant), 48),
       Node                  =>
-         Shift_Right(Intrinsics.Byte_Swap(UUID.Node), 16));
+         Shift_Right(Byte_Swap(UUID.Node), 16));
 
    PROCEDURE Get_Partition
      (New_Partition   : OUT partition;
@@ -136,4 +135,4 @@ IS
       END LOOP;
    END Get_Partition;
 
-END HAVK_Kernel.Drive.GPT;
+END HAVK_ATA_PIO.GPT;

@@ -34,20 +34,25 @@
 
 PRAGMA Restrictions (No_Elaboration_Code);
 
-PACKAGE System.C.Malloc IS
-   PRAGMA Preelaborate;
+PACKAGE System.C.Malloc
+WITH
+   Preelaborate => true
+IS
+   -- My own wrapper that extends the heap boundary if needed.
+   FUNCTION Alloc_Wrapper
+     (Size : IN size_t)
+      RETURN address
+   WITH
+      Export        => true,
+      Convention    => C,
+      External_Name => "__gnat_malloc";
+
    FUNCTION Alloc
       (Size : size_t)
        RETURN address;
-   PRAGMA Export (C, Alloc, "__gnat_malloc");
    PROCEDURE Free
       (Ptr : address);
    PRAGMA Export (C, Free, "__gnat_free");
-   FUNCTION Realloc
-      (Ptr  : address;
-       Size : size_t)
-       RETURN address;
-   PRAGMA Export (C, Realloc, "realloc");
 
 PRIVATE
    --  The basic implementation structures are made private in the spec so that

@@ -53,7 +53,7 @@ IS
          RSDP_Byte OF RSDP_Bytes
       LOOP
          EXIT WHEN Total_Size > number'last - (2**8 - 1); -- Overflow check.
-         Total_Size := Total_Size + RSDP_Byte;
+         Total_Size := Total_Size + number(RSDP_Byte);
       END LOOP;
 
       IF
@@ -96,7 +96,7 @@ IS
                XSDT_Byte OF XSDT_Bytes
             LOOP -- Overflow check below.
                EXIT WHEN Total_Size > number'last - (2**8 - 1);
-               Total_Size := Total_Size + XSDT_Byte;
+               Total_Size := Total_Size + number(XSDT_Byte);
             END LOOP;
          END;
       ELSE
@@ -195,7 +195,7 @@ IS
                   Table_Byte OF Table_Bytes
                LOOP -- Overflow check below.
                   EXIT WHEN Total_Size > number'last - (2**8 - 1);
-                  Total_Size := Total_Size + Table_Byte;
+                  Total_Size := Total_Size + number(Table_Byte);
                END LOOP;
 
                IF
@@ -222,7 +222,7 @@ IS
       SPARK_Mode => off
    IS
       FUNCTION Enum_Val IS NEW Ada.Unchecked_Conversion
-        (source => number, target => interrupt_controller);
+        (source => byte, target => interrupt_controller);
 
       MADT         : CONSTANT multiple_APIC_description_table
       WITH
@@ -253,7 +253,7 @@ IS
          END IF;
 
          APICs(APIC_Index).Record_Address := APICs_Bytes(Byte_Index)'address;
-         Byte_Index := Byte_Index + APICs_Bytes(Byte_Index + 1);
+         Byte_Index := Byte_Index + number(APICs_Bytes(Byte_Index + 1));
          APIC_Index := APIC_Index + 1;
       END LOOP;
 

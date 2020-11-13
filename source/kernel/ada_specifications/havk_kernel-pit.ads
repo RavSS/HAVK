@@ -10,6 +10,8 @@
 -- READ: https://wiki.osdev.org/PIT
 -- TODO: This lacks detailed documentation and features. For now, I'm only
 -- using the PIT to calibrate the LAPIC timer and for sleeping.
+-- TODO: Shift this out of ring 0 as well. This can easily be made into a task.
+-- Preferably do so when tasks can handle interrupts.
 PACKAGE HAVK_Kernel.PIT
 WITH
    Preelaborate => true

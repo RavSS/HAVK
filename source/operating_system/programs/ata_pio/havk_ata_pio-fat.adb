@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-drive-fat.adb                              --
+-- Program         -- HAVK Operating System ATA PIO Driver                   --
+-- Filename        -- havk_ata_pio-fat.adb                                   --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -9,7 +9,7 @@ WITH
    Ada.Unchecked_Deallocation,
    System.Case_Util;
 
-PACKAGE BODY HAVK_Kernel.Drive.FAT
+PACKAGE BODY HAVK_ATA_PIO.FAT
 IS
    FUNCTION Get_FAT_Version
      (FAT_Context : IN file_system)
@@ -238,7 +238,7 @@ IS
          IF -- Check must be placed here, as the access type can't be constant.
             Table_Index IN Table_Entries'range
          THEN
-            Next_Cluster := Table_Entries(Table_Index);
+            Next_Cluster := number(Table_Entries(Table_Index));
          ELSE
             Next_Cluster := invalid_cluster_16'last;
          END IF;
@@ -678,4 +678,4 @@ IS
       END IF;
    END Read_File;
 
-END HAVK_Kernel.Drive.FAT;
+END HAVK_ATA_PIO.FAT;

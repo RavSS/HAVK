@@ -6,7 +6,6 @@
 -------------------------------------------------------------------------------
 
 PRAGMA License(GPL);
-PRAGMA SPARK_Mode(off); -- Programs are not in SPARK by default.
 PRAGMA Normalize_Scalars;
 PRAGMA Assertion_Policy(CHECK);
 PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);

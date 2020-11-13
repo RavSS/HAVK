@@ -44,6 +44,7 @@ typedef enum
 	LOG_OPERATION,
 	IRQ_STATISTICS_OPERATION,
 	IO_PORT_OPERATION,
+	BUFFER_OPERATION,
 	FRAMEBUFFER_ACCESS_OPERATION
 } syscall_ht;
 
@@ -164,28 +165,54 @@ inline syserr_ht syscall_data(sysargs_ht *arguments, void *data)
 
 inline void output_byte(uint16_t port, uint8_t value)
 {
-        sysargs_ht arguments =
-        {
-                .operation = IO_PORT_OPERATION,
-                .argument_1 = port,
-                .argument_2 = value
-        };
+	sysargs_ht arguments =
+	{
+		.operation = IO_PORT_OPERATION,
+		.argument_1 = port,
+		.argument_2 = value
+	};
 
-        syscall(&arguments);
+	syscall(&arguments);
+}
+
+inline void output_word(uint16_t port, uint16_t value)
+{
+	sysargs_ht arguments =
+	{
+		.operation = IO_PORT_OPERATION,
+		.argument_1 = port,
+		.argument_2 = value,
+		.argument_4 = true // Word size.
+	};
+
+	syscall(&arguments);
 }
 
 inline uint8_t input_byte(uint16_t port)
 {
-        sysargs_ht arguments =
-        {
-                .operation = IO_PORT_OPERATION,
-                .argument_1 = port,
-                .argument_3 = true // Input, not output.
-        };
+	sysargs_ht arguments =
+	{
+		.operation = IO_PORT_OPERATION,
+		.argument_1 = port,
+		.argument_3 = true // Input, not output.
+	};
 
-        syscall(&arguments);
-        return arguments.argument_2;
+	syscall(&arguments);
+	return arguments.argument_2;
 }
 
+inline uint16_t input_word(uint16_t port)
+{
+	sysargs_ht arguments =
+	{
+		.operation = IO_PORT_OPERATION,
+		.argument_1 = port,
+		.argument_3 = true, // Input, not output.
+		.argument_4 = true // Word size.
+	};
+
+	syscall(&arguments);
+	return arguments.argument_2;
+}
 
 #endif

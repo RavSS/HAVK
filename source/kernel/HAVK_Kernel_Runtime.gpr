@@ -9,74 +9,36 @@
 -- to the source directory listed below.
 LIBRARY PROJECT HAVK_Kernel_Runtime
 IS
-   FOR Default_Language    USE "Ada";
-   FOR Languages           USE("Ada");
-   FOR Source_Dirs         USE("./ada_runtime/");
-   FOR Object_Dir          USE "./../../build/kernel/";
-   FOR Exec_Dir            USE HAVK_Kernel_Runtime'Object_Dir;
-   FOR Library_Name        USE "havk_kernel_runtime";
-   FOR Library_Kind        USE "static";
-   FOR Library_Src_Dir     USE
-      HAVK_Kernel_Runtime'Object_Dir & "adainclude/";
-   FOR Library_Dir         USE
-      HAVK_Kernel_Runtime'Object_Dir & "adalib/";
-   FOR Create_Missing_Dirs USE "true";
+   FOR default_language    USE "Ada";
+   FOR languages           USE("Ada");
+   FOR source_dirs         USE("./ada_runtime/");
+   FOR object_dir          USE "./../../build/kernel/";
+   FOR exec_dir            USE HAVK_Kernel_Runtime'object_dir;
+   FOR library_name        USE "havk_kernel_runtime";
+   FOR library_kind        USE "static";
+   FOR library_src_dir     USE
+      HAVK_Kernel_Runtime'object_dir & "adainclude/";
+   FOR library_dir         USE
+      HAVK_Kernel_Runtime'object_dir & "adalib/";
+   FOR create_missing_dirs USE "true";
 
-   TYPE Runtime_Type IS("Final", "Debug");
-   Build : Runtime_Type := EXTERNAL("Build", "Final");
+   TYPE runtime_type IS("Final", "Debug");
+   Build : runtime_type := EXTERNAL("Build", "Final");
 
    PACKAGE Builder
    IS -- `gnatmake`
-      Ada_Basic_Switches :=
-        (-- We're compiling parts of GNAT, so this is necessary.
-         "-gnatg",
-         -- Allows the builder to include external files needed to build the
+      Builder_Basic_Switches :=
+        (-- Allows the builder to include external files needed to build the
          -- runtime.
          "-x",
-         -- May as well use the latest version of Ada, there is no harm in it.
-         "-gnat2012",
-         -- Disable the style enforcement for the RTS. It's not written by me
-         -- at this stage.
-         "-gnatyN",
-         -- Enable all warnings by default.
-         "-gnatwa",
-         -- Disable exception propagation warnings.
-         "-gnatw.X",
          -- No standard library since HAVK is a freestanding program
          -- without "-ffreestanding".
          "-nostdlib",
          -- No standard include paths.
          "-nostdinc");
 
-      Ada_Final_Switches :=
-        (-- No debug information at all for obvious reasons.
-         "-g0",
-         -- Default validity checks. Specified by default regardless.
-         "-gnatVd",
-         -- Speed up compilation by not generating some references in
-         -- the "ali" files. Also saves a little space.
-         "-gnatx");
-
-      Ada_Debug_Switches :=
-        (-- Maximum debug information for GDB specifically.
-         "-ggdb3",
-         -- All validity checks for debugging.
-         "-gnatVa",
-         -- Creates "rep" files showing the bit representation of types etc.
-         "-gnatR2s");
-
-      CASE
-         Build
-      IS
-         WHEN "Final" =>
-            FOR Default_Switches("Ada") USE
-               Ada_Basic_Switches &
-               Ada_Final_Switches;
-         WHEN "Debug" =>
-            FOR Default_Switches("Ada") USE
-               Ada_Basic_Switches &
-               Ada_Debug_Switches;
-      END CASE;
+      FOR switches(OTHERS) USE
+         Builder_Basic_Switches;
 
       -- A separate configuration file is used for the runtime system.
       -- It is not too different.
@@ -123,7 +85,49 @@ IS
          -- Optimize code for no particular CPU family.
          "-mtune=generic");
 
-      FOR Default_Switches("Ada") USE
-         GCC_Basic_Switches;
+      Ada_Basic_Switches :=
+        (-- We're compiling parts of GNAT, so this is necessary.
+         "-gnatg",
+         -- May as well use the latest version of Ada, there is no harm in it.
+         "-gnat2012",
+         -- Disable the style enforcement for the RTS. It's not written by me
+         -- at this stage.
+         "-gnatyN",
+         -- Enable all warnings by default.
+         "-gnatwa",
+         -- Disable exception propagation warnings.
+         "-gnatw.X");
+
+      Ada_Final_Switches :=
+        (-- No debug information at all for obvious reasons.
+         "-g0",
+         -- Default validity checks. Specified by default regardless.
+         "-gnatVd",
+         -- Speed up compilation by not generating some references in
+         -- the "ali" files. Also saves a little space.
+         "-gnatx");
+
+      Ada_Debug_Switches :=
+        (-- Maximum debug information for GDB specifically.
+         "-ggdb3",
+         -- All validity checks for debugging.
+         "-gnatVa",
+         -- Creates "rep" files showing the bit representation of types etc.
+         "-gnatR2s");
+
+      CASE
+         Build
+      IS
+         WHEN "Final" =>
+            FOR default_switches("Ada") USE
+               GCC_Basic_Switches &
+               Ada_Basic_Switches &
+               Ada_Final_Switches;
+         WHEN "Debug" =>
+            FOR default_switches("Ada") USE
+               GCC_Basic_Switches &
+               Ada_Basic_Switches &
+               Ada_Debug_Switches;
+      END CASE;
    END Compiler;
 END HAVK_Kernel_Runtime;

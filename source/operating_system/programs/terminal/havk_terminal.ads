@@ -5,13 +5,8 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   System,
-   HAVK_Operating_System;
-USE
-   System,
-   HAVK_Operating_System;
-
 PACKAGE HAVK_Terminal
+WITH
+   Pure => true
 IS
 END HAVK_Terminal;

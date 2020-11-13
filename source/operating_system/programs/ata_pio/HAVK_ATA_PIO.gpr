@@ -1,16 +1,16 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System PS/2 Driver                      --
--- Filename        -- HAVK_PS2.gpr                                           --
+-- Program         -- HAVK Operating System ATA PIO Driver                   --
+-- Filename        -- HAVK_ATA_PIO.gpr                                       --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
-PROJECT HAVK_PS2
+PROJECT HAVK_ATA_PIO
 EXTENDS
    "./../../HAVK_Operating_System_Program.gpr"
 IS
    -- The name of the ELF and internal build directory.
-   Name := "ps2";
+   Name := "ata_pio";
 
    FOR languages  USE("Ada");
    FOR object_dir USE HAVK_Operating_System_Program'object_dir &
@@ -25,4 +25,4 @@ IS
       FOR executable("main.adb") USE "./../programs/" & Name;
    END Builder;
 
-END HAVK_PS2;
+END HAVK_ATA_PIO;

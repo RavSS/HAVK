@@ -5,6 +5,11 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   HAVK_Operating_System;
+USE
+   HAVK_Operating_System;
+
 -- Contains a 8x8 bitmap font used for drawing text onto a framebuffer.
 PACKAGE HAVK_Terminal.Font
 IS

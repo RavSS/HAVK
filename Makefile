@@ -165,7 +165,7 @@ OPERATING_SYSTEM_BUILD_PATH=$(BUILD_PATH)operating_system/
 OPERATING_SYSTEM_SOURCE_PATH=$(SOURCE_PATH)operating_system/
 
 OPERATING_SYSTEM_RUNTIME_PATH=\
-	$(OPERATING_SYSTEM_SOURCE_PATH)include/ada_runtime/
+	$(OPERATING_SYSTEM_SOURCE_PATH)include/
 OPERATING_SYSTEM_ADAINCLUDE_PATH=$(OPERATING_SYSTEM_BUILD_PATH)adainclude/
 OPERATING_SYSTEM_ADALIB_PATH=$(OPERATING_SYSTEM_BUILD_PATH)adalib/
 
@@ -203,19 +203,24 @@ ESP_PARTITION:=$(BUILD_PATH)ESP.partition
 ESP_OFFSET?=$$(($(IMAGE_BLOCK_SIZE) * $(ESP_SECTOR_START)))
 IMAGE_ESP=$(IMAGE)@@$(ESP_OFFSET)
 
+# My build system has frozen due to being OOM multiple times, so I've made this
+# tweakable from here. Zero means no limit. This is set in megabytes and the
+# default value is the level four memory limit.
+GNATPROVE_MEMORY_LIMIT?=2000
+
 # When debugging, consider warnings as errors and be more verbose.
 # Also control the optimisation here so it's easier to tweak.
 ifeq ("$(BUILD)", "Debug")
 	O?=g
 	UEFI_CC_OPT+= -ggdb3 -O$(O)
-	GPR_RUNTIME_FLAGS=-we -k -d -O$(O)
-	GPR_FLAGS=-we -k -d -O$(O)
+	GPR_RUNTIME_FLAGS=-j0 -s -eL -p -we -k -d --complete-output -O$(O)
+	GPR_FLAGS=-j0 -s -eL -p -we -k -d --complete-output -O$(O)
 	GPR_VARIABLES=-XBuild=$(BUILD)
 else
 	O?=2
 	UEFI_CC_OPT+= -g0 -O$(O)
-	GPR_RUNTIME_FLAGS=-q -vP0 -O$(O)
-	GPR_FLAGS=-q -vP0 -O$(O)
+	GPR_RUNTIME_FLAGS=-j0 -s -eL -p --complete-output -q -vP0 -O$(O)
+	GPR_FLAGS=-j0 -s -eL -p --complete-output -q -vP0 -O$(O)
 	GPR_VARIABLES=-XBuild=$(BUILD)
 endif
 
@@ -264,7 +269,8 @@ $(KERNEL_ADAINCLUDE_PATH): | $(KERNEL_BUILD_PATH)
 
 $(OPERATING_SYSTEM_ADAINCLUDE_PATH): | $(OPERATING_SYSTEM_BUILD_PATH)
 	@if [ ! -d "$@" ]; then mkdir "$@"; fi
-	@ln -f $(OPERATING_SYSTEM_RUNTIME_PATH)/* "$@"
+	@ln -f $(OPERATING_SYSTEM_RUNTIME_PATH)/ada*/* "$@"
+	@ln -f $(OPERATING_SYSTEM_RUNTIME_PATH)/spark*/* "$@"
 
 ############################# Bootloader Building #############################
 
@@ -298,15 +304,15 @@ $(KERNEL_LIBRARY): | $(KERNEL_ADAINCLUDE_PATH) $(KERNEL_ADALIB_PATH)
 	$(call echo, "BUILDING THE HAVK KERNEL\'S RUNTIME IN \
 		$(KERNEL_BUILD_PATH)")
 
-	@gprbuild -P $(KERNEL_RUNTIME_PROJECT) $(GPR_VARIABLES) -p -eL \
-		--complete-output $(GPR_RUNTIME_FLAGS) -j0 -s -o "./../../$@"
+	@gprbuild -P $(KERNEL_RUNTIME_PROJECT) $(GPR_VARIABLES) \
+		$(GPR_RUNTIME_FLAGS) -o "./../../$@"
 
 .PHONY: $(KERNEL) # Let `gprbuild` handle change detection.
 $(KERNEL): $(KERNEL_LIBRARY)
 	$(call echo, "BUILDING THE HAVK KERNEL TO $@")
 
-	@gprbuild -P $(KERNEL_PROJECT) $(GPR_VARIABLES) -p -eL \
-		--complete-output $(GPR_FLAGS) -j0 -s -o "./../../$@"
+	@gprbuild -P $(KERNEL_PROJECT) $(GPR_VARIABLES) $(GPR_FLAGS) \
+		-o "./../../$@"
 
 ########################## Operating System Building ##########################
 
@@ -317,16 +323,16 @@ $(OPERATING_SYSTEM_ADALIB_PATH)
 		$(OPERATING_SYSTEM_BUILD_PATH)")
 
 	@gprbuild -P $(OPERATING_SYSTEM_RUNTIME_PROJECT) $(GPR_VARIABLES) \
-		-p -eL --complete-output $(GPR_RUNTIME_FLAGS) -j0 -s \
-		-o "./../../$@"
+		$(GPR_RUNTIME_FLAGS) -o "./../../$@"
 
 .PHONY: $(OPERATING_SYSTEM)
 $(OPERATING_SYSTEM): $(OPERATING_SYSTEM_LIBRARY)
 	$(call echo, "BUILDING THE HAVK OPERATING SYSTEM IN \
 		$(OPERATING_SYSTEM_BUILD_PATH)")
 
-	@gprbuild -P $(OPERATING_SYSTEM_PROJECT) $(GPR_VARIABLES) -p -eL \
-		--complete-output $(GPR_FLAGS) -j0 -s -nostdlib -nostdinc
+	@if [ ! -d "$(OPERATING_SYSTEM_BUILD_PATH)/programs" ]; then \
+		mkdir "$(OPERATING_SYSTEM_BUILD_PATH)/programs"; fi
+	@gprbuild -P $(OPERATING_SYSTEM_PROJECT) $(GPR_VARIABLES) $(GPR_FLAGS)
 
 ################################ Image Building ###############################
 
@@ -433,7 +439,8 @@ uefi-gdb:
 proof: $(KERNEL_BUILD_PATH)
 	$(call echo, "PROVING HAVK KERNEL\'S CORRECTNESS")
 
-	@gnatprove -P "$(KERNEL_PROJECT)" $(GPR_VARIABLES) $(PROVE_FILES)
+	@gnatprove -P "$(KERNEL_PROJECT)" $(GPR_VARIABLES) \
+		--memlimit=$(GNATPROVE_MEMORY_LIMIT) $(PROVE_FILES)
 
 .PHONY: stats
 stats:

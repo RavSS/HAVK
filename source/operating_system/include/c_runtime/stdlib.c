@@ -57,8 +57,20 @@ int rand(void)
 void srand(unsigned int seed)
 {
 	// As long as not all remain zero, it should be fine.
-	rand_state.a = seed >> 6;
-	rand_state.b = seed >> 12;
-	rand_state.c = seed >> 18;
-	rand_state.d = seed >> 24;
+	rand_state.a = (seed >> 6) | 1;
+	rand_state.b = (seed >> 12) | 1;
+	rand_state.c = (seed >> 18) | 1;
+	rand_state.d = (seed >> 24) | 1;
+}
+
+extern void *__gnat_malloc(size_t bytes);
+void *malloc(size_t bytes)
+{
+	return __gnat_malloc(bytes);
+}
+
+extern void __gnat_free(void *allocation);
+void free(void *allocation)
+{
+	__gnat_free(allocation);
 }

@@ -9,80 +9,40 @@
 -- runtime.
 LIBRARY PROJECT HAVK_Operating_System_Runtime
 IS
-   FOR Default_Language    USE "Ada";
-   FOR Languages           USE("Ada");
-   FOR Source_Dirs         USE("./include/ada_runtime/");
-   FOR Object_Dir          USE "./../../build/operating_system/";
-   FOR Exec_Dir            USE HAVK_Operating_System_Runtime'Object_Dir;
-   FOR Library_Name        USE "havk_operating_system_runtime";
-   FOR Library_Kind        USE "static";
-   FOR Library_Src_Dir     USE
-      HAVK_Operating_System_Runtime'Object_Dir & "adainclude/";
-   FOR Library_Dir         USE
-      HAVK_Operating_System_Runtime'Object_Dir & "adalib/";
-   FOR Create_Missing_Dirs USE "true";
+   FOR default_language    USE "Ada";
+   FOR languages           USE("Ada", "ASM", "C");
+   FOR source_dirs         USE("./include/**");
+   FOR object_dir          USE "./../../build/operating_system/";
+   FOR exec_dir            USE HAVK_Operating_System_Runtime'object_dir;
+   FOR library_name        USE "havk_operating_system_runtime";
+   FOR library_kind        USE "static";
+   FOR library_src_dir     USE
+      HAVK_Operating_System_Runtime'object_dir & "adainclude/";
+   FOR library_dir         USE
+      HAVK_Operating_System_Runtime'object_dir & "adalib/";
+   FOR create_missing_dirs USE "true";
 
-   TYPE Runtime_Type IS("Final", "Debug");
-   Build : Runtime_Type := EXTERNAL("Build", "Final");
+   TYPE runtime_type IS("Final", "Debug");
+   Build : runtime_type := EXTERNAL("Build", "Final");
 
    -- There's a lot of style parameters in the below package's switches, so
    -- I'll override them all.
    PACKAGE Builder
-   IS -- `gprbuild`.
-      Ada_Basic_Switches :=
-        (-- We're compiling parts of GNAT, so this is necessary.
-         "-gnatg",
-         -- Allows the builder to include external files needed to build the
-         -- runtime.
-         "-x",
-         -- May as well use the latest version of Ada, there is no harm in it.
-         "-gnat2012",
-         -- Disable the style enforcement for the RTS. It's not written by me
-         -- at this stage.
-         "-gnatyN",
-         -- Enable all warnings by default.
-         "-gnatwa",
-         -- Disable exception propagation warnings.
-         "-gnatw.X",
+   IS -- `gnatmake`.
+      Builder_Basic_Switches :=
+        ("-x",
          -- No standard library since HAVK's operating system (and its runtime)
          -- is a freestanding program without "-ffreestanding".
          "-nostdlib",
          -- No standard include paths.
          "-nostdinc");
 
-      Ada_Final_Switches :=
-        (-- No debug information at all for obvious reasons.
-         "-g0",
-         -- Default validity checks. Specified by default regardless.
-         "-gnatVd",
-         -- Speed up compilation by not generating some references in
-         -- the "ali" files. Also saves a little space.
-         "-gnatx");
-
-      Ada_Debug_Switches :=
-        (-- Maximum debug information for GDB specifically.
-         "-ggdb3",
-         -- All validity checks for debugging.
-         "-gnatVa",
-         -- Creates "rep" files showing the bit representation of types etc.
-         "-gnatR2s");
-
-      CASE
-         Build
-      IS
-         WHEN "Final" =>
-            FOR Default_Switches("Ada") USE
-               Ada_Basic_Switches &
-               Ada_Final_Switches;
-         WHEN "Debug" =>
-            FOR Default_Switches("Ada") USE
-               Ada_Basic_Switches &
-               Ada_Debug_Switches;
-      END CASE;
+      FOR switches(OTHERS) USE
+         Builder_Basic_Switches;
 
       -- A separate configuration file is used for the runtime system.
       -- It is not too different.
-      FOR Global_Configuration_Pragmas USE
+      FOR global_configuration_pragmas USE
          "./include/ada_runtime/havk_operating_system_runtime.adc";
    END Builder;
 
@@ -120,7 +80,102 @@ IS
          -- Optimize code for no particular CPU family.
          "-mtune=generic");
 
-      FOR Default_Switches("Ada") USE
-         GCC_Basic_Switches;
+      Ada_Basic_Switches :=
+        (-- We're compiling parts of GNAT, so this is necessary.
+         "-gnatg",
+         -- May as well use the latest version of Ada, there is no harm in it.
+         "-gnat2012",
+         -- Disable the style enforcement for the RTS. It's not written by me
+         -- at this stage.
+         "-gnatyN",
+         -- Enable all warnings by default.
+         "-gnatwa",
+         -- Disable exception propagation warnings.
+         "-gnatw.X");
+
+      Ada_Final_Switches :=
+        (-- No debug information at all for obvious reasons.
+         "-g0",
+         -- Default validity checks. Specified by default regardless.
+         "-gnatVd",
+         -- Speed up compilation by not generating some references in
+         -- the "ali" files. Also saves a little space.
+         "-gnatx");
+
+      Ada_Debug_Switches :=
+        (-- Maximum debug information for GDB specifically.
+         "-ggdb3",
+         -- All validity checks for debugging.
+         "-gnatVa",
+         -- Creates "rep" files showing the bit representation of types etc.
+         "-gnatR2s");
+
+      C_Basic_Switches :=
+        (-- Using the latest standard of C that GCC supports.
+         "-std=c17",
+         -- We're dealing with a freestanding environment, as I still haven't
+         -- prepared a hosted version of GCC.
+         "-ffreestanding");
+
+      C_Debug_Switches :=
+        (-- This just defines a preprocessor symbol to indicate the build type.
+         -- Some C files are just for debugging purposes as of now.
+         "-DDEBUG=1",
+         -- For some reason, I need to redefine this here, even when it should
+         -- be controlled on the command-line to get debug information.
+         "-ggdb3");
+
+      GAS_Basic_Switches :=
+        (-- Use the AMD64 ISA. This is often default, but specify it anyway.
+         "-Wa,-mamd64",
+         -- Always output machine code for long mode by default (SysV ABI).
+         "-Wa,--64",
+         -- Don't suppress any warnings and make them into errors.
+         "-Wa,--warn", "-Wa,--fatal-warnings",
+         -- Define the stack as non-executable for paging purposes.
+         "-Wa,--noexecstack",
+         -- For the ".size" directive, raise an error if the size is invalid.
+         "-Wa,--size-check=error",
+         -- Optimise the machine code for no particular CPU family.
+         "-Wa,-mtune=generic64",
+         -- Raise an error if certain operands are invalid.
+         "-Wa,-moperand-check=error",
+         -- GAS supports Intel syntax. Prefer using that at all times.
+         "-Wa,-msyntax=intel",
+         -- Also use Intel-style mnemonics/instruction names. They're cleaner.
+         "-Wa,-mmnemonic=intel",
+         -- Avoid the pointless AT&T-style register prefix.
+         "-Wa,-mnaked-reg");
+
+      GAS_Debug_Switches :=
+        (-- Output debugging information in any preferred format.
+         "-Wa,--gen-debug");
+
+      CASE
+         Build
+      IS
+         WHEN "Final" =>
+            FOR default_switches("Ada") USE
+               GCC_Basic_Switches &
+               Ada_Basic_Switches &
+               Ada_Final_Switches;
+            FOR default_switches("ASM") USE
+               GAS_Basic_Switches;
+            FOR default_switches("C")   USE
+               GCC_Basic_Switches &
+               C_Basic_Switches;
+         WHEN "Debug" =>
+            FOR default_switches("Ada") USE
+               GCC_Basic_Switches &
+               Ada_Basic_Switches &
+               Ada_Debug_Switches;
+            FOR default_switches("ASM") USE
+               GAS_Basic_Switches &
+               GAS_Debug_Switches;
+            FOR default_switches("C")   USE
+               GCC_Basic_Switches &
+               C_Basic_Switches &
+               C_Debug_Switches;
+      END CASE;
    END Compiler;
 END HAVK_Operating_System_Runtime;

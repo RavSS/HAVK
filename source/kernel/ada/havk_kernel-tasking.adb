@@ -488,8 +488,9 @@ IS
    WITH
       Refined_Global => (Input => Tasks),
       Refined_Post   => (IF Error_Status = no_error THEN
-                            Task_Index IN task_limit'range) AND THEN
-                        (IF Error_Status = attempt_error THEN
+                            Task_Index IN task_limit'range AND THEN
+                            Tasks(Task_Index) /= NULL
+                         ELSIF Error_Status = attempt_error THEN
                             Task_Index = number'first)
    IS
    BEGIN

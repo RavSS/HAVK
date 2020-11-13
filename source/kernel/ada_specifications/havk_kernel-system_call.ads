@@ -5,8 +5,6 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
-PRAGMA Restrictions(No_Specification_Of_Aspect => Pre);
-
 WITH
    Ada.Unchecked_Conversion,
    HAVK_Kernel.Intrinsics;
@@ -43,6 +41,7 @@ PRIVATE
       log_operation,
       irq_statistics_operation,
       io_port_operation,
+      buffer_operation,
       framebuffer_access_operation)
    WITH
       Convention => C;
@@ -116,11 +115,8 @@ PRIVATE
       XMM : OUT Intrinsics.XMM_registers;
       RAX : OUT Intrinsics.general_register);
 
-   -- Loads an ELF file off the EFI file system. This is only intended for
-   -- early usage.
-   -- TODO: This lets any task load a file. For now, that is temporary.
-   -- @param XMM The buffer containing the 192 character/byte file path and 64
-   -- character/byte task name in that order.
+   -- Loads an ELF file off the current task's kernel buffer.
+   -- @param XMM The name for the newly created task.
    -- @param RAX An error status.
    PROCEDURE Load_ELF_Operation_Call
      (XMM : IN Intrinsics.XMM_registers;
@@ -181,6 +177,23 @@ PRIVATE
       R9  : IN Intrinsics.general_register;
       RAX : OUT Intrinsics.general_register);
 
+   -- Interacts with a kernel buffer. Each task can have a single kernel buffer
+   -- which belongs to itself.
+   -- @param RSI The operation to perform on the buffer.
+   -- 1 = Create, 2 = Reading, 3 = Writing, 4 = Grant Ownership, 5 = Delete.
+   -- @param RDX If creating, then this is the size of the buffer. If
+   -- reading/writing, then this is the byte offset of the buffer. If changing
+   -- ownership, then this is the task identity you wish to grant access to. If
+   -- deleting, then this is ignored.
+   -- @param XMM This contains the data if you are reading the buffer or
+   -- writing to buffer.
+   -- @param RAX An error status.
+   PROCEDURE Buffer_Operation_Call
+     (RSI : IN Intrinsics.general_register;
+      RDX : IN Intrinsics.general_register;
+      XMM : IN OUT Intrinsics.XMM_registers;
+      RAX : OUT Intrinsics.general_register);
+
    -- This hands over the framebuffer to a task by mapping it into the task's
    -- virtual memory.
    -- TODO: Right now, this just hands it over to any task.
@@ -201,7 +214,7 @@ PRIVATE
       RAX : OUT Intrinsics.general_register);
 
    -- A type to help with converting the data buffer to a string.
-   TYPE XMM_registers_characters IS ARRAY(1 .. 256) OF character
+   TYPE XMM_registers_characters IS ARRAY(1 .. 256) OF ALIASED character
    WITH
       Size        => 128 * Intrinsics.XMM_registers'length,
       Object_Size => 128 * Intrinsics.XMM_registers'length;

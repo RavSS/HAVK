@@ -56,6 +56,9 @@ IS
       Dynamic_Predicate => canonical_address IN
          address'first .. 2**47 - 1 | -(2**47) .. address'last;
 
+   -- The opposite of a canonical address.
+   SUBTYPE invalid_address IS address RANGE 2**47 .. -(2**47) - 1;
+
    -- An address guaranteed/proven to be 4 KiB aligned.
    SUBTYPE page_address IS address
       RANGE address'first .. address'last - address(Paging.Page - 1)
@@ -63,6 +66,23 @@ IS
       Dynamic_Predicate => page_address MOD address(Paging.Page) = 0 AND THEN
          page_address IN address'first .. 2**47 - 1 |
             -(2**47) .. address'last - address(Paging.Page - 1);
+
+   -- Just a simple `memcpy()`. Use with high amounts of caution. Keep its use
+   -- limited to when you're just moving data around and don't want to waste
+   -- time marshalling. Preferably avoid it and stick to loops.
+   PROCEDURE Copy
+     (Destination : IN canonical_address;
+      Source      : IN canonical_address;
+      Bytes       : IN number)
+   WITH
+      Global        => (In_Out => Memory_State),
+      Import        => true,
+      Convention    => C,
+      External_Name => "memcpy",
+      Pre           => Bytes < number(invalid_address'first) AND THEN
+                       Destination + address(Bytes) NOT IN
+                          invalid_address'range AND THEN
+                       Source + address(Bytes) NOT IN invalid_address'range;
 
    -- This controls the heap size for the kernel. It's only static for now.
    -- This must be a multiple of 4 KiB.

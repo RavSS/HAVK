@@ -11,10 +11,8 @@ WITH
    HAVK_Kernel.Tasking,
    HAVK_Kernel.Tasking.ELF,
    HAVK_Kernel.Tasking.IPC,
-   HAVK_Kernel.Tasking.Memory,
-   HAVK_Kernel.Drive,
-   HAVK_Kernel.Drive.GPT,
-   HAVK_Kernel.Drive.FAT;
+   HAVK_Kernel.Tasking.Buffer,
+   HAVK_Kernel.Tasking.Memory;
 
 PACKAGE BODY HAVK_Kernel.System_Call
 IS
@@ -115,45 +113,25 @@ IS
      (XMM : IN Intrinsics.XMM_registers;
       RAX : OUT Intrinsics.general_register)
    IS
-      USE TYPE
-         Drive.FAT.version;
-
-      Error_Check        : error;
-      EFI_Boot_Partition : Drive.GPT.partition;
-      EFI_File_System    : Drive.FAT.file_system;
+      Active_Task_Index : CONSTANT number := Tasking.Get_Active_Task_Index;
+      ELF_Address       : address;
+      ELF_Size          : number;
+      Error_Check       : error;
    BEGIN
-      -- TODO: This is partially lifted from "HAVK_Kernel.Initialise" and there
-      -- is still a lot more error checking and drive reset checking to be done
-      -- here.
-      FOR -- Check both buses and both drives for the (U)EFI boot partition.
-         I IN 1 .. 4
-      LOOP
-         Drive.GPT.Get_Partition(EFI_Boot_Partition, "EFI",
-            Secondary_Bus => (I IN 3 | 4), Secondary_Drive => (I IN 2 | 4));
-         EXIT WHEN EFI_Boot_Partition.Present;
-      END LOOP;
+      Tasking.Buffer.Buffer_Base(Active_Task_Index, ELF_Address, ELF_Size,
+         Error_Check);
 
       IF
-         NOT EFI_Boot_Partition.Present
+         Error_Check /= no_error
       THEN
-         RAX := format_error'enum_rep;
+         RAX := Error_Check'enum_rep;
          RETURN;
       END IF;
 
-      Drive.FAT.Get_File_System(EFI_File_System, EFI_Boot_Partition);
-
-      IF
-         Drive.FAT.Get_FAT_Version(EFI_File_System) = Drive.FAT.FAT16
-      THEN
-         Tasking.ELF.Load
-           (EFI_File_System,
-            string(To_Characters(XMM)(001 .. 192)),
-            string(To_Characters(XMM)(193 .. 256)),
-            Error_Check);
-         RAX := Error_Check'enum_rep;
-      ELSE
-         RAX := format_error'enum_rep;
-      END IF;
+      Tasking.ELF.Load(ELF_Address, ELF_Size,
+         string(To_Characters(XMM)(Tasking.task_name_string'range)),
+         Error_Check);
+      RAX := Error_Check'enum_rep;
    END Load_ELF_Operation_Call;
 
    PROCEDURE Heap_Increase_Operation_Call
@@ -260,6 +238,35 @@ IS
 
       RAX := no_error'enum_rep;
    END IO_Port_Operation_Call;
+
+   PROCEDURE Buffer_Operation_Call
+     (RSI : IN Intrinsics.general_register;
+      RDX : IN Intrinsics.general_register;
+      XMM : IN OUT Intrinsics.XMM_registers;
+      RAX : OUT Intrinsics.general_register)
+   IS
+      Task_Index  : CONSTANT number := Tasking.Get_Active_Task_Index;
+      Error_Check : error;
+   BEGIN
+      CASE
+         RSI
+      IS
+         WHEN 1 => -- Create.
+            Tasking.Buffer.Create(Task_Index, number(RDX), Error_Check);
+         WHEN 2 => -- Read.
+            Tasking.Buffer.Read(Task_Index, number(RDX), XMM, Error_Check);
+         WHEN 3 => -- Write.
+            Tasking.Buffer.Write(Task_Index, number(RDX), XMM, Error_Check);
+         WHEN 4 => -- Ownership.
+            Error_Check := attempt_error; -- TODO: Time for capability tokens?
+         WHEN 5 => -- Delete.
+            Tasking.Buffer.Delete(Task_Index);
+         WHEN OTHERS =>
+            Error_Check := index_error;
+      END CASE;
+
+      RAX := Error_Check'enum_rep;
+   END Buffer_Operation_Call;
 
    PROCEDURE Framebuffer_Access_Operation_Call
      (RSI : OUT Intrinsics.general_register;

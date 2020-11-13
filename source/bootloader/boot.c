@@ -236,10 +236,21 @@ struct elf64_file
 
 // I made this little library to parse key-value pair files. See the header for
 // more details.
-#define KVP_ENTRY_DATA_FIELDS UINTN data[32];
-#define KVP_ENTRY_ATTRIBUTE PACKED
-#define KVP_NO_STDDEF // Force usage of "unsigned long" instead of "size_t".
+struct boot_file_data_layout
+{
+	struct elf64_file_header *boot_file_address;
+	UINT64 boot_file_size;
+} PACKED;
+union options_data
+{
+	struct boot_file_data_layout boot_file_data;
+} PACKED;
+#define KVP_ENTRY_DATA_FIELDS union options_data data;
+#define KVP_ENTRY_ATTRIBUTES PACKED
+#define KVP_INDEX_TYPE UINT32
 #include <key_value_pair.h>
+#define HAVK_KEY "HAVK"
+#define BOOT_FILE_KEY "BOOT_FILE."
 
 // This gets passed to HAVK's entry function later on. I've just made it
 // into a structure for the sake of less parameters needing to be passed.
@@ -510,6 +521,11 @@ EFI_FILE_PROTOCOL *open_file(CONST EFI_FILE_PROTOCOL *CONST root_directory,
 	if (attempt == EFI_NOT_FOUND)
 	{
 		CRITICAL_FAILURE(u"FILE NOT FOUND: \"%s\"\r\n",
+			wide_file_path);
+	}
+	else if (attempt == EFI_INVALID_PARAMETER)
+	{
+		CRITICAL_FAILURE(u"BAD FILE PATH: \"%s\"\r\n",
 			wide_file_path);
 	}
 	else
@@ -1383,14 +1399,28 @@ VOID switch_page_layout(struct uefi_page_structure *CONST page_structure)
 	);
 }
 
-// Note that the tasks/modules are not actually mapped upon entry into the
-// kernel. It will figure out how to map them later on its own.
-VOID load_modules(CONST EFI_FILE_PROTOCOL *CONST root_directory,
+// For reasons unknown, GNU-EFI's `strncmpa()` (`strncmp()` for ASCII strings)
+// returns an unsigned integer and thus is not an accurate implementation of
+// `strncmp()` or the similar `strcmp()`. Casting the `strncmpa()` result to
+// "INTN" seems to work depending on how the compiler feels during compilation,
+// so I've replaced it with a normal `strncmp()`.
+INTN strncmp(CONST CHAR8 *string_1, CONST CHAR8 *string_2,
+	UINTN bytes)
+{
+	while (bytes-- && *string_1++ == *string_2++);
+
+	return bytes ? *string_1 - *string_2 : 0;
+}
+
+// The boot files are mapped upon entry if they're in the range that I cover
+// when I'm building my own paging structure. The kernel will map them
+// according to the memory map if they're not mapped anyway.
+VOID load_boot_files(CONST EFI_FILE_PROTOCOL *CONST root_directory,
 	struct bootloader_arguments *CONST arguments)
 {
-	// If the key is smaller than or equal to the module prefix indicator I
-	// use, then it's not a module or the module name itself is not
-	// specified.
+	// If the key is smaller than or equal to the boot file prefix
+	// indicator I use, then it's not a boot_file or the boot file name
+	// itself is not specified.
 	for (UINTN i = 0; i < arguments->options_count; ++i)
 	{
 		CHAR8 *CONST key = &arguments->options_string
@@ -1402,14 +1432,18 @@ VOID load_modules(CONST EFI_FILE_PROTOCOL *CONST root_directory,
 		CONST UINTN value_length = arguments->options[i].value_end
 			- arguments->options[i].value_start;
 
-		// For reasons unknown, GNU-EFI's `strncmpa()` (`strncmp()` for
-		// ASCII strings) returns an unsigned integer and thus is not
-		// an accurate implementation of `strncmp()` or the similiar
-		// `strcmp()`. Thankfully, I can just cast the bug away. This
-		// will however break if "UINTN" does not match the bit size of
-		// "INTN" anymore.
-		if ((INTN) strncmpa(key, (CONST CHAR8 *)"MODULE.",
-			key_length < 8 ? key_length : 8) <= 0)
+		// If it's the key we're looking for, then it has to longer
+		// than the "base key".
+		if (key_length <= ARRAY_LENGTH(BOOT_FILE_KEY))
+		{
+			continue;
+		}
+
+		// Only needs to match the first part of the key, even if the
+		// whole key is longer. The "sub-key" at minimum is at least a
+		// single character.
+		if (strncmp(key, (CONST CHAR8 *CONST) BOOT_FILE_KEY,
+			ARRAY_LENGTH(BOOT_FILE_KEY)))
 		{
 			continue;
 		}
@@ -1420,57 +1454,58 @@ VOID load_modules(CONST EFI_FILE_PROTOCOL *CONST root_directory,
 		CHAR8 old_end = value[value_length + 1];
 		value[value_length + 1] = '\0';
 
-		EFI_FILE_PROTOCOL *CONST module = open_file(root_directory,
+		EFI_FILE_PROTOCOL *CONST boot_file = open_file(root_directory,
 			value);
 
-		if (!module)
+		if (!boot_file)
 		{
-			CRITICAL_FAILURE(u"FAILED TO OPEN MODULE FILE: "
+			CRITICAL_FAILURE(u"FAILED TO OPEN BOOT FILE: "
 				"\"%a\"\r\n", value);
 		}
 
-		CONST UINT64 module_size = LibFileInfo(module)->FileSize;
+		CONST UINT64 boot_file_size = LibFileInfo(boot_file)->FileSize;
 
-		Print(u"MODULE OPENED AT \"%a\"\r\n"
-			"MODULE FILE SIZE: %llu KIBIBYTES\r\n",
+		Print(u"BOOT FILE OPENED AT \"%a\"\r\n"
+			"BOOT FILE SIZE: %llu KIBIBYTES\r\n",
 			value,
-			module_size / 1024);
+			boot_file_size / 1024);
 
 		value[value_length + 1] = old_end; // Restore the end.
 
-		UEFI(module->SetPosition, 2,
-			module,
+		UEFI(boot_file->SetPosition, 2,
+			boot_file,
 			0);
 
-		CONST EFI_PHYSICAL_ADDRESS module_area
-			= (EFI_PHYSICAL_ADDRESS)
-			malloc(module_size, EfiLoaderData);
+		// The ELF itself is not loaded. I'm just reusing this
+		// structure as a pointer holder for future expansion.
+		struct elf64_file_header *CONST boot_file_area
+			= malloc(boot_file_size, EfiLoaderData);
 
-		UEFI(module->Read, 3,
-			module,
-			&module_size,
-			module_area);
+		UEFI(boot_file->Read, 3,
+			boot_file,
+			&boot_file_size,
+			boot_file_area);
 
 		// The data field will carry the address and size for the
 		// loadable files.
-		CopyMem(arguments->options[i].data,
-			(CONST VOID *)module_area, sizeof(module_area));
-		CopyMem(arguments->options[i].data + sizeof(module_area),
-			(CONST VOID *)module_size, sizeof(module_size));
+		arguments->options[i].data.boot_file_data.boot_file_address
+			= boot_file_area;
+		arguments->options[i].data.boot_file_data.boot_file_size
+			= boot_file_size;
 
 		// Do the same trick as I did for the value string.
 		old_end = key[key_length + 1];
 		key[key_length + 1] = '\0';
-		Print(u"MODULE \"%a\" LOADED AT: 0x%llX\r\n",
-			key, module_area);
+		Print(u"BOOT FILE SPECIFIED BY \"%a\" LOADED AT: 0x%llX\r\n",
+			key, boot_file_area);
 		key[key_length + 1] = old_end;
 
-		UEFI(module->Close, 1,
-			module);
+		UEFI(boot_file->Close, 1,
+			boot_file);
 	}
 }
 
-// Similiar logic to `open_modules()`, but specialised for the kernel ELF.
+// Similar logic to `load_boot_files()`, but specialised for the kernel ELF.
 // Same comments and notes mostly apply.
 EFI_FILE_PROTOCOL *open_havk(CONST EFI_FILE_PROTOCOL *CONST root_directory,
 	CONST struct bootloader_arguments *CONST arguments)
@@ -1488,8 +1523,10 @@ EFI_FILE_PROTOCOL *open_havk(CONST EFI_FILE_PROTOCOL *CONST root_directory,
 		CONST UINTN value_length = arguments->options[i].value_end
 			- arguments->options[i].value_start;
 
-		if ((INTN) strncmpa(key, (CONST CHAR8 *)"HAVK",
-			key_length < 5 ? key_length : 5))
+		// Must match "HAVK" fully.
+		if (strncmp(key, (CONST CHAR8 *CONST) HAVK_KEY,
+			key_length < ARRAY_LENGTH(HAVK_KEY)
+			? key_length : ARRAY_LENGTH(HAVK_KEY)))
 		{
 			continue;
 		}
@@ -1540,7 +1577,7 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	root_directory = open_root_directory(image->DeviceHandle);
 
 	// Parse the configuration file, which contains the location of the
-	// kernel ELF and other modules.
+	// kernel ELF and other boot files.
 	arguments = malloc(sizeof(arguments), EfiLoaderData);
 	parse_configuration(root_directory, arguments);
 
@@ -1579,8 +1616,8 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	page_structure = page_malloc(sizeof(page_structure));
 	default_mappings(&havk_elf, page_structure);
 
-	// Load the initialisation tasks or "modules" into memory.
-	load_modules(root_directory, arguments);
+	// Load the initialisation tasks or "boot files" into memory.
+	load_boot_files(root_directory, arguments);
 
 	// I want to pass the memory map etc. to HAVK, so instead of using
 	// inline assembly, I can just tell GCC to use the System V ABI way

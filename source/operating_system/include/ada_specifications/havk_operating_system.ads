@@ -14,38 +14,80 @@ USE
 -- A package with some simple types for general style unity between programs
 -- and definitions for system calls. Keep this file up to date with the kernel
 -- itself.
--- TODO: Either add this to the runtime or let programs use it regularly.
 -- TODO: This package (especially its body) is very rushed and needs
 -- documentation etc.
 PACKAGE HAVK_Operating_System
+WITH
+   Preelaborate   => true,
+   Abstract_State =>
+   (
+      CPU_Port_State
+      WITH
+         External
+   )
 IS
-   TYPE number IS MOD 2**64;
+   TYPE number IS MOD 2**64
+   WITH
+      Size        => 64,
+      Object_Size => 64;
    PRAGMA Provide_Shift_Operators(number);
 
-   TYPE bits        IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**01 - 1
+   TYPE addressable_length IS
+     (byte_length,
+      word_length,
+      doubleword_length,
+      quadword_length);
+   FOR addressable_length USE
+     (byte_length       => 08,
+      word_length       => 16,
+      doubleword_length => 32,
+      quadword_length   => 64);
+
+   TYPE bit        IS MOD 2**1
    WITH
-      Component_Size          => 01,
-      Default_Component_Value => 00;
-   TYPE bytes       IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**08 - 1
+      Size        => 1,
+      Object_Size => byte_length'enum_rep;
+   TYPE byte       IS MOD 2**byte_length'enum_rep
    WITH
-      Component_Size          => 08,
-      Default_Component_Value => 00;
-   TYPE words       IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**16 - 1
+      Size        => byte_length'enum_rep,
+      Object_Size => byte_length'enum_rep;
+   TYPE word       IS MOD 2**word_length'enum_rep
    WITH
-      Component_Size          => 16,
-      Default_Component_Value => 00;
-   TYPE doublewords IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**32 - 1
+      Size        => word_length'enum_rep,
+      Object_Size => word_length'enum_rep;
+   TYPE doubleword IS MOD 2**doubleword_length'enum_rep
    WITH
-      Component_Size          => 32,
-      Default_Component_Value => 00;
-   TYPE quadwords   IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**64 - 1
+      Size        => doubleword_length'enum_rep,
+      Object_Size => doubleword_length'enum_rep;
+   TYPE quadword   IS MOD 2**quadword_length'enum_rep
    WITH
-      Component_Size          => 64,
-      Default_Component_Value => 00;
+      Size        => quadword_length'enum_rep,
+      Object_Size => quadword_length'enum_rep;
+
+   TYPE bits        IS ARRAY(number RANGE <>) OF bit
+   WITH
+      Component_Size          => 1,
+      Default_Component_Value => bit'first;
+   TYPE bytes       IS ARRAY(number RANGE <>) OF ALIASED byte
+   WITH
+      Component_Size          => byte_length'enum_rep,
+      Default_Component_Value => byte'first;
+   TYPE words       IS ARRAY(number RANGE <>) OF ALIASED word
+   WITH
+      Component_Size          => word_length'enum_rep,
+      Default_Component_Value => word'first;
+   TYPE doublewords IS ARRAY(number RANGE <>) OF ALIASED doubleword
+   WITH
+      Component_Size          => doubleword_length'enum_rep,
+      Default_Component_Value => doubleword'first;
+   TYPE quadwords   IS ARRAY(number RANGE <>) OF ALIASED quadword
+   WITH
+      Component_Size          => quadword_length'enum_rep,
+      Default_Component_Value => quadword'first;
    TYPE addresses   IS ARRAY(number RANGE <>) OF ALIASED address
    WITH
-      Component_Size          => 64,
-      Default_Component_Value => 00;
+      Component_Size          => address'size,
+      Default_Component_Value => address'first;
 
    TYPE operation IS
      (null_operation,
@@ -59,6 +101,7 @@ IS
       log_operation,
       irq_statistics_operation,
       io_port_operation,
+      buffer_operation,
       framebuffer_access_operation)
    WITH
       Convention => C;
@@ -84,15 +127,28 @@ IS
       Annotate    => (GNATprove, No_Wrap_Around);
    PRAGMA Provide_Shift_Operators(general_register);
 
-   TYPE XMM_register IS RECORD
-      High : number := 0;
-      Low  : number := 0;
+   PRAGMA Warnings(off, "no component clause given for ""Data_Length"" *",
+      Reason => "It's not a real component.");
+   TYPE XMM_register
+     (Data_Length : addressable_length := quadword_length)
+   IS RECORD
+      CASE
+         Data_Length
+      IS
+         WHEN byte_length       => XMM_Bytes       :       bytes(1 .. 16);
+         WHEN word_length       => XMM_Words       :       words(1 .. 08);
+         WHEN doubleword_length => XMM_Doublewords : doublewords(1 .. 04);
+         WHEN quadword_length   => XMM_Quadwords   :   quadwords(1 .. 02);
+      END CASE;
    END RECORD
    WITH
-      Object_Size => 128;
+      Unchecked_Union => true,
+      Object_Size     => 128;
    FOR XMM_register USE RECORD
-      High AT 0 RANGE 0 .. 63;
-      Low  AT 8 RANGE 0 .. 63;
+      XMM_Bytes       AT 0 RANGE 0 .. 127;
+      XMM_Words       AT 0 RANGE 0 .. 127;
+      XMM_Doublewords AT 0 RANGE 0 .. 127;
+      XMM_Quadwords   AT 0 RANGE 0 .. 127;
    END RECORD;
 
    TYPE XMM_registers IS ARRAY(number RANGE 0 .. 15) OF ALIASED XMM_register
@@ -106,6 +162,9 @@ IS
       Size           => 128 * 16,
       Object_Size    => 128 * 16,
       Component_Size => 8;
+
+   FUNCTION To_XMM_Registers IS NEW Ada.Unchecked_Conversion
+     (source => XMM_string, target => XMM_registers);
 
    TYPE arguments IS RECORD
       Operation_Call : operation := null_operation;                -- RDI.
@@ -154,21 +213,55 @@ IS
      (Port  : IN number;
       Value : IN number)
    WITH
+      Global        => (Output => CPU_Port_State),
       Import        => true,
       Convention    => C,
       External_Name => "output_byte",
       Pre           => Port <= 16#FFFF# AND THEN Value <= 16#FF#;
+
+   PROCEDURE Output_Word
+     (Port  : IN number;
+      Value : IN number)
+   WITH
+      Global        => (Output => CPU_Port_State),
+      Import        => true,
+      Convention    => C,
+      External_Name => "output_word",
+      Pre           => Port <= 16#FFFF# AND THEN Value <= 16#FFFF#;
 
    FUNCTION Input_Byte
      (Port  : IN number)
       RETURN number
    WITH
       Volatile_Function => true,
+      Global            => (Input => CPU_Port_State),
       Import            => true,
       Convention        => C,
       External_Name     => "input_byte",
       Pre               => Port              <= 16#FFFF#,
       Post              => Input_Byte'result <= 16#00FF#;
+
+   FUNCTION Input_Word
+     (Port  : IN number)
+      RETURN number
+   WITH
+      Volatile_Function => true,
+      Global            => (Input => CPU_Port_State),
+      Import            => true,
+      Convention        => C,
+      External_Name     => "input_word",
+      Pre               => Port              <= 16#FFFF#,
+      Post              => Input_Word'result <= 16#FFFF#;
+
+   FUNCTION Byte_Swap
+     (Value : IN number)
+      RETURN number
+   WITH
+      Global        => NULL,
+      Inline        => true,
+      Import        => true,
+      Convention    => Intrinsic,
+      External_Name => "__builtin_bswap64";
 
    IRQ_Base : CONSTANT := 32;
 

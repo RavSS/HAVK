@@ -29,8 +29,12 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-WITH System.Storage_Elements;
-WITH Ada.Unchecked_Conversion;
+WITH
+   System.Storage_Elements,
+   Ada.Unchecked_Conversion,
+   HAVK_Operating_System;
+USE
+   HAVK_Operating_System;
 
 PACKAGE BODY System.C.Malloc IS
    PACKAGE SSE RENAMES System.Storage_Elements;
@@ -39,12 +43,10 @@ PACKAGE BODY System.C.Malloc IS
    -- RavSS: I've changed the heap range variables from what were essentially
    -- void pointers into pointers to an address value, along with changing the
    -- symbols to reflect my code style.
-   Heap_Start : address;
-   PRAGMA Import(Assembler, Heap_Start, "global__kernel_heap_base");
+   Heap_Start : address := Null_Address;
    --  The address of the variable is the start of the heap
 
-   Heap_End : address;
-   PRAGMA Import(Assembler, Heap_End, "global__kernel_heap_end");
+   Heap_End : address := Null_Address;
    --  The address of the variable is the end of the heap
 
    -- RavSS: I've added an atomic lock to this package so it can be used for
@@ -100,6 +102,45 @@ PACKAGE BODY System.C.Malloc IS
    Cell_Size : CONSTANT SSE.Storage_Offset := cell_type'Size / Storage_Unit;
    Free_Cell_Size : CONSTANT SSE.Storage_Offset :=
       free_cell_type'Size / Storage_Unit;
+
+   --------------------------
+   -- RavSS: Alloc_Wrapper --
+   --------------------------
+   FUNCTION Alloc_Wrapper
+     (Size : IN size_t)
+      RETURN address
+   IS
+      Heap_Extension : arguments := (heap_increase_operation, OTHERS => 0);
+      Allocation     : address;
+   BEGIN
+      IF -- Initialise the heap.
+         Heap_Start = Null_Address
+      THEN
+         IF
+            System_Call(Heap_Extension) = no_error
+         THEN
+            Heap_Start := address(Heap_Extension.Argument_1 - 16#1000#);
+            Heap_End   := address(Heap_Extension.Argument_1);
+         ELSE
+            RETURN Null_Address;
+         END IF;
+      END IF;
+
+      LOOP -- Keep trying and extending until the latter also starts failing.
+         Allocation := Alloc(Size);
+         IF
+            Allocation /= Null_Address
+         THEN
+            RETURN Allocation;
+         ELSIF
+            System_Call(Heap_Extension) = no_error
+         THEN
+            Heap_End := address(Heap_Extension.Argument_1);
+         ELSE
+            RETURN Null_Address;
+         END IF;
+      END LOOP;
+   END Alloc_Wrapper;
 
    -------------------
    -- Add_Free_Cell --
@@ -369,20 +410,6 @@ PACKAGE BODY System.C.Malloc IS
    BEGIN
       RETURN To_Cell_Acc (Get_Cell_Data (Cell) + Storage_Offset (Cell.Size));
    END Get_Next_Cell;
-
-   -------------
-   -- Realloc --
-   -------------
-   FUNCTION Realloc
-      (Ptr  : address;
-       Size : size_t)
-       RETURN address
-   IS
-   BEGIN
-      --  Not yet implemented
-      RAISE Program_Error;
-      RETURN Null_Address;
-   END Realloc;
 
    ----------------------
    -- Remove_Free_Cell --

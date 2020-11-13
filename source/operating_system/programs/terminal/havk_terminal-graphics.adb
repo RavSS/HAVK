@@ -134,10 +134,8 @@ IS
          RETURN Index;
       END IF;
    END Calculate_Pixel;
-
-   -- Get the framebuffer information before the package finishes elaborating.
-   Display_Data : arguments := (framebuffer_access_operation, OTHERS => 0);
 BEGIN
+   -- Get the framebuffer information before the package finishes elaborating.
    System_Call(Display_Data);
 
    Framebuffer_Address  := address(Display_Data.Argument_1);

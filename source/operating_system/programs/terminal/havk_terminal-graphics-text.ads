@@ -20,9 +20,6 @@ IS
      (Width  : number; -- Amount of columns (characters on a row).
       Height : number) -- Amount of rows (characters in a column).
    IS RECORD
-      -- Holds the data for the textbox. First dimension is the line/row (Y).
-      Data              : textbox_data(0 .. Height, 0 .. Width) :=
-         (OTHERS => (OTHERS => ' '));
       -- The X index of the text cursor, which is the column (textbox width).
       Current_X_Index   : number := 0;
       -- The Y index of the text cursor, which is the row (textbox height).
@@ -41,6 +38,9 @@ IS
       Line_Separation   : number := 3;
       -- Where the textbox should be drawn on a framebuffer.
       Start_Position    : number := 0;
+      -- Holds the data for the textbox. First dimension is the line/row (Y).
+      Data              : textbox_data(0 .. Height, 0 .. Width) :=
+         (OTHERS => (OTHERS => ' '));
    END RECORD;
 
    -- Adds a string into a textbox.

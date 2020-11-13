@@ -1,17 +1,17 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-drive.adb                                  --
+-- Program         -- HAVK Operating System ATA PIO Driver                   --
+-- Filename        -- havk_ata_pio.adb                                       --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
-WITH
-   Ada.Unchecked_Conversion;
-
-PACKAGE BODY HAVK_Kernel.Drive
+PACKAGE BODY HAVK_ATA_PIO
 WITH
    Refined_State => (Drive_State => NULL)
 IS
+   PRAGMA Warnings(off, "types for unchecked conversion have different sizes",
+      Reason => "The I/O port wrappers can't return beyond their sizes.");
+
    PROCEDURE PIO_Input
      (Data          : OUT generic_format;
       Secondary_Bus : IN boolean := false)
@@ -42,9 +42,9 @@ IS
       IF
          NOT Word_Length
       THEN
-         Temporary := Intrinsics.Input_Byte(Port_Value);
+         Temporary := Input_Byte(Port_Value);
       ELSE
-         Temporary := Intrinsics.Input_Word(Port_Value);
+         Temporary := Input_Word(Port_Value);
       END IF;
 
       Data := Value_To_Format(Temporary);
@@ -83,9 +83,9 @@ IS
       IF
          NOT Word_Length
       THEN
-         Intrinsics.Output_Byte(Port_Value, Unmasked_Data_Value AND 16#00FF#);
+         Output_Byte(Port_Value, Unmasked_Data_Value AND 16#00FF#);
       ELSE
-         Intrinsics.Output_Word(Port_Value, Unmasked_Data_Value AND 16#FFFF#);
+         Output_Word(Port_Value, Unmasked_Data_Value AND 16#FFFF#);
       END IF;
    END PIO_Output;
 
@@ -349,4 +349,4 @@ IS
          ELSE cache_flush), Secondary_Bus);
    END PIO_Write;
 
-END HAVK_Kernel.Drive;
+END HAVK_ATA_PIO;

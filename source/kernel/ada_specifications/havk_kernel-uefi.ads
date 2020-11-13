@@ -129,6 +129,47 @@ IS
       Memory_Attribute_Bitmask    AT 32 RANGE 0 .. 63;
    END RECORD;
 
+   -- Indicates where the bootloader actually loaded the file to and its size.
+   TYPE configuration_data IS LIMITED RECORD
+      -- This is a physical address, as the bootloader identity-maps all
+      -- physical addresses to the same virtual address. It is also a canonical
+      -- address.
+      Boot_File_Address : address RANGE address'first .. 2**47 - 1;
+      Boot_File_Size    : number;
+   END RECORD;
+   FOR configuration_data USE RECORD
+      Boot_File_Address AT 0 RANGE 0 .. 63;
+      Boot_File_Size    AT 8 RANGE 0 .. 63;
+   END RECORD;
+
+   -- Represents one option and any data the bootloader passed over as well.
+   TYPE configuration_option IS LIMITED RECORD
+      Key_Start_Index   : number RANGE 0 .. 2**32 - 1;
+      Key_End_Index     : number RANGE 0 .. 2**32 - 1;
+      Value_Start_Index : number RANGE 0 .. 2**32 - 1;
+      Value_End_Index   : number RANGE 0 .. 2**32 - 1;
+      Data              : configuration_data;
+   END RECORD;
+   FOR configuration_option USE RECORD
+      Key_Start_Index   AT 00 RANGE 0 .. 031;
+      Key_End_Index     AT 04 RANGE 0 .. 031;
+      Value_Start_Index AT 08 RANGE 0 .. 031;
+      Value_End_Index   AT 12 RANGE 0 .. 031;
+      Data              AT 16 RANGE 0 .. 127;
+   END RECORD;
+
+   -- The array of configuration options the bootloader hands over.
+   TYPE configuration_options IS ARRAY(number RANGE <>) OF configuration_option
+   WITH
+      Pack       => true,
+      Convention => C;
+
+   -- Represents the configuration file in a simple flat character array.
+   TYPE configuration_string IS ARRAY(number RANGE <>) OF character
+   WITH
+      Component_Size => 8,
+      Convention     => C;
+
    -- The layout of the arguments structure that my bootloader passes to the
    -- kernel.
    -- TODO: Perhaps make a version number for the structure that gets passed
@@ -150,6 +191,9 @@ IS
       Memory_Map_Descriptor_Version : number  RANGE 0 .. 2**32 - 1;
       RSDP_Address                  : address RANGE 1 .. address'last;
       Physical_Base_Address         : address RANGE 1 .. address'last;
+      Configuration_Options_Address : address RANGE 1 .. address'last;
+      Configuration_String_Address  : address RANGE 1 .. address'last;
+      Configuration_Options_Count   : number  RANGE 1 .. 2**16 - 1;
    END RECORD
    WITH
       Dynamic_Predicate => -- A few limits to counter wrap-around situations.
@@ -178,6 +222,9 @@ IS
       Memory_Map_Descriptor_Version    AT 088 RANGE 0 .. 031;
       RSDP_Address                     AT 092 RANGE 0 .. 063;
       Physical_Base_Address            AT 100 RANGE 0 .. 063;
+      Configuration_Options_Address    AT 108 RANGE 0 .. 063;
+      Configuration_String_Address     AT 116 RANGE 0 .. 063;
+      Configuration_Options_Count      AT 124 RANGE 0 .. 015;
    END RECORD;
 
    -- I use a double pointer to the bootloader arguments structure.

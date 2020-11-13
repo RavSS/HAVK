@@ -45,8 +45,7 @@ IS
       local_x2APIC_NMI_entry,
       ARM_interrupt_controller_entry) -- Ignore all below this enumeration.
    WITH
-      Size        => 8,
-      Object_Size => number'size;
+      Size => 8;
    FOR interrupt_controller USE
      (local_APIC_entry                  => 00,
       IO_APIC_entry                     => 01,

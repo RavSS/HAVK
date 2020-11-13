@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-drive-gpt.ads                              --
+-- Program         -- HAVK Operating System ATA PIO Driver                   --
+-- Filename        -- havk_ata_pio-gpt.ads                                   --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -13,7 +13,7 @@ WITH
 -- READ: UEFI Specification, Version 2.8 - Page 116.
 -- READ: https://en.wikipedia.org/wiki/GUID_Partition_Table
 -- READ: https://wiki.osdev.org/GPT
-PACKAGE HAVK_Kernel.Drive.GPT
+PACKAGE HAVK_ATA_PIO.GPT
 IS
    -- The amount of partitions GPT supports (as of now) is 128.
    SUBTYPE partition_index IS number RANGE 0 .. 127;
@@ -95,7 +95,7 @@ IS
       Secondary_Bus   : IN boolean := false;
       Secondary_Drive : IN boolean := false)
    WITH
-      Global => (In_Out => (Intrinsics.CPU_Port_State, Drive_State,
+      Global => (In_Out => (CPU_Port_State, Drive_State,
                             SPARK.Heap.Dynamic_Memory));
 
    -- Returns information for a particular requested partition via name.
@@ -106,7 +106,7 @@ IS
       Secondary_Bus   : IN boolean := false;
       Secondary_Drive : IN boolean := false)
    WITH
-      Global => (In_Out => (Intrinsics.CPU_Port_State, Drive_State,
+      Global => (In_Out => (CPU_Port_State, Drive_State,
                             SPARK.Heap.Dynamic_Memory)),
       Pre    => Name'first = partition_name_string'first AND THEN
                 Name'last <= partition_name_string'last;
@@ -259,4 +259,4 @@ PRIVATE
    WITH
       Inline => true;
 
-END HAVK_Kernel.Drive.GPT;
+END HAVK_ATA_PIO.GPT;

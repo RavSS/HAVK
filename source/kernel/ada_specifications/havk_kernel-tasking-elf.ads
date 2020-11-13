@@ -5,39 +5,24 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
-WITH
-   Ada.Unchecked_Deallocation,
-   HAVK_Kernel.Drive,
-   HAVK_Kernel.Drive.FAT;
-USE TYPE
-   HAVK_Kernel.Drive.FAT.version;
-
 -- This package contains logic for loading programs in the Executable and
--- Linkable Format (ELF). It only supports ELF64, as HAVK is solely a x86-64
+-- Linkable Format (ELF). It only supports ELF64, as HAVK is solely an x86-64
 -- kernel.
 -- READ: https://en.wikipedia.org/wiki/Executable_and_Linkable_Format
--- TODO: Currently, this relies entirely on the FAT driver, specifically FAT16
--- support. A virtual filesystem is needed.
 PACKAGE HAVK_Kernel.Tasking.ELF
 IS
-   -- This procedure loads an ELF file from a FAT16 partition and makes it into
-   -- a task.
+   -- This procedure loads all sections of an ELF file that is placed into
+   -- memory.
    -- TODO: The validation logic for this as of now is extremely naive and
    -- should not be considered anywhere close to being secure when it comes to
    -- parsing user data. Checking header and entry sanity beyond the basics is
-   -- required. This is also not efficient, as my FAT driver doesn't have a
-   -- C-like "FILE" structure which saves from having to do unnecessary
-   -- filesystem scanning, along with the fact that multiple iterations are
-   -- done over the program headers for the sake of memory space etc.
+   -- required. I would say that this is the most vulnerable part of the
+   -- kernel that user tasks/programs interact with.
    PROCEDURE Load
-     (FAT_Context  : IN Drive.FAT.file_system;
-      File_Path    : IN string;
+     (File_Address : IN Memory.canonical_address;
+      File_Size    : IN number;
       Task_Name    : IN string;
-      Error_Status : OUT error)
-   WITH
-      Pre => Drive.FAT.Get_FAT_Version(FAT_Context) = Drive.FAT.FAT16 AND THEN
-             File_Path'first = 1                                      AND THEN
-             File_Path'last IN File_Path'first .. 255;
+      Error_Status : OUT error);
 
 PRIVATE
    ELF_Tag : CONSTANT string := "ELF";
@@ -61,7 +46,7 @@ PRIVATE
 
    -- This identifies the first several bytes of an ELF file. It belongs to the
    -- ELF header structure.
-   TYPE identity IS RECORD
+   TYPE identity IS LIMITED RECORD
       -- The first byte of the file is 0x7F if it's valid.
       Magic_Byte       : number RANGE 0 .. 2**08 - 1 := 0;
       -- For a valid ELF file, this should always be "ELF".
@@ -117,7 +102,7 @@ PRIVATE
       low_processor_specific_object_file         => 16#FF00#,
       high_processor_specific_object_file        => 16#FFFF#);
 
-   TYPE file_header IS RECORD
+   TYPE file_header IS LIMITED RECORD
       -- Contains information that can identify the ELF file's purpose etc.
       File_Identity              : identity;
       -- For our purposes, this will always be set to two (also known as
@@ -240,7 +225,7 @@ PRIVATE
    -- This structure format makes up the entries in the program header table,
    -- which can be found at the start of the file plus the program header
    -- offset specified in the file header.
-   TYPE program_header_entry IS RECORD
+   TYPE program_header_entry IS LIMITED RECORD
       -- This indicates what the entry is for. For executable loading purposes,
       -- ignore everything that isn't a loadable segment.
       Segment_Type     : segment := null_segment;
@@ -257,7 +242,7 @@ PRIVATE
       -- The size of the segment in the file itself. This is used for
       -- retrieving the segment from the file itself.
       File_Size        : number := 0;
-      -- THe size of the segment when put into memory. Use this for mapping and
+      -- The size of the segment when put into memory. Use this for mapping and
       -- loading the segment into memory.
       Memory_Size      : number := 0;
       -- This is the boundary that the segment must be placed on. Values zero
@@ -356,7 +341,7 @@ PRIVATE
       processor_specific_section_flag        => 16#F0000000#);
 
    -- This makes up the section header table. Each entry describes a section.
-   TYPE section_header_entry IS RECORD
+   TYPE section_header_entry IS LIMITED RECORD
       -- This index gives the string name of the section when used with the
       -- special string section. The index of that section can be found in the
       -- file header.
@@ -399,46 +384,20 @@ PRIVATE
       Section_Entry_Size      AT 56 RANGE 0 .. 63;
    END RECORD;
 
-   -- Just to save some stack space and make loading the ELF data easier.
-   TYPE access_file_header IS ACCESS file_header;
-   TYPE access_program_header_entry IS ACCESS program_header_entry;
-   TYPE access_section_header_entry IS ACCESS section_header_entry;
-
-   -- A maximum of 128 segments is defined. You can increase this, but there
-   -- should be no real reason for something to have more segments than that.
-   TYPE program_header_entries IS ARRAY(number RANGE 1 .. 128) OF
-      access_program_header_entry;
-
-   PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
-     (object => file_header, name => access_file_header);
-   PROCEDURE Free IS NEW Ada.Unchecked_Deallocation
-     (object => program_header_entry, name => access_program_header_entry);
-
-   FUNCTION To_Address
-     (Header : NOT NULL ACCESS CONSTANT file_header)
-      RETURN address
-   WITH
-      Import     => true,
-      Convention => Intrinsic,
-      Post       => To_Address'result /= 0;
-
-   FUNCTION To_Address
-     (Header : NOT NULL ACCESS CONSTANT program_header_entry)
-      RETURN address
-   WITH
-      Import     => true,
-      Convention => Intrinsic,
-      Post       => To_Address'result /= 0;
-
    -- This checks whether or not the passed ELF file header is sane or not.
    FUNCTION Valid_File_Header
-     (Header   : NOT NULL ACCESS CONSTANT file_header;
-      ELF_File : IN Drive.FAT.file)
+     (Header    : IN file_header;
+      File_Size : IN number)
       RETURN boolean;
 
    -- Similar to `Valid_File_Header()`, but for ELF program headers instead.
    FUNCTION Valid_Program_Header_Entry
-     (Header   : NOT NULL ACCESS CONSTANT program_header_entry)
-      RETURN boolean;
+     (Header       : IN program_header_entry;
+      File_Address : IN Memory.canonical_address;
+      File_Size    : IN number)
+      RETURN boolean
+   WITH
+      Pre => address(File_Address) + address(File_Size) NOT IN
+                Memory.invalid_address'range;
 
 END HAVK_Kernel.Tasking.ELF;

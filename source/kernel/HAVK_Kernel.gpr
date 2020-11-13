@@ -7,23 +7,23 @@
 
 PROJECT HAVK_Kernel
 IS
-   FOR Default_Language    USE "Ada";
-   FOR Languages           USE("Ada", "ASM", "C");
-   FOR Source_Dirs         USE
+   FOR default_language    USE "Ada";
+   FOR languages           USE("Ada", "ASM", "C");
+   FOR source_dirs         USE
      ("./ada/",
       "./ada_specifications/",
       "./assembly/",
       "./c",
       "./spark_runtime/");
-   FOR Object_Dir          USE "./../../build/kernel/";
-   FOR Exec_Dir            USE HAVK_Kernel'Object_Dir;
-   FOR Create_Missing_Dirs USE "true";
-   FOR Main                USE("havk.adb");
+   FOR object_dir          USE "./../../build/kernel/";
+   FOR exec_dir            USE HAVK_Kernel'object_dir;
+   FOR create_missing_dirs USE "true";
+   FOR main                USE("havk.adb");
    -- Object directory must contain "adainclude" (RTS files) and "adalib".
-   FOR Runtime("Ada")      USE HAVK_Kernel'Object_Dir;
+   FOR runtime("Ada")      USE HAVK_Kernel'object_dir;
 
-   TYPE Kernel_Type IS("Final", "Debug");
-   Build : Kernel_Type := EXTERNAL("Build", "Final");
+   TYPE kernel_type IS("Final", "Debug");
+   Build : kernel_type := EXTERNAL("Build", "Final");
 
    -- NOTE: Do not include extra spaces in the switches or else `gprbuild`
    -- will fail to parse them properly.
@@ -36,13 +36,13 @@ IS
          "--lines-all", "--lines-spark",
          "--syntax-all");
 
-      FOR Default_Switches("Ada") USE
+      FOR default_switches("Ada") USE
          Metrics_Switches;
    END Metrics;
 
    PACKAGE Prove
    IS -- `gnatprove`
-      Ada_Proof_Switches :=
+      SPARK_Proof_Switches :=
         (-- Use all CPU cores to speed up the provers.
          "-j0",
          -- Output assumption info in the build directory.
@@ -62,13 +62,70 @@ IS
          -- All range check failures and warnings are treated as errors.
          "--checks-as-errors", "--warnings=error");
 
-      FOR Proof_Dir             USE HAVK_Kernel'Object_Dir;
-      FOR Proof_Switches("Ada") USE
-         Ada_Proof_Switches;
+      FOR proof_dir             USE HAVK_Kernel'object_dir;
+      FOR proof_switches("Ada") USE
+         SPARK_Proof_Switches;
    END Prove;
 
    PACKAGE Builder
    IS -- `gnatmake`
+      FOR switches(OTHERS) USE
+        (-- No standard library since HAVK is a freestanding program
+         -- without "-ffreestanding".
+         "-nostdlib",
+         -- No standard include paths.
+         "-nostdinc");
+
+      -- Add my GNAT configuration file and apply it everywhere.
+      FOR global_configuration_pragmas USE
+         "./ada_specifications/havk_kernel.adc";
+
+      -- Just a default output. The Makefile should control it, so this
+      -- is only a fallback.
+      FOR executable("havk.adb") USE "No_Makefile_HAVK";
+      FOR executable_suffix      USE ".elf";
+   END Builder;
+
+   PACKAGE Compiler
+   IS -- `gcc`
+      GCC_Basic_Switches :=
+        (-- Stack protector fully enabled, because why not. Doesn't seem to
+         -- actually do anything that Ada's checks don't do already. Make sure
+         -- that all code can reach `__stack_chk_fail()` no matter where they
+         -- are. If they can't, then redefine it statically/locally.
+         "-fstack-protector-all",
+         -- Create a "su" file with information about stack usage (SU).
+         -- Useful for checking if a function exceeds the stack space
+         -- I've allocated in the entry assembly file.
+         "-fstack-usage",
+         -- Issue any warnings for potential stack overflows. This should be
+         -- kept consistent with the stack size set in the "entry.s" file.
+         -- TODO: Revisit this when we have time to provide static bounds on
+         -- every single primary stack object.
+         ---- "-Wstack-usage=32768",
+         -- TODO: The x86-64 red zone is a problem when handling interrupts as
+         -- the stack is shared with the ISR and whatever was executing before
+         -- in ring 0, but we can remove this once we have set up the IST and
+         -- don't have ISRs using the interrupted stack for full ABI support.
+         "-mno-red-zone",
+         -- HAVK is a higher-half kernel that virtually lives in the -2 GiB
+         -- address space. The "kernel" model does not allow PIC generation.
+         -- It should result in better assembly than with the "large" model.
+         "-fno-PIC", "-mcmodel=kernel",
+         -- No MMX instructions.
+         "-mno-mmx",
+         -- No SSE and SSE2 instructions. Please note that SSE and SSE2 are
+         -- supported by any CPU that supports long mode, but I've just
+         -- disabled them for now.
+         "-mno-sse", "-mno-sse2",
+         -- Intel syntax for inline x86-64 assembly, since I like it more and
+         -- it's less messy. Note that inline assembly won't be used anyway.
+         "-masm=intel",
+         -- Explicitly mention x86-64, just to be sure.
+         "-march=x86-64",
+         -- Optimize code for no particular CPU family.
+         "-mtune=generic");
+
       Ada_Basic_Switches :=
         (-- May as well use the latest version of Ada, there is no harm in it.
          "-gnat2012",
@@ -94,12 +151,7 @@ IS
          -- If a specified size is overridden, then mention it.
          "-gnatw.s",
          -- Disable exception propagation warnings.
-         "-gnatw.X",
-         -- No standard library since HAVK is a freestanding program
-         -- without "-ffreestanding".
-         "-nostdlib",
-         -- -- No standard include paths.
-         "-nostdinc");
+         "-gnatw.X");
 
       Ada_Style_Switches :=
         (-- Indentation of 3 spaces. I would have really liked to stick to
@@ -162,71 +214,6 @@ IS
          -- Creates "rep" files showing the bit representation of types etc.
          "-gnatR2s");
 
-      CASE
-         Build
-      IS
-         WHEN "Final" =>
-            FOR Default_Switches("Ada") USE
-               Ada_Basic_Switches &
-               Ada_Style_Switches &
-               Ada_Final_Switches;
-         WHEN "Debug" =>
-            FOR Default_Switches("Ada") USE
-               Ada_Basic_Switches &
-               Ada_Style_Switches &
-               Ada_Debug_Switches;
-      END CASE;
-
-      -- Add my Ada configuration file and apply it everywhere.
-      FOR Global_Configuration_Pragmas  USE
-         "./ada_specifications/havk_kernel.adc";
-
-      -- Just a default output. The Makefile should control it, so this
-      -- is only a fallback.
-      FOR Executable("havk.adb") USE "No_Makefile_HAVK";
-      FOR Executable_Suffix      USE ".elf";
-   END Builder;
-
-   PACKAGE Compiler
-   IS -- `gcc`
-      GCC_Basic_Switches :=
-        (-- Stack protector fully enabled, because why not. Doesn't seem to
-         -- actually do anything that Ada's checks don't do already. Make sure
-         -- that all code can reach `__stack_chk_fail()` no matter where they
-         -- are. If they can't, then redefine it statically/locally.
-         "-fstack-protector-all",
-         -- Create a "su" file with information about stack usage (SU).
-         -- Useful for checking if a function exceeds the stack space
-         -- I've allocated in the entry assembly file.
-         "-fstack-usage",
-         -- Issue any warnings for potential stack overflows. This should be
-         -- kept consistent with the stack size set in the "entry.s" file.
-         -- TODO: Revisit this when we have time to provide static bounds on
-         -- every single primary stack object.
-         ---- "-Wstack-usage=32768",
-         -- TODO: The x86-64 red zone is a problem when handling interrupts as
-         -- the stack is shared with the ISR and whatever was executing before
-         -- in ring 0, but we can remove this once we have set up the IST and
-         -- don't have ISRs using the interrupted stack for full ABI support.
-         "-mno-red-zone",
-         -- HAVK is a higher-half kernel that virtually lives in the -2 GiB
-         -- address space. The "kernel" model does not allow PIC generation.
-         -- It should result in better assembly than with the "large" model.
-         "-fno-PIC", "-mcmodel=kernel",
-         -- No MMX instructions.
-         "-mno-mmx",
-         -- No SSE and SSE2 instructions. Please note that SSE and SSE2 are
-         -- supported by any CPU that supports long mode, but I've just
-         -- disabled them for now.
-         "-mno-sse", "-mno-sse2",
-         -- Intel syntax for inline x86-64 assembly, since I like it more and
-         -- it's less messy. Note that inline assembly won't be used anyway.
-         "-masm=intel",
-         -- Explicitly mention x86-64, just to be sure.
-         "-march=x86-64",
-         -- Optimize code for no particular CPU family.
-         "-mtune=generic");
-
       C_Basic_Switches :=
         (-- We're dealing with a freestanding environment for the initial user
          -- mode applications that will be including in the kernel binary.
@@ -270,20 +257,26 @@ IS
          Build
       IS
          WHEN "Final" =>
-            FOR Default_Switches("Ada") USE
-               GCC_Basic_Switches;
-            FOR Default_Switches("ASM") USE
+            FOR default_switches("Ada") USE
+               GCC_Basic_Switches &
+               Ada_Basic_Switches &
+               Ada_Style_Switches &
+               Ada_Final_Switches;
+            FOR default_switches("ASM") USE
                GAS_Basic_Switches;
-            FOR Default_Switches("C") USE
+            FOR default_switches("C") USE
                GCC_Basic_Switches &
                C_Basic_Switches;
          WHEN "Debug" =>
-            FOR Default_Switches("Ada") USE
-               GCC_Basic_Switches;
-            FOR Default_Switches("ASM") USE
+            FOR default_switches("Ada") USE
+               GCC_Basic_Switches &
+               Ada_Basic_Switches &
+               Ada_Style_Switches &
+               Ada_Debug_Switches;
+            FOR default_switches("ASM") USE
                GAS_Basic_Switches &
                GAS_Debug_Switches;
-            FOR Default_Switches("C") USE
+            FOR default_switches("C") USE
                GCC_Basic_Switches &
                C_Basic_Switches &
                C_Debug_Switches;
@@ -292,7 +285,7 @@ IS
 
    PACKAGE Binder
    IS -- `gnatbind`
-      FOR Default_Switches("Ada") USE
+      FOR default_switches("Ada") USE
         (-- Static GNAT runtime.
          "-static",
          -- Check if the source files actually exist and are findable;
@@ -304,7 +297,7 @@ IS
    END Binder;
 
    PACKAGE Linker
-   IS -- `gnatlink`
+   IS -- `gnatlink` or `ld`
       Linker_Basic_Switches :=
         (-- Static GNAT runtime.
          "-static",
@@ -338,27 +331,29 @@ IS
          -- is likely ignored for direct `ld` usage.
          "-g");
 
+      -- These are split up just in case a language might need a special flag
+      -- or argument in the future etc.
       CASE
          Build
       IS
          WHEN "Final" =>
-            FOR Default_Switches("Ada") USE
+            FOR default_switches("Ada") USE
                Linker_Basic_Switches &
                Linker_Final_Switches;
-            FOR Default_Switches("ASM") USE
+            FOR default_switches("ASM") USE
                Linker_Basic_Switches &
                Linker_Final_Switches;
-            FOR Default_Switches("C") USE
+            FOR default_switches("C") USE
                Linker_Basic_Switches &
                Linker_Final_Switches;
          WHEN "Debug" =>
-            FOR Default_Switches("Ada") USE
+            FOR default_switches("Ada") USE
                Linker_Basic_Switches &
                Linker_Debug_Switches;
-            FOR Default_Switches("ASM") USE
+            FOR default_switches("ASM") USE
                Linker_Basic_Switches &
                Linker_Final_Switches;
-            FOR Default_Switches("C") USE
+            FOR default_switches("C") USE
                Linker_Basic_Switches &
                Linker_Final_Switches;
       END CASE;

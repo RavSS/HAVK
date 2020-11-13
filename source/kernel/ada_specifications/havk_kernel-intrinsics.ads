@@ -188,15 +188,26 @@ IS
 
    -- Describes one of the XMM registers that come with SSE support. x86-64 at
    -- a minimum supports SSE and SSE2.
-   TYPE XMM_register IS RECORD
-      High : number := 0;
-      Low  : number := 0;
+   TYPE XMM_register
+     (Data_Length : addressable_length := quadword_length)
+   IS RECORD
+      CASE
+         Data_Length
+      IS
+         WHEN byte_length       => XMM_Bytes       :       bytes(1 .. 16);
+         WHEN word_length       => XMM_Words       :       words(1 .. 08);
+         WHEN doubleword_length => XMM_Doublewords : doublewords(1 .. 04);
+         WHEN quadword_length   => XMM_Quadwords   :   quadwords(1 .. 02);
+      END CASE;
    END RECORD
    WITH
-      Object_Size => 128;
+      Unchecked_Union => true,
+      Object_Size     => 128;
    FOR XMM_register USE RECORD
-      High AT 0 RANGE 0 .. 63;
-      Low  AT 8 RANGE 0 .. 63;
+      XMM_Bytes       AT 0 RANGE 0 .. 127;
+      XMM_Words       AT 0 RANGE 0 .. 127;
+      XMM_Doublewords AT 0 RANGE 0 .. 127;
+      XMM_Quadwords   AT 0 RANGE 0 .. 127;
    END RECORD;
 
    -- This array type can hold the total data stored in the XMM registers.

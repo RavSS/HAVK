@@ -213,17 +213,18 @@ PRIVATE
    -- Details a task's various states and settings. The index of the task
    -- itself is considered to be the task identity.
    TYPE task_control_block IS LIMITED RECORD
-      -- The name of the task. Only the task has a name, not the threads.
+      -- The name of the task.
       Name                  : task_name_string := (OTHERS => NUL);
       -- Indicates the frame count of the task's initial code/data which is
       -- given to it in `Create()`.
       Initial_Frames        : Memory.Frames.frame_limit := 0;
       -- This is the base address of the physical frames given to the task upon
-      -- create. The size onwards is given by the "Code_Size" field above.
+      -- create. The size onwards is given by the "Initial_Frames" field above.
+      -- The heap size is controlled by a child package and is not counted
+      -- towards this value.
       Physical_Base         : Memory.page_address := 0;
       -- The paging layout for the task and how it sees virtual memory. I've
-      -- only given a task a single page layout for now, each thread shares
-      -- both virtual and physical memory with each other.
+      -- only given a task a single page layout for now.
       Virtual_Space         : Paging.page_layout;
       -- The registers the context switcher will load and `REX.W IRET` to with.
       State                 : ALIASED callee_saved_registers;

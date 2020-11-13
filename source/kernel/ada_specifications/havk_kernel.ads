@@ -34,34 +34,69 @@ IS
    -- This type's limit and size is irrelevant, as it's just a placeholder.
    TYPE void IS MOD 1;
 
-   -- Types used to express memory/data without any specific purpose. It's best
-   -- to derive from these types and then provide more information about why
-   -- they're going to be used; thus, just pretend they are anonymous arrays,
-   -- but with each element having a guaranteed/known size.
-   TYPE bits        IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**01 - 1
+   -- The addressable bit lengths of memory for x86-64 (only including the
+   -- general integer registers).
+   TYPE addressable_length IS
+     (byte_length,
+      word_length,
+      doubleword_length,
+      quadword_length);
+   FOR addressable_length USE
+     (byte_length       => 08,
+      word_length       => 16,
+      doubleword_length => 32,
+      quadword_length   => 64);
+
+   -- Unsigned types used to express memory/data without any specific purpose.
+   TYPE bit        IS MOD 2**1
    WITH
-      Component_Size          => 01,
-      Default_Component_Value => 00;
-   TYPE bytes       IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**08 - 1
+      Size        => 1,
+      Object_Size => byte_length'enum_rep;
+   TYPE byte       IS MOD 2**byte_length'enum_rep
    WITH
-      Component_Size          => 08,
-      Default_Component_Value => 00;
-   TYPE words       IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**16 - 1
+      Size        => byte_length'enum_rep,
+      Object_Size => byte_length'enum_rep;
+   TYPE word       IS MOD 2**word_length'enum_rep
    WITH
-      Component_Size          => 16,
-      Default_Component_Value => 00;
-   TYPE doublewords IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**32 - 1
+      Size        => word_length'enum_rep,
+      Object_Size => word_length'enum_rep;
+   TYPE doubleword IS MOD 2**doubleword_length'enum_rep
    WITH
-      Component_Size          => 32,
-      Default_Component_Value => 00;
-   TYPE quadwords   IS ARRAY(number RANGE <>) OF number RANGE 0 .. 2**64 - 1
+      Size        => doubleword_length'enum_rep,
+      Object_Size => doubleword_length'enum_rep;
+   TYPE quadword   IS MOD 2**quadword_length'enum_rep
    WITH
-      Component_Size          => 64,
-      Default_Component_Value => 00;
+      Size        => quadword_length'enum_rep,
+      Object_Size => quadword_length'enum_rep;
+
+   -- The arrays of the above types. It's best to derive from these types and
+   -- then provide more information about why they're going to be used; thus,
+   -- just pretend they are anonymous arrays, but with each element having a
+   -- guaranteed/known size.
+   TYPE bits        IS ARRAY(number RANGE <>) OF bit
+   WITH
+      Component_Size          => 1,
+      Default_Component_Value => bit'first;
+   TYPE bytes       IS ARRAY(number RANGE <>) OF ALIASED byte
+   WITH
+      Component_Size          => byte_length'enum_rep,
+      Default_Component_Value => byte'first;
+   TYPE words       IS ARRAY(number RANGE <>) OF ALIASED word
+   WITH
+      Component_Size          => word_length'enum_rep,
+      Default_Component_Value => word'first;
+   TYPE doublewords IS ARRAY(number RANGE <>) OF ALIASED doubleword
+   WITH
+      Component_Size          => doubleword_length'enum_rep,
+      Default_Component_Value => doubleword'first;
+   TYPE quadwords   IS ARRAY(number RANGE <>) OF ALIASED quadword
+   WITH
+      Component_Size          => quadword_length'enum_rep,
+      Default_Component_Value => quadword'first;
    TYPE addresses   IS ARRAY(number RANGE <>) OF ALIASED address
    WITH
-      Component_Size          => 64,
-      Default_Component_Value => 00;
+      Component_Size          => address'size,
+      Default_Component_Value => address'first;
 
    -- A broad exception identity to be used for simple kernel panics anywhere.
    -- There's little point in declaring numerous exception identities, as we're

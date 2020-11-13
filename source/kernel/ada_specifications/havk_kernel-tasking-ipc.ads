@@ -22,7 +22,7 @@ WITH
    Abstract_State => IPC_State
 IS
    TYPE message_data IS RECORD
-      XMM : Intrinsics.XMM_registers := (OTHERS => (OTHERS => 0));
+      XMM : Intrinsics.XMM_registers;
    END RECORD;
    FOR message_data USE RECORD
       XMM AT 0 RANGE 0 .. (128 * Intrinsics.XMM_registers'length) - 1;

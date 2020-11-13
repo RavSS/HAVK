@@ -16,11 +16,9 @@
 #ifndef KEY_VALUE_PAIR_H
 #define KEY_VALUE_PAIR_H
 
-#ifdef KVP_NO_STDDEF
-	typedef unsigned long kvp_uint;
-#else
-	#include <stddef.h> /* Only "size_t" is used. Conforms to ANSI C. */
-	typedef size_t kvp_uint;
+/* Should be an unsigned type that can hold index values. */
+#ifndef KVP_INDEX_TYPE
+	#define KVP_INDEX_TYPE unsigned long;
 #endif
 
 #ifndef KVP_ENTRY_ATTRIBUTES
@@ -44,6 +42,7 @@
 	#define KVP_LINE_COMMENT '#'
 #endif
 
+typedef KVP_INDEX_TYPE kvp_uint;
 typedef struct kvp_entry
 {
 	kvp_uint key_start, key_end;

@@ -31,4 +31,10 @@ int rand(void);
 /  Seeds the generator (xorwow). */
 void srand(unsigned int seed);
 
+/* Standard libc `malloc()` (C89). */
+void *malloc(size_t bytes);
+
+/* Standard libc `free()` (C89). */
+void free(void *allocation);
+
 #endif

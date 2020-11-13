@@ -7,7 +7,6 @@
 
 OUTPUT_FORMAT(elf64-x86-64)
 ENTRY(_start)
-STARTUP(start.o)
 
 SECTIONS
 {
@@ -17,6 +16,7 @@ SECTIONS
 
 	.text ALIGN(4K) : AT(ADDR(.text))
 	{
+		*(.text._start)
 		*(.text)
 	}
 

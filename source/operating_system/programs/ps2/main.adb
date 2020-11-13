@@ -13,8 +13,7 @@ WITH
 USE
    HAVK_Operating_System,
    HAVK_PS2,
-   HAVK_PS2.Keyboard,
-   HAVK_PS2.User_Input;
+   HAVK_PS2.Keyboard;
 
 PROCEDURE Main
 WITH
@@ -44,7 +43,7 @@ IS
 
    -- Check the port in the terminal's "main.adb".
    Text_Data         : arguments :=
-     (send_message_operation, argument_3 => 404, OTHERS => 0);
+     (send_message_operation, Argument_3 => 404, OTHERS => 0);
    Text_Data_String  : XMM_string := (OTHERS => NUL);
 BEGIN
    Log("Attempting to initialise PS/2 controller.", Tag => Main_Tag);

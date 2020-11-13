@@ -1,12 +1,12 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-drive-fat.ads                              --
+-- Program         -- HAVK Operating System ATA PIO Driver                   --
+-- Filename        -- havk_ata_pio-fat.ads                                   --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Drive.GPT;
+   HAVK_ATA_PIO.GPT;
 
 -- A package that details the FAT file system (mostly FAT16 for early boot
 -- purposes). For now, it merely attempts to read the file system, but it
@@ -14,16 +14,13 @@ WITH
 -- READ: https://en.wikipedia.org/wiki/Design_of_the_FAT_file_system
 -- READ: https://wiki.osdev.org/FAT
 -- TODO: Has no write support as of now.
--- TODO: Like with the parent package, this is only to be here temporarily, as
--- it is a driver running in ring 0. Chances of it failing are minimal and
--- mostly depend on hardware, but it will soon have user space interaction.
 -- TODO: Adding FAT32 support doesn't seem like too much work once FAT16
 -- support has been added in, so it may be okay to implement support for it.
 -- TODO: Lacks a lot of error checking and the contracts provided for
 -- verification aren't fully adequate, although runtime errors in the Ada code
 -- itself are unlikely to happen.
 -- TODO: Make a virtual file system to abstract from FAT's specific details.
-PACKAGE HAVK_Kernel.Drive.FAT
+PACKAGE HAVK_ATA_PIO.FAT
 IS
    -- A context/state type. What's inside should be hidden from the rest of the
    -- operating system to avoid modifications by mistake, as it's not relevant
@@ -579,4 +576,4 @@ PRIVATE
                 File_Entry.Cluster_Low) < invalid_cluster_16'first,
       Post => Error_Status IN no_error; -- TODO: Add more error checking.
 
-END HAVK_Kernel.Drive.FAT;
+END HAVK_ATA_PIO.FAT;

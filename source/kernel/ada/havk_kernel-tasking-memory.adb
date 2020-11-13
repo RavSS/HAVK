@@ -51,10 +51,10 @@ IS
 
       Paging.Map_Address -- Make the old heap end now writable.
         (Tasks(Task_Index).Virtual_Space,
-         New_Frame,
-         Tasks(Task_Index).Heap_End,
-         Write_Access => true,
-         User_Access  => true);
+         Virtual_Address  => Tasks(Task_Index).Heap_End,
+         Physical_Address => New_Frame,
+         Write_Access     => true,
+         User_Access      => true);
 
       Tasks(Task_Index).Heap_End := -- Now extend the heap end address.
          Tasks(Task_Index).Heap_End + address(Paging.Page);

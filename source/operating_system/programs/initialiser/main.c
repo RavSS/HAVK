@@ -30,14 +30,7 @@
 // The name can be up to 64 bytes and the path can be up to 192 bytes.
 static syserr_ht load_file(const char *name, const char *path)
 {
-	sysargs_ht arguments;
-	uint8_t buffer[256];
-
-	memset(buffer, 0, ARRAY_LENGTH(buffer));
-	arguments.operation = LOAD_ELF_OPERATION;
-	memcpy(buffer, path, strlen(path));
-	memcpy(&buffer[192], name, strlen(name));
-	return syscall_data(&arguments, buffer);
+	return ATTEMPT_ERROR; // TODO: Not yet implemented.
 }
 
 #define LOADER(x, y) \
@@ -55,15 +48,15 @@ uint64_t main(void)
 	const char *start_log = "Starting initialisation from user space.";
 	log_string(start_log);
 
-	// Enabled tasks.
+	log_string("TODO: The initialiser can't get files off the drive yet.");
+
+	/* Disabled tasks.
 	LOADER(IPC_TESTER_NAME, IPC_TESTER_PATH);
 	LOADER(THREAD_TESTER_NAME, THREAD_TESTER_PATH);
 	LOADER(TERMINAL_NAME, TERMINAL_PATH);
 	LOADER(PS2_NAME, PS2_PATH);
-
-	/* Disabled tasks.
 	LOADER(FRAMEBUFFER_TESTER_NAME, FRAMEBUFFER_TESTER_PATH);
 	*/
 
-	return 0;
+	return EXIT_SUCCESS;
 }

@@ -6,6 +6,8 @@
 -------------------------------------------------------------------------------
 
 PACKAGE BODY HAVK_Operating_System
+WITH
+   Refined_State => (CPU_Port_State => NULL)
 IS
    PROCEDURE Last_Chance_Handler
      (String_Address : IN address;
@@ -61,6 +63,9 @@ IS
       END LOOP;
    END Last_Chance_Handler;
 
+   PRAGMA Warnings(off,
+      "formal parameter ""*"" is not referenced",
+      Reason => "The kernel system call doesn't handle these yet.");
    PROCEDURE Log
      (Information : IN string;
       Tag         : IN string  := "N/A";

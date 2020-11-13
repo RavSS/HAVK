@@ -15,7 +15,6 @@ WITH
    HAVK_Kernel.Tasking.ELF,
    HAVK_Kernel.Paging,
    HAVK_Kernel.Debug,
-   HAVK_Kernel.Drive.GPT,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.PIT;
 
@@ -257,52 +256,104 @@ IS
          " MHz.", Tag => Initialise_Tag);
    END CPU_Feature_Check;
 
-   PROCEDURE Boot_Partition_Check
-     (EFI_File_System : OUT Drive.FAT.file_system)
+   PROCEDURE Boot_Configuration_Check
+   WITH
+      Refined_Post => Initialiser_Address /= 0 AND THEN
+                      ATA_PIO_Driver_Address /= 0
    IS
-      EFI_Boot_Partition : Drive.GPT.partition;
+      USE TYPE
+         UEFI.configuration_string;
+
+      FUNCTION Length
+        (Pointer : IN address;
+         Limit   : IN natural)
+         RETURN natural
+      WITH
+         Global        => NULL,
+         Import        => true,
+         Inline        => true,
+         Convention    => Assembler,
+         External_Name => "assembly__string_length",
+         Pre           => Pointer /= 0,
+         Post          => Length'result <= Limit;
+
+      Configuration_String_Length : CONSTANT natural :=
+         Length(UEFI.Bootloader_Arguments.Configuration_String_Address,
+            natural'last);
+
+      Configuration         : CONSTANT UEFI.configuration_string
+        (0 .. number(Configuration_String_Length))
+      WITH
+         Import     => true,
+         Convention => C,
+         Address    => UEFI.Bootloader_Arguments.Configuration_String_Address,
+         Annotate   => (GNATprove, False_Positive,
+                        "object with constraints on bit representation *",
+                        "It is just a big char array.");
+
+      Configuration_Options : CONSTANT UEFI.configuration_options
+        (1 .. UEFI.Bootloader_Arguments.Configuration_Options_Count)
+      WITH
+         Import     => true,
+         Convention => C,
+         Address    => UEFI.Bootloader_Arguments.Configuration_Options_Address;
+
+      Initialiser_Key    : CONSTANT UEFI.configuration_string :=
+         "BOOT_FILE.INITIALISER_ELF";
+      ATA_PIO_Driver_Key : CONSTANT UEFI.configuration_string :=
+         "BOOT_FILE.ATA_PIO_ELF";
    BEGIN
-      FOR -- Check both buses and both drives for the (U)EFI boot partition.
-         I IN 1 .. 4
+      FOR
+         Option OF Configuration_Options
       LOOP
-         Drive.GPT.Get_Partition(EFI_Boot_Partition, "EFI",
-            Secondary_Bus => (I IN 3 | 4), Secondary_Drive => (I IN 2 | 4));
-         EXIT WHEN EFI_Boot_Partition.Present;
+         IF
+            Option.Key_Start_Index IN Configuration'range AND THEN
+            Option.Key_End_Index IN Configuration'range
+         THEN
+            IF
+               Configuration(Option.Key_Start_Index .. Option.Key_End_Index) =
+                  Initialiser_Key
+            THEN
+               Initialiser_Address := Option.Data.Boot_File_Address;
+               Initialiser_Size    := Option.Data.Boot_File_Size;
+               Log("Initialisation program found at 0x" &
+                  Image(Initialiser_Address) & '.', Tag => Initialise_Tag);
+            ELSIF
+               Configuration(Option.Key_Start_Index .. Option.Key_End_Index) =
+                  ATA_PIO_Driver_Key
+            THEN
+               ATA_PIO_Driver_Address := Option.Data.Boot_File_Address;
+               ATA_PIO_Driver_Size    := Option.Data.Boot_File_Size;
+               Log("Initial ATA PIO driver found at 0x" &
+                  Image(ATA_PIO_Driver_Address) & '.', Tag => Initialise_Tag);
+            END IF;
+         END IF;
       END LOOP;
 
-      IF
-         NOT EFI_Boot_Partition.Present
+      IF -- We can't continue if any of these are missing.
+         Initialiser_Address = 0
       THEN
          RAISE Panic
          WITH
-            Source_Location & " - Could not find the EFI/UEFI boot partition.";
+            Source_Location & " - No initialisation program found.";
          PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "We cannot continue if we don't have access to other files.");
-      END IF;
-
-      Drive.FAT.Get_File_System(EFI_File_System, EFI_Boot_Partition);
-
-      IF
-         Drive.FAT.Get_FAT_Version(EFI_File_System) /= Drive.FAT.FAT16
+            "We cannot continue if the bootloader did not load it.");
+      ELSIF
+         ATA_PIO_Driver_Address = 0
       THEN
          RAISE Panic
          WITH
-            Source_Location & " - EFI/UEFI boot partition is not FAT16.";
+            Source_Location & " - No initial ATA PIO driver found.";
          PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "It must be formatted as FAT16 for now, not i.e. FAT12.");
+            "We cannot continue if the bootloader did not load it.");
       END IF;
-   END Boot_Partition_Check;
+   END Boot_Configuration_Check;
 
-   -- TODO: For now, this just loads a few ELF files. I really need to add more
-   -- worthwhile system calls.
    PROCEDURE Begin_Tasking
    IS
-      Error_Check     : error;
-      EFI_File_System : Drive.FAT.file_system;
+      Error_Check : error;
    BEGIN
-      Boot_Partition_Check(EFI_File_System);
-
-      Tasking.ELF.Load(EFI_File_System, Initialiser_Path, Initialiser_Name,
+      Tasking.ELF.Load(Initialiser_Address, Initialiser_Size, Initialiser_Name,
          Error_Check);
 
       IF
@@ -311,6 +362,19 @@ IS
          RAISE Panic
          WITH
             Source_Location & " - Failed to load the initialiser program.";
+         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
+            "We cannot continue if it fails to load. External error.");
+      END IF;
+
+      Tasking.ELF.Load(ATA_PIO_Driver_Address, ATA_PIO_Driver_Size,
+         ATA_PIO_Name, Error_Check);
+
+      IF
+         Error_Check /= no_error
+      THEN
+         RAISE Panic
+         WITH
+            Source_Location & " - Failed to load the ATA PIO driver.";
          PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
             "We cannot continue if it fails to load. External error.");
       END IF;

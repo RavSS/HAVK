@@ -153,6 +153,7 @@ PACKAGE BODY System.C.Malloc IS
       (Size : size_t)
        RETURN address
    IS
+      Allocation_Address : address; -- RavSS: Put it here before we unlock.
       Rounded_Size : size_t;
    BEGIN
       --  Return null address for zero length request
@@ -217,8 +218,9 @@ PACKAGE BODY System.C.Malloc IS
                   Add_Free_Cell (New_Next_Cell);
                END IF;
                Res.Cell.Free := False;
+               Allocation_Address := Get_Cell_Data (To_Cell_Acc (Res));
                Release_Lock; -- RavSS: Unlock it.
-               RETURN Get_Cell_Data (To_Cell_Acc (Res));
+               RETURN Allocation_Address;
             END IF;
             Res := Res.Next_Free;
          END LOOP;
@@ -245,8 +247,9 @@ PACKAGE BODY System.C.Malloc IS
             RETURN Null_Address;
          END IF;
          Last_Cell := Res;
+         Allocation_Address := Get_Cell_Data (Res);
          Release_Lock; -- RavSS: Unlock it.
-         RETURN Get_Cell_Data (Res);
+         RETURN Allocation_Address;
       END;
    END Alloc;
 

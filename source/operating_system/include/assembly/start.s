@@ -12,7 +12,7 @@ _stack_end:
 	.SPACE 32768 # Just 32 KiB for now.
 _stack_base:
 
-.SECTION .text
+.SECTION .text._start
 
 # The below is taken from the kernel's entry file ("entry.S"). The only missing
 # block is the RFLAGS initialisation, as the kernel has done that for us. This

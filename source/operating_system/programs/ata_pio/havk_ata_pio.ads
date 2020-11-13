@@ -1,28 +1,30 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-drive.ads                                  --
+-- Program         -- HAVK Operating System ATA PIO Driver                   --
+-- Filename        -- havk_ata_pio.ads                                       --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Intrinsics;
+   System,
+   Ada.Unchecked_Conversion,
+   HAVK_Operating_System;
+USE
+   System,
+   HAVK_Operating_System;
 
 -- This package facilitates a very basic disk driver (ATA PIO) that is to be
 -- used until the operating system part of HAVK can load better drivers which
 -- use the controllers on the PCI bus instead.
 -- READ: https://wiki.osdev.org/ATA_PIO_Mode
 -- TODO: Only supports polling, not interrupt-driven operation.
--- TODO: This should really be a user-mode task that utilises system calls and
--- IPC to get and send drive data around, but that can come much later.
 -- TODO: This makes a relatively safe assumption that the sector size is 512
 -- bytes and not any other value. For newer devices, the sector size can be
 -- 4096 bytes. For now, 512 is hardcoded into many places, including the child
 -- packages of this package. To resolve it, I would need to interpret the
 -- Identify command's 512-byte "IDENTIFY DEVICE data" structure/record.
-PACKAGE HAVK_Kernel.Drive
+PACKAGE HAVK_ATA_PIO
 WITH
-   Preelaborate   => true,
    Abstract_State =>
    (
       Drive_State
@@ -50,7 +52,7 @@ IS
       Secondary_Bus   : IN boolean := false;
       Secondary_Drive : IN boolean := false)
    WITH
-      Global => (In_Out => (Intrinsics.CPU_Port_State, Drive_State)),
+      Global => (In_Out => (CPU_Port_State, Drive_State)),
       Pre    => Sector_Count IN 1 .. 2**16 - 1;
 
    -- Writes values from the memory source to the specified drive sectors.
@@ -64,7 +66,7 @@ IS
       Secondary_Bus   : IN boolean := false;
       Secondary_Drive : IN boolean := false)
    WITH
-      Global => (In_Out => (Intrinsics.CPU_Port_State, Drive_State)),
+      Global => (In_Out => (CPU_Port_State, Drive_State)),
       Pre    => Sector_Count IN 1 .. 2**16 - 1;
 
 PRIVATE
@@ -105,8 +107,7 @@ PRIVATE
       -- Read only. Used for checking drive selection.
       select_port)
    WITH
-      Size        => 8,
-      Object_Size => number'size;
+      Size => 8;
    FOR ATA_port USE
      (data_port           => 0,
       feature_error_port  => 1,
@@ -142,8 +143,7 @@ PRIVATE
       -- The same as "cache_flush", but for LBA48 mode.
       cache_flush_extra)
    WITH
-      Size        => 8,
-      Object_Size => number'size;
+      Size => 8;
    FOR ATA_command USE
      (no_command            => 16#00#,
       sector_read_retry     => 16#20#,
@@ -199,9 +199,7 @@ PRIVATE
       LBA_Addressing : boolean;
       -- Always set.
       Reserved_2     : number RANGE 1 .. 1;
-   END RECORD
-   WITH
-      Object_Size => number'size;
+   END RECORD;
    FOR drive_register USE RECORD
       Block_Number       AT 0 RANGE 0 .. 3;
       Drive_Number       AT 0 RANGE 4 .. 4;
@@ -233,9 +231,7 @@ PRIVATE
       -- When true, the drive is busy transferring data. If the drive is busy,
       -- then the other information here is apparently out of date.
       Busy           : boolean;
-   END RECORD
-   WITH
-      Object_Size => number'size;
+   END RECORD;
    FOR status_register USE RECORD
       Error              AT 0 RANGE 0 .. 0;
       Zeroed             AT 0 RANGE 1 .. 1;
@@ -263,9 +259,7 @@ PRIVATE
       -- When true, you can read back the higher bytes when using LBA48 mode.
       -- Otherwise, you will only be able to read the lower bytes (LBA28).
       High_Order_Byte : boolean;
-   END RECORD
-   WITH
-      Object_Size => number'size;
+   END RECORD;
    FOR control_register USE RECORD
       Zeroed              AT 0 RANGE 0 .. 0;
       No_Interrupts       AT 0 RANGE 1 .. 1;
@@ -290,9 +284,7 @@ PRIVATE
       Not_Writing          : boolean;
       -- Not used, although it apparently indicates a high impedance state.
       Reserved             : number RANGE 0 .. 1;
-   END RECORD
-   WITH
-      Object_Size => number'size;
+   END RECORD;
    FOR select_register USE RECORD
       Drive_0_Deselected       AT 0 RANGE 0 .. 0;
       Drive_1_Deselected       AT 0 RANGE 1 .. 1;
@@ -343,6 +335,6 @@ PRIVATE
      (Current_Status : OUT drive_status;
       Secondary_Bus  : IN boolean := false)
    WITH
-      Global => (In_Out => Intrinsics.CPU_Port_State, Input => Drive_State);
+      Global => (In_Out => CPU_Port_State, Input => Drive_State);
 
-END HAVK_Kernel.Drive;
+END HAVK_ATA_PIO;

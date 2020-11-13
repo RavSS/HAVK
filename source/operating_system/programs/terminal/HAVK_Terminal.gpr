@@ -12,19 +12,17 @@ IS
    -- The name of the ELF and internal build directory.
    Name := "terminal";
 
-   FOR Object_Dir          USE HAVK_Operating_System_Program'Object_Dir &
+   FOR languages  USE("Ada");
+   FOR object_dir USE HAVK_Operating_System_Program'object_dir &
       Name & "/";
-   FOR Exec_Dir            USE HAVK_Operating_System_Program'Object_Dir &
-      "programs/";
-   FOR Main                USE("main.adb");
-   FOR Create_Missing_Dirs USE "true";
+   FOR main       USE("main.adb"); -- Can't use a wildcard here.
 
    PACKAGE Builder
    EXTENDS
       HAVK_Operating_System_Program.Builder
    IS
       -- The name of the generated ELF file placed in the executable directory.
-      FOR Executable("main.adb") USE Name;
+      FOR executable("main.adb") USE "./../programs/" & Name;
    END Builder;
 
 END HAVK_Terminal;

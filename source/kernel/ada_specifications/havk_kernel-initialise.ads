@@ -10,11 +10,7 @@ WITH
    HAVK_Kernel.System_Call,
    HAVK_Kernel.System_Call.Handler,
    HAVK_Kernel.Memory,
-   HAVK_Kernel.Memory.Frames,
-   HAVK_Kernel.Drive,
-   HAVK_Kernel.Drive.FAT;
-USE TYPE
-   HAVK_Kernel.Drive.FAT.version;
+   HAVK_Kernel.Memory.Frames;
 
 -- This package contains all of the initialisation routines for the other
 -- packages. The reason is to keep the main procedures more readable.
@@ -52,21 +48,19 @@ IS
    FUNCTION HAVK_Build_Datetime
       RETURN datetime_string;
 
-   -- Initialises any debug utilities. The "Printing" parameter controls
-   -- whether or not logs are sent to the terminal/textbox.
+   -- Initialises any debugging utilities.
    PROCEDURE Debugger
    WITH
       Inline => true;
 
+   -- Checks the boot configuration options.
+   -- TODO: This probably deserves its own package, as a bit of parsing logic
+   -- is contained in here.
+   PROCEDURE Boot_Configuration_Check;
+
    -- This executes the `CPUID` instruction and outputs a few bits of
    -- interesting information.
    PROCEDURE CPU_Feature_Check;
-
-   -- Finds the boot partition and returns it in the first parameter.
-   PROCEDURE Boot_Partition_Check
-     (EFI_File_System : OUT Drive.FAT.file_system)
-   WITH
-      Post => Drive.FAT.Get_FAT_Version(EFI_File_System) = Drive.FAT.FAT16;
 
    -- Prepare the heap, as certain functionality like manipulating virtual
    -- addresses requires dynamic memory.
@@ -81,16 +75,17 @@ IS
       No_Return => true;
 
 PRIVATE
-   Initialise_Tag : CONSTANT string := "INIT";
-
-   -- The directory of the initialisation files for the operating system.
-   Operating_System_Folder : CONSTANT string :=
-      Drive.FAT.Separator & "HAVK" &
-      Drive.FAT.Separator & "system" & Drive.FAT.Separator;
+   Initialise_Tag         : CONSTANT string := "INIT";
 
    -- The root server program that will start everything else up.
-   Initialiser_Name : CONSTANT string := "Initialiser";
-   Initialiser_Path : CONSTANT string :=
-      Operating_System_Folder & "INITIA~1.ELF";
+   Initialiser_Name       : CONSTANT string := "Initialiser";
+   Initialiser_Address    : Memory.canonical_address := 0;
+   Initialiser_Size       : number := 0;
+
+   -- An ATA PIO driver with the bare essentials to start loading files off the
+   -- EFI system partition (ESP).
+   ATA_PIO_Name           : CONSTANT string := "ATA PIO Driver";
+   ATA_PIO_Driver_Address : Memory.canonical_address := 0;
+   ATA_PIO_Driver_Size    : number := 0;
 
 END HAVK_Kernel.Initialise;

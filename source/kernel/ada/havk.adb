@@ -54,6 +54,9 @@ BEGIN
    -- Set up the system call instruction's functionality and options.
    Initialise.System_Call_Instruction;
 
+   -- Parse the configuration file and do what must be done for each option.
+   Initialise.Boot_Configuration_Check;
+
    -- Begin multi-tasking and leave this phase.
    Initialise.Begin_Tasking;
 END HAVK;

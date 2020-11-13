@@ -5,6 +5,13 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   System,
+   HAVK_Operating_System;
+USE
+   System,
+   HAVK_Operating_System;
+
 PACKAGE HAVK_Terminal.Graphics
 WITH
    Abstract_State =>
@@ -41,6 +48,10 @@ IS
       Component_Size => 32;
    TYPE access_framebuffer_area IS ACCESS framebuffer_area;
 
+   -- Raw system call information that contains the framebuffer information.
+   -- This gets filled out during elaboration.
+   Display_Data         : arguments := (framebuffer_access_operation,
+      OTHERS => 0);
    -- The framebuffer area. UEFI GOP can only grant a single framebuffer, so
    -- I've removed the old tagged record way of handling it.
    Framebuffer          : access_framebuffer_area;
