@@ -130,7 +130,7 @@ PRIVATE
    Configurable_Run_Time     : CONSTANT boolean := True;
    Denorm                    : CONSTANT boolean := True;
    Duration_32_Bits          : CONSTANT boolean := False;
-   Exit_Status_Supported     : CONSTANT boolean := False;
+   Exit_Status_Supported     : CONSTANT boolean := True;
    Fractional_Fixed_Ops      : CONSTANT boolean := False;
    Frontend_Layout           : CONSTANT boolean := False;
    Machine_Overflows         : CONSTANT boolean := False;

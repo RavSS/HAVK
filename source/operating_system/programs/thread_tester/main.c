@@ -35,7 +35,7 @@ void ALIGN_STACK thread_function(void)
 		}
 
 		arguments.argument_2 = i;
-		syscall(&arguments);
+		system_call(&arguments);
 	}
 
 	while (true);
@@ -50,7 +50,7 @@ uint64_t main(void)
 	sysargs_ht arguments;
 
 	arguments.operation = LOG_OPERATION;
-	syscall_data(&arguments, log_string);
+	system_call_xmm(&arguments, log_string);
 
 	return 1;
 }

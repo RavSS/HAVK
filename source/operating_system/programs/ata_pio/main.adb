@@ -6,54 +6,41 @@
 -------------------------------------------------------------------------------
 
 WITH
-   System,
    HAVK_Operating_System,
+   HAVK_Operating_System.Call,
+   HAVK_Operating_System.Call.Logging,
+   HAVK_Operating_System.C,
+   HAVK_Operating_System.C.Standard_IO,
    HAVK_ATA_PIO,
    HAVK_ATA_PIO.GPT,
    HAVK_ATA_PIO.FAT;
 USE
-   System,
    HAVK_Operating_System,
+   HAVK_Operating_System.Call,
+   HAVK_Operating_System.Call.Logging,
+   HAVK_Operating_System.C,
+   HAVK_Operating_System.C.Standard_IO,
    HAVK_ATA_PIO;
 
--- TODO: For now, I'm just loading an example ELF off the drive. This needs to
--- be reworked so it can be a proper "server" task.
+-- TODO: As of now, this can only read files off the drive. There is also no
+-- permission checking etc. Another task will have to be consulted for that.
 PROCEDURE Main
+WITH
+   No_Return => true
 IS
    USE TYPE
       FAT.version;
 
-   -- Cache the ELF file in task memory. Avoid multiple file lookups. Gives a
-   -- chance to more strenuously test out heap memory as well.
-   TYPE access_bytes IS ACCESS bytes;
+   Main_Tag             : CONSTANT string := "MAIN";
+   Error_Check          : error;
 
-   PROCEDURE Copy -- Not bothered doing it the way it's done in-kernel.
-     (Destination : IN address;
-      Source      : IN address;
-      Byte_Size   : IN number)
-   WITH
-      Import        => true,
-      Convention    => C,
-      External_Name => "memcpy";
+   EFI_System_Partition : GPT.partition;
+   ESP_File_System      : FAT.file_system;
+   ESP_File             : FAT.file;
 
-   Main_Tag           : CONSTANT string := "MAIN";
-   Error_Check        : error;
-
-   EFI_Boot_Partition : GPT.partition;
-   EFI_File_System    : FAT.file_system;
-
-   -- This can be any executable.
-   Task_Name          : CONSTANT string := "Framebuffer Tester";
-   Task_Executable    : CONSTANT string := ">HAVK>system>FRAMEB~1.ELF";
-
-   ELF                : access_bytes := NULL;
-   ELF_Offset         : number := 1;
-   ELF_File           : FAT.file;
-   ELF_Buffer         : arguments;
-   ELF_Data           : ALIASED XMM_registers;
-
-   Padded_Task_Name   : XMM_string := (OTHERS => NUL);
-   Packed_Task_Name   : XMM_registers;
+   Call_Arguments       : arguments;
+   Temporary_File_State : CONSTANT FILE_pointer := NEW FILE;
+   Temporary_File_Path  : string(1 .. 128);
 BEGIN
    -- TODO: Does not do drive error checking or drive resets. Last time I
    -- checked, this will freeze up the driver if a non-existent drive is
@@ -61,91 +48,88 @@ BEGIN
    FOR -- Check both buses and both drives for the (U)EFI boot partition.
       I IN 1 .. 4
    LOOP
-      GPT.Get_Partition(EFI_Boot_Partition, "EFI",
+      GPT.Get_Partition(EFI_System_Partition, "EFI",
          Secondary_Bus => (I IN 3 | 4), Secondary_Drive => (I IN 2 | 4));
-      EXIT WHEN EFI_Boot_Partition.Present;
+      EXIT WHEN EFI_System_Partition.Present;
    END LOOP;
 
    IF
-      NOT EFI_Boot_Partition.Present
+      NOT EFI_System_Partition.Present
    THEN
       RAISE Program_Error
       WITH
          "No EFI System Partition (ESP) detected.";
    END IF;
 
-   FAT.Get_File_System(EFI_File_System, EFI_Boot_Partition);
+   FAT.Get_File_System(ESP_File_System, EFI_System_Partition);
 
    IF
-      FAT.Get_FAT_Version(EFI_File_System) /= FAT.FAT16
+      FAT.Get_FAT_Version(ESP_File_System) /= FAT.FAT16
    THEN
       RAISE Program_Error
       WITH
          "No FAT16 partition detected.";
    END IF;
 
-   FAT.Check_File(EFI_File_System, Task_Executable, Error_Check, ELF_File);
+   Log("EFI System Partition (ESP) found. Now receiving file requests.",
+      Tag => Main_Tag);
 
-   IF
-      Error_Check /= no_error
-   THEN
-      RAISE Program_Error
-      WITH
-         "Could not find the framebuffer tester.";
-   END IF;
-
-   ELF_Buffer := (buffer_operation, 1, general_register(ELF_File.Size),
-      OTHERS => <>);
-
-   IF
-      System_Call(ELF_Buffer) /= no_error
-   THEN
-      RAISE Program_Error
-      WITH
-         "Failed to create the kernel buffer.";
-   END IF;
-
-   ELF := NEW bytes(ELF_Offset .. ELF_File.Size);
-   FAT.Read_File(EFI_File_System, Task_Executable, ELF.ALL'address,
-      Error_Check);
-
-   IF
-      Error_Check /= no_error
-   THEN
-      RAISE Program_Error
-      WITH
-         "Failed to create the file cache.";
-   END IF;
-
-   WHILE
-      ELF_Offset IN ELF'range
-   LOOP
-      ELF_Buffer := (buffer_operation, 3, general_register(ELF_Offset),
-         OTHERS => <>);
-
-      Copy(ELF_Data'address, ELF.ALL(ELF_Offset)'address,
-         ELF_Data'size / 8);
+   LOOP -- Begin the request loop.
+      Call_Arguments.Operation_Call := receive_message_operation;
+      Error_Check := System_Call(Call_Arguments, Temporary_File_State);
 
       IF
-         System_Call(ELF_Buffer, ELF_Data) /= no_error
+         Error_Check = no_error                    AND THEN
+         Call_Arguments.Argument_3 = general_register(Storage_Task_Port)
+            AND THEN
+         Temporary_File_State.ALL.File_Error'valid AND THEN
+         Temporary_File_State.Buffer_Length IN
+            Temporary_File_State.Buffer'first + 1 ..
+               Temporary_File_State.Buffer'last + 1
       THEN
-         RAISE Program_Error
-         WITH
-            "Failed to write to our task's kernel buffer.";
+         FOR
+            Index IN Temporary_File_State.File_Path'range
+         LOOP
+            Temporary_File_Path(positive(Index + 1)) := character'val
+              (Temporary_File_State.File_Path(Index));
+         END LOOP;
+
+         IF -- If they give a size, then they want to do a file read/write.
+            Temporary_File_State.File_Size /= 0
+         THEN
+            IF
+               NOT Temporary_File_State.Write_Request
+            THEN
+               FAT.Read_File(ESP_File_System, Temporary_File_Path,
+                  Temporary_File_State.Buffer'address, Error_Check,
+                  Base_Byte => number(Temporary_File_State.File_Offset + 1),
+                  Byte_Size => number(Temporary_File_State.Buffer_Length));
+
+               Temporary_File_State.File_Error := Error_Check;
+            ELSE
+               -- TODO: Writing is not yet implemented in my FAT driver.
+               Temporary_File_State.File_Error := attempt_error;
+            END IF;
+         ELSE -- Otherwise, just check the file.
+            FAT.Check_File(ESP_File_System, Temporary_File_Path,
+               Error_Check, ESP_File);
+
+            IF
+               Error_Check = no_error
+            THEN
+               Temporary_File_State.File_Size := size_t(ESP_File.Size);
+            ELSE
+               Temporary_File_State.File_Error := Error_Check;
+            END IF;
+         END IF;
+
+         Call_Arguments.Operation_Call := send_message_operation;
+         Call_Arguments.Argument_2 := FILE'size / 8;
+
+         System_Call(Call_Arguments, Temporary_File_State);
       ELSE
-         ELF_Offset := ELF_Offset + (ELF_Data'size / 8);
+         Call_Arguments.Operation_Call := yield_operation;
+         System_Call(Call_Arguments);
       END IF;
    END LOOP;
-
-   Padded_Task_Name(Task_Name'range) := XMM_string(Task_Name);
-   Packed_Task_Name := To_XMM_Registers(Padded_Task_Name);
-   ELF_Buffer := (load_elf_operation, OTHERS => <>); -- Reuse the name.
-
-   IF
-      System_Call(ELF_Buffer, Packed_Task_Name) /= no_error
-   THEN
-      RAISE Program_Error
-      WITH
-         "Failed to create the new task.";
-   END IF;
 END Main;

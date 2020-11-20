@@ -57,6 +57,8 @@
 		# TODO: Maybe replace this with `FXSAVE` etc.
 		SUB RSP, 16 * 17 + 8
 		M_SAVE_XMM_REGISTERS RSP
+		SUB RSP, 8 * 8 # Make space for the MMX registers.
+		M_SAVE_MMX_REGISTERS RSP
 
 		# The ISR can't make an assumption about the direction
 		# flag. GCC also clears it before doing anything else.
@@ -95,6 +97,8 @@
 
 		M_SWITCH_TO_TASK_CR3
 
+		M_LOAD_MMX_REGISTERS RSP
+		ADD RSP, 8 * 8
 		M_LOAD_XMM_REGISTERS RSP
 		ADD RSP, 16 * 17 + 8
 

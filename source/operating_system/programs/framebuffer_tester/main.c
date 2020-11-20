@@ -122,7 +122,7 @@ uint64_t main(void)
 	sysargs_ht arguments;
 
 	arguments.operation = FRAMEBUFFER_ACCESS_OPERATION;
-	syscall(&arguments);
+	system_call(&arguments);
 
 	framebuffer = (uint32_t *)arguments.argument_1;
 	framebuffer_size = arguments.argument_2;

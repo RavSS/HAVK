@@ -5,6 +5,15 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   HAVK_Operating_System.Call,
+   HAVK_Operating_System.Call.Logging,
+   HAVK_Operating_System.Utility;
+USE
+   HAVK_Operating_System.Call,
+   HAVK_Operating_System.Call.Logging,
+   HAVK_Operating_System.Utility;
+
 PACKAGE BODY HAVK_PS2.Keyboard
 IS
    -- TODO: This was prepared in mind for an interrupt handler, not a polling

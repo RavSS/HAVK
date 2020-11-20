@@ -32,9 +32,11 @@
 WITH
    System.Storage_Elements,
    Ada.Unchecked_Conversion,
-   HAVK_Operating_System;
+   HAVK_Operating_System,
+   HAVK_Operating_System.Call;
 USE
-   HAVK_Operating_System;
+   HAVK_Operating_System,
+   HAVK_Operating_System.Call;
 
 PACKAGE BODY System.C.Malloc IS
    PACKAGE SSE RENAMES System.Storage_Elements;

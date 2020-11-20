@@ -7,11 +7,12 @@
 
 WITH
    System,
-   Ada.Unchecked_Conversion,
-   HAVK_Operating_System;
+   HAVK_Operating_System,
+   HAVK_Operating_System.Utility;
 USE
    System,
-   HAVK_Operating_System;
+   HAVK_Operating_System,
+   HAVK_Operating_System.Utility;
 
 -- This package facilitates a very basic disk driver (ATA PIO) that is to be
 -- used until the operating system part of HAVK can load better drivers which

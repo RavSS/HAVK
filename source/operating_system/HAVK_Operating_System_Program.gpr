@@ -86,22 +86,23 @@ IS
    PACKAGE Compiler
    IS -- `gcc`
       GCC_Basic_Switches :=
-        (-- TODO: It seems that the stack protector (or libssp) tries to get
-         -- the stack canary via the TLS (at FS:0x28) like how it's done for
-         -- the Linux kernel. I haven't encountered this issue with my kernel,
-         -- but for some reason, that appears in OS programs but not the kernel
-         -- itself. Obviously, this causes a page fault, as I currently do not
-         -- use the GS and FS registers for thread local storage etc.
-         "-fno-stack-protector",
+        (-- Enable stack checking everywhere. The canary value is not stored
+         -- in the TLS (since I don't touch the GS and FS base nor implement
+         -- kernel level thread-local storage), but rather it's stored in a
+         -- global symbol labelled "__stack_chk_guard".
+         "-mstack-protector-guard=global", "-fstack-protector-all",
+         "-fstack-check",
          -- Create a "su" file with information about stack usage (SU). Useful
          -- for checking if a function exceeds the stack space I've allocated
          -- in the "start.s" assembly file.
          "-fstack-usage",
-         -- TODO: The x86-64 red zone is a problem when handling interrupts as
-         -- the stack is shared with the ISR and whatever was executing before
-         -- in ring 0, but we can remove this once we have set up the IST and
-         -- don't have ISRs using the interrupted stack for full ABI support.
-         "-mno-red-zone",
+         -- Use the SSE instruction set(s) to do floating point calculations.
+         -- The old x87 instructions are likely emulated at this point and I
+         -- have other plans for them anyway, as the MMX registers overlap with
+         -- the x87 FPU registers. SSE 2 at a bare minimum is required, which
+         -- is almost (if not completely) certain to be available in long mode.
+         "-mno-80387", "-mno-mmx", "-msse2", "-mfpmath=sse",
+         "-mprefer-vector-width=128",
          -- HAVK can support both the small and large code models, but for now,
          -- stick to the small one.
          "-fno-PIC", "-mcmodel=small",
@@ -216,7 +217,8 @@ IS
 
       C_Debug_Switches :=
         (-- This just defines a preprocessor symbol to indicate the build type.
-         -- Some C files are just for debugging purposes as of now.
+         -- Removing this causes assertions to not be checked, which is default
+         -- for the "Final" build type.
          "-DDEBUG=1",
          -- For some reason, I need to redefine this here, even when it should
          -- be controlled on the command-line to get debug information.

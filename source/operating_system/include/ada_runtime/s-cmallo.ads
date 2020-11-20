@@ -38,7 +38,7 @@ PACKAGE System.C.Malloc
 WITH
    Preelaborate => true
 IS
-   -- My own wrapper that extends the heap boundary if needed.
+   -- RavSS: My own wrapper that extends the heap boundary if needed.
    FUNCTION Alloc_Wrapper
      (Size : IN size_t)
       RETURN address

@@ -99,10 +99,14 @@ IS
       Memory_Region_Type       : memory_type;
       -- See the representation clause for information about this component.
       Padding_1                : number RANGE 0 .. 2**32 - 1;
-      -- The physical address of where the region starts.
+      -- The physical address of where the region starts. Do carefully note
+      -- that a memory descriptor can cover memory covered by another memory
+      -- descriptor. The interpretation of that is up to the kernel.
       Start_Address_Physical   : address;
       -- The virtual address of where the region starts. This is essentially
-      -- useless for the operating system and is truly for UEFI applications.
+      -- useless for the operating system and is truly only useful for UEFI
+      -- applications. The same idea of multiple address coverage applies to
+      -- this as well.
       Start_Address_Virtual    : address;
       -- Each descriptor has at least one page. Each one is 4 KiB.
       -- The maximum number of pages cannot represent memory over the limit

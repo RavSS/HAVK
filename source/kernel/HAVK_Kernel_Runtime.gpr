@@ -58,6 +58,16 @@ IS
          -- be caught or raised, so that means the last chance handler
          -- might be called instead of the general page-fault by the CPU.
          "-fstack-check",
+         -- Use the SSE instruction set(s) to do floating point calculations.
+         -- SSE 2 at a bare minimum is required, which is almost (if not
+         -- completely) certain to be available in long mode. The kernel will
+         -- not mess with a task's SIMD state, as that is stored and restored
+         -- every time the kernel is entered.
+         "-msse2", "-mfpmath=sse", "-mprefer-vector-width=128",
+         -- Keep the stack aligned for any SSE instructions which require
+         -- 16-byte alignment. This should be the default due to the ABI, but
+         -- specify it anyway.
+         "-mpreferred-stack-boundary=4",
          -- Create a "su" file with information about stack usage (SU).
          -- Useful for checking if a function exceeds the stack space
          -- I've allocated in the entry assembly file.
@@ -71,12 +81,6 @@ IS
          -- Allows me to place the kernel anywhere. I can also specify
          -- "large" instead of "kernel". Not sure if there is a difference.
          "-mcmodel=kernel", "-fno-PIC",
-         -- No MMX instructions.
-         "-mno-mmx",
-         -- No SSE instructions.
-         "-mno-sse",
-         -- No SSE2 instructions.
-         "-mno-sse2",
          -- Intel syntax for inline x86-64 assembly, since I like it more
          -- and it's less messy.
          "-masm=intel",

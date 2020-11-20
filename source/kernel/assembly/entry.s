@@ -77,7 +77,7 @@ assembly__entry:
 	XORPD XMM0, XMM0 # TODO: Does XMM0 hold useful information from UEFI?
 
 	# Set the x87 FPU control word.
-	SUB RSP, 2 # Make room for the FCW register (16-bits).
+	SUB RSP, 2 # Make room for the FCW register (16 bits).
 	FNCLEX # Clear any FPU exceptions.
 	FNSTCW [RSP] # Store the FCW register's value in the stack.
 	MOV WORD PTR [RSP], 0x33F # Set it to what the System V ABI demands.
@@ -85,15 +85,17 @@ assembly__entry:
 	ADD RSP, 2 # Clean-up.
 
 	# Set the MXCSR control/status register.
-	SUB RSP, 4 # Make room for the MXCSR register (32-bits).
+	SUB RSP, 4 # Make room for the MXCSR register (32 bits).
 	MOV DWORD PTR [RSP], 0x1F80 # Set it to what the System V ABI demands.
 	LDMXCSR [RSP] # Load the MXCSR register.
 	ADD RSP, 4 # Clean-up.
 
 	# Set the appropriate flags in the lower RFLAGS register.
-	SUB RSP, 8 # Make room for the RFLAGS register (64-bits).
+	SUB RSP, 8 # Make room for the RFLAGS register (64 bits).
 	MOV WORD PTR [RSP], 0x6 # Bits 1 (reserved) and 2 (PF/even parity) set.
-	POPFQ # Clean 8-bytes off the stack and into the RFLAGS register.
+	POPFQ # Clean 8 bytes off the stack and into the RFLAGS register.
 
-	# Begin to enter HAVK. It's proven to not return.
-	JMP havk
+	# Begin to enter HAVK. It's proven to not return. A call is done
+	# instead of a direct jump because GCC realigns the stack for main
+	# procedures.
+	CALL havk

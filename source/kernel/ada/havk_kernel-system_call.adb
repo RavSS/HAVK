@@ -183,62 +183,6 @@ IS
       END IF;
    END IRQ_Statistics_Operation_Call;
 
-   PROCEDURE IO_Port_Operation_Call
-     (RSI : IN Intrinsics.general_register;
-      RDX : IN OUT Intrinsics.general_register;
-      R8  : IN Intrinsics.general_register;
-      R9  : IN Intrinsics.general_register;
-      RAX : OUT Intrinsics.general_register)
-   IS
-      Inputting : CONSTANT boolean := R8 /= 0;
-      Word_Size : CONSTANT boolean := R9 /= 0;
-   BEGIN
-      IF
-         RSI <= 2**16 - 1
-      THEN
-         IF
-            NOT Word_Size
-         THEN
-            IF
-               NOT Inputting
-            THEN
-               IF
-                  RDX <= 2**8 - 1
-               THEN
-                  Intrinsics.Output_Byte(number(RSI), number(RDX));
-               ELSE
-                  RAX := size_error'enum_rep;
-                  RETURN;
-               END IF;
-            ELSE
-               RDX := Intrinsics.general_register
-                 (Intrinsics.Input_Byte(number(RSI)));
-            END IF;
-         ELSE
-            IF
-               NOT Inputting
-            THEN
-               IF
-                  RDX <= 2**16 - 1
-               THEN
-                  Intrinsics.Output_Word(number(RSI), number(RDX));
-               ELSE
-                  RAX := size_error'enum_rep;
-                  RETURN;
-               END IF;
-            ELSE
-               RDX := Intrinsics.general_register
-                 (Intrinsics.Input_Word(number(RSI)));
-            END IF;
-         END IF;
-      ELSE
-         RAX := index_error'enum_rep;
-         RETURN;
-      END IF;
-
-      RAX := no_error'enum_rep;
-   END IO_Port_Operation_Call;
-
    PROCEDURE Buffer_Operation_Call
      (RSI : IN Intrinsics.general_register;
       RDX : IN Intrinsics.general_register;
@@ -257,9 +201,7 @@ IS
             Tasking.Buffer.Read(Task_Index, number(RDX), XMM, Error_Check);
          WHEN 3 => -- Write.
             Tasking.Buffer.Write(Task_Index, number(RDX), XMM, Error_Check);
-         WHEN 4 => -- Ownership.
-            Error_Check := attempt_error; -- TODO: Time for capability tokens?
-         WHEN 5 => -- Delete.
+         WHEN 4 => -- Delete.
             Tasking.Buffer.Delete(Task_Index);
          WHEN OTHERS =>
             Error_Check := index_error;

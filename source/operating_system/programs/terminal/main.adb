@@ -7,11 +7,13 @@
 
 WITH
    HAVK_Operating_System,
+   HAVK_Operating_System.Call,
    HAVK_Terminal,
    HAVK_Terminal.Graphics,
    HAVK_Terminal.Graphics.Text;
 USE
    HAVK_Operating_System,
+   HAVK_Operating_System.Call,
    HAVK_Terminal,
    HAVK_Terminal.Graphics,
    HAVK_Terminal.Graphics.Text;
@@ -20,8 +22,6 @@ PROCEDURE Main
 WITH
    No_Return => true
 IS
-   Main_Tag         : CONSTANT string := "MAIN";
-
    -- The main terminal or virtual terminal used to display text to the user.
    Terminal         : textbox  -- Font width and font height are 8 pixels.
      (Screen_Width  / 14 + 2,  -- (Font width  - 1) * 2 + 2. Wider.

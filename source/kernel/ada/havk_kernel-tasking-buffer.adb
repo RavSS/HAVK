@@ -52,6 +52,7 @@ IS
             PRAGMA Assume(Buffers(Task_Identity).Buffer_Size = Buffer_Size,
                "See the assembly implementation. This should hold here.");
             Buffers(Task_Identity).Owners(Task_Identity) := true;
+            Buffers(Task_Identity).Data := (OTHERS => 0); -- Zero it out.
             Error_Status := no_error;
          ELSE
             Error_Status := memory_error;
@@ -163,6 +164,7 @@ IS
          Task_Identity IN task_limit'range AND THEN
          Buffers(Task_Identity) /= NULL
       THEN
+         Buffers(Task_Identity).Data := (OTHERS => 0); -- Zero it out.
          Free(Buffers(Task_Identity));
       END IF;
    END Delete;

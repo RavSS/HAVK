@@ -7,7 +7,10 @@
 
 WITH
    Ada.Unchecked_Deallocation,
-   System.Case_Util;
+   System.Case_Util,
+   HAVK_Operating_System.Call.Logging;
+USE
+   HAVK_Operating_System.Call.Logging;
 
 PACKAGE BODY HAVK_ATA_PIO.FAT
 IS

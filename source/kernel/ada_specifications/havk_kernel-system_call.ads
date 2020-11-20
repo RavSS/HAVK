@@ -40,7 +40,6 @@ PRIVATE
       yield_operation,
       log_operation,
       irq_statistics_operation,
-      io_port_operation,
       buffer_operation,
       framebuffer_access_operation)
    WITH
@@ -155,35 +154,12 @@ PRIVATE
       RDX : OUT Intrinsics.general_register;
       RAX : OUT Intrinsics.general_register);
 
-   -- Interacts with the x86 I/O ports.
-   -- TODO: This currently lets any task mess with them, so that will need to
-   -- change sooner or later.
-   -- TODO: This is also a temporary substitute for proper I/O permissions in
-   -- the TSS; however, that seems to be an obscure x86 feature that may be
-   -- valuable in potentially avoiding?
-   -- @param RSI The 16-bit port address.
-   -- @param RDX The value to send/output or the value to retrieve/input
-   -- depending on the call options. The size of the value also depends.
-   -- @param R8 A boolean value indicating whether to send (false) or retrieve
-   -- (true). Any value that is not zero is interpreted as true.
-   -- @param R9 A boolean value indicating whether to send or retrieve an 8-bit
-   -- value (false) or a 16-bit value (true). Any value that is not zero is
-   -- interpreted as true.
-   -- @param RAX An error status.
-   PROCEDURE IO_Port_Operation_Call
-     (RSI : IN Intrinsics.general_register;
-      RDX : IN OUT Intrinsics.general_register;
-      R8  : IN Intrinsics.general_register;
-      R9  : IN Intrinsics.general_register;
-      RAX : OUT Intrinsics.general_register);
-
    -- Interacts with a kernel buffer. Each task can have a single kernel buffer
    -- which belongs to itself.
    -- @param RSI The operation to perform on the buffer.
-   -- 1 = Create, 2 = Reading, 3 = Writing, 4 = Grant Ownership, 5 = Delete.
+   -- 1 = Create, 2 = Reading, 3 = Writing, 4 = Delete.
    -- @param RDX If creating, then this is the size of the buffer. If
-   -- reading/writing, then this is the byte offset of the buffer. If changing
-   -- ownership, then this is the task identity you wish to grant access to. If
+   -- reading/writing, then this is the one-based byte index of the buffer. If
    -- deleting, then this is ignored.
    -- @param XMM This contains the data if you are reading the buffer or
    -- writing to buffer.

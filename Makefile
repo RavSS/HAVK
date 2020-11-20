@@ -126,6 +126,7 @@ UEFI_LD_INC=-L $(LIB_PATH) -T $(UEFI_LINK)
 UEFI_LD_LIB=-l efi -l gnuefi
 UEFI_LD_FLAGS=$(UEFI_LD_OPT) $(UEFI_LD_INC) $(UEFI_CRT0)
 
+GDB_FILE?=$(KERNEL) # This can be set to user programs as well.
 GDB_REMOTE_DEBUG_PORT?=40404
 QEMU_MEMORY?=1024
 QEMU_FLAGS=-serial mon:stdio -gdb tcp::$(GDB_REMOTE_DEBUG_PORT) -net none \
@@ -401,7 +402,7 @@ $(HAVK_VMDK): $(IMAGE) image-configuration
 
 .PHONY: gdb
 gdb:
-	-@gdb "$(KERNEL)" -q \
+	-@gdb $(GDB_FILE) -q \
 		-ex "set confirm off" \
 		-ex "set architecture i386:x86-64:intel" \
 		-ex "set max-value-size 10485760" \

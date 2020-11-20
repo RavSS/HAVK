@@ -5,7 +5,7 @@
 // Original Author -- Ravjot Singh Samra, Copyright 2020                     //
 ///////////////////////////////////////////////////////////////////////////////
 
-#include "debug.h"
+#include <havk/debug.h>
 
 // Lifted this from my kernel's "test.c".
 char *uitoa(uintmax_t value, char *buffer)
@@ -30,11 +30,5 @@ void log_string(const char *text)
 		buffer[i] = text[i];
 	}
 
-	syscall_data(&arguments, buffer);
-}
-
-noreturn void __stack_chk_fail(void)
-{
-	log_string("Stack smash detected.");
-	while (true);
+	system_call_xmm(&arguments, buffer);
 }

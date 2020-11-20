@@ -45,6 +45,7 @@ IS
 
       Frame_Base_Address : CONSTANT page_address :=
          page_address(Frame_Index * Paging.Page);
+      Missing_Frame      : boolean := false;
    BEGIN
       FOR
          Region OF UEFI.Memory_Map
@@ -55,15 +56,25 @@ IS
                Region.Start_Address_Physical +
                address(Region.Number_Of_Pages * Paging.Page)
          THEN
-            RETURN (Region.Memory_Region_Type /= UEFI.conventional_data
-               OR ELSE Undesirable_Attributes(Region));
+            -- Memory descriptors inside the memory map can and will often
+            -- share memory ranges. So, we just check if the frame is reserved
+            -- in any single region inside the memory map; otherwise, odd
+            -- dangerous things will happen.
+            IF
+               Region.Memory_Region_Type /= UEFI.conventional_data OR ELSE
+               Undesirable_Attributes(Region)
+            THEN
+               RETURN true;
+            ELSE
+               Missing_Frame := false;
+            END IF;
          END IF;
          PRAGMA Annotate(GNATprove, False_Positive,
             "null exclusion check might fail",
             "The region access won't become null during this subprogram.");
       END LOOP;
 
-      RETURN true;
+      RETURN Missing_Frame;
    END Frame_Is_Reserved;
 
    PROCEDURE Allocate

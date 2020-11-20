@@ -11,7 +11,7 @@
 #include <stddef.h>
 
 /* Standard libc `memset()` (C89). */
-void memset(void *area, int value, size_t bytes);
+void *memset(void *area, int value, size_t bytes);
 
 /* Standard libc `memcpy()` (C89). */
 void *memcpy(void *destination, const void *source, size_t bytes);

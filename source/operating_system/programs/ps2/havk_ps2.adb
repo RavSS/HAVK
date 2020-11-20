@@ -6,7 +6,14 @@
 -------------------------------------------------------------------------------
 
 WITH
-   Ada.Unchecked_Conversion;
+   Ada.Unchecked_Conversion,
+   HAVK_Operating_System.Call,
+   HAVK_Operating_System.Call.Logging,
+   HAVK_Operating_System.Utility;
+USE
+   HAVK_Operating_System.Call,
+   HAVK_Operating_System.Call.Logging,
+   HAVK_Operating_System.Utility;
 
 PACKAGE BODY HAVK_PS2
 WITH

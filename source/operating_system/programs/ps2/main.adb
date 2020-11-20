@@ -7,11 +7,21 @@
 
 WITH
    HAVK_Operating_System,
+   HAVK_Operating_System.Call,
+   HAVK_Operating_System.Call.Interrupt,
+   HAVK_Operating_System.Call.Tasking,
+   HAVK_Operating_System.Call.Logging,
+   HAVK_Operating_System.Utility,
    HAVK_PS2,
    HAVK_PS2.Keyboard,
    HAVK_PS2.User_Input;
 USE
    HAVK_Operating_System,
+   HAVK_Operating_System.Call,
+   HAVK_Operating_System.Call.Interrupt,
+   HAVK_Operating_System.Call.Tasking,
+   HAVK_Operating_System.Call.Logging,
+   HAVK_Operating_System.Utility,
    HAVK_PS2,
    HAVK_PS2.Keyboard;
 

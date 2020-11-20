@@ -33,7 +33,7 @@ void send_test(void)
 	memcpy(&message[strlen(prefix)], name, 64);
 	memcpy(&message[strlen(prefix) + 64], suffix, strlen(suffix));
 
-	syscall_data(&arguments, message);
+	system_call_xmm(&arguments, message);
 }
 
 void receive_test(void)
@@ -42,7 +42,7 @@ void receive_test(void)
 	sysargs_ht arguments;
 	arguments.operation = RECEIVE_MESSAGE_OPERATION;
 
-	while (syscall_data(&arguments, message[0]) != NO_ERROR);
+	while (system_call_xmm(&arguments, message[0]) != NO_ERROR);
 	arguments.operation = LOG_OPERATION;
 
 	const char *prefix = "Sender says [";
@@ -52,7 +52,7 @@ void receive_test(void)
 	memcpy(&message[1][strlen(prefix)], message[0], 128);
 	memcpy(&message[1][strlen(prefix) + 128], suffix, strlen(suffix));
 
-	syscall_data(&arguments, message[1]);
+	system_call_xmm(&arguments, message[1]);
 }
 
 uint64_t main(void)
@@ -62,7 +62,7 @@ uint64_t main(void)
 	arguments.operation = IDENTIFY_TASK_OPERATION;
 	arguments.argument_1 = 0;
 
-	if (syscall_data(&arguments, identity) != NO_ERROR)
+	if (system_call_xmm(&arguments, identity) != NO_ERROR)
 	{
 		return 1;
 	}

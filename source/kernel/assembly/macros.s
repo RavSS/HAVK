@@ -10,6 +10,9 @@
 # macros. All public macros should be prefixed with "M_*" and all
 # internal/private macros should be prefixed with a single underscore. If this
 # file changes, then all assembly files should be reassembled forcefully.
+# Note that some macros use relative local labels (e.g. "1:") for branching
+# purposes, so using e.g. "JMP 1b" after a macro might not do what you expect
+# it to do.
 
 # # # # # # # # # # # # # # # # # # Public # # # # # # # # # # # # # # # # # #
 
@@ -37,6 +40,26 @@
 	.NOALTMACRO
 .ENDM
 
+.MACRO M_SAVE_MMX_REGISTERS BUFFER_POINTER:req
+	.ALTMACRO
+	.EQU i, 0
+	.REPT 8
+		_SAVE_MMX_REGISTER \BUFFER_POINTER %i
+		.EQU i, i + 1
+	.ENDR
+	.NOALTMACRO
+.ENDM
+
+.MACRO M_LOAD_MMX_REGISTERS BUFFER_POINTER:req
+	.ALTMACRO
+	.EQU i, 0
+	.REPT 8
+		_LOAD_MMX_REGISTER \BUFFER_POINTER %i
+		.EQU i, i + 1
+	.ENDR
+	.NOALTMACRO
+.ENDM
+
 # Switches the page layout to the active task's page layout. Clobbers RAX and
 # additionally calls other functions.
 .MACRO M_SWITCH_TO_TASK_CR3
@@ -58,4 +81,12 @@
 
 .MACRO _LOAD_XMM_REGISTER BUFFER_POINTER:req XMM_INDEX:req
 	MOVDQA XMM\XMM_INDEX, [\BUFFER_POINTER + 16 * \XMM_INDEX]
+.ENDM
+
+.MACRO _SAVE_MMX_REGISTER BUFFER_POINTER:req MMX_INDEX:req
+	MOVQ [\BUFFER_POINTER + 8 * \MMX_INDEX], MM\MMX_INDEX
+.ENDM
+
+.MACRO _LOAD_MMX_REGISTER BUFFER_POINTER:req MMX_INDEX:req
+	MOVQ MM\MMX_INDEX, [\BUFFER_POINTER + 8 * \MMX_INDEX]
 .ENDM

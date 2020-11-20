@@ -49,25 +49,23 @@ IS
    PACKAGE Compiler
    IS -- `gcc`
       GCC_Basic_Switches :=
-        (-- TODO: See the base program project for more on this.
-         "-fno-stack-protector",
-         -- Add some extra instructions that check if we've gone
-         -- over the stack space limit. Usually that just causes an
-         -- intense crash like a general page-fault for example.
-         -- I believe this "enables" the "STORAGE_ERROR" exception to
-         -- be caught or raised, so that means the last chance handler
-         -- might be called instead of the general page-fault by the CPU.
+        (-- Enable stack checking everywhere. The canary value is not stored
+         -- in the TLS (since I don't touch the GS and FS base nor implement
+         -- kernel level thread-local storage), but rather it's stored in a
+         -- global symbol labelled "__stack_chk_guard".
+         "-mstack-protector-guard=global", "-fstack-protector-all",
          "-fstack-check",
          -- Create a "su" file with information about stack usage (SU).
          -- Useful for checking if a function exceeds the stack space
          -- I've allocated in the entry assembly file.
          "-fstack-usage",
-         -- The x86-64 red zone will be a problem when handling interrupts in
-         -- the future, so just disable it. Search OSDev for more, I found it
-         -- noticed as an issue due to the System V ABI so I thought I would
-         -- get rid of it since it seems to be useless for me right now. Note
-         -- that this might be useless for operating system programs.
-         "-mno-red-zone",
+         -- Use the SSE instruction set(s) to do floating point calculations.
+         -- The old x87 instructions are likely emulated at this point and I
+         -- have other plans for them anyway, as the MMX registers overlap with
+         -- the x87 FPU registers. SSE 2 at a bare minimum is required, which
+         -- is almost (if not completely) certain to be available in long mode.
+         "-mno-80387", "-mno-mmx", "-msse2", "-mfpmath=sse",
+         "-mprefer-vector-width=128",
          -- The current ELF loader expects a small or large code model, but
          -- it's limited to code below 2 GiB, so a small code model is the best
          -- choice so far.

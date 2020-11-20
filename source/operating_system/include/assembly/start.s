@@ -1,5 +1,5 @@
 ###############################################################################
-## Program         -- HAVK                                                   ##
+## Program         -- HAVK Operating System                                  ##
 ## Filename        -- start.s                                                ##
 ## License         -- GNU General Public License version 3.0                 ##
 ## Original Author -- Ravjot Singh Samra, Copyright 2020                     ##
@@ -14,7 +14,7 @@ _stack_base:
 
 .SECTION .text._start
 
-# The below is taken from the kernel's entry file ("entry.S"). The only missing
+# The below is taken from the kernel's entry file ("entry.s"). The only missing
 # block is the RFLAGS initialisation, as the kernel has done that for us. This
 # requires a stack before being used.
 .MACRO INITIALISE_REGISTER_STATE
@@ -58,9 +58,5 @@ _start:
 
 	CALL main
 
-	MOV RDI, 0x1 # System call for exiting the current thread.
-	MOV RSI, RAX # Store the exit code in the first argument.
-	SYSCALL
-	.L_wait:
-		PAUSE
-		JMP .L_wait # Wait for our time slice to expire.
+	MOV RDI, RAX # Store the exit code in the first argument.
+	JMP exit # Now exit the task. We will not return.

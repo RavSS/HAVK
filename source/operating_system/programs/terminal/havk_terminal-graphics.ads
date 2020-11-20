@@ -7,10 +7,12 @@
 
 WITH
    System,
-   HAVK_Operating_System;
+   HAVK_Operating_System,
+   HAVK_Operating_System.Call;
 USE
    System,
-   HAVK_Operating_System;
+   HAVK_Operating_System,
+   HAVK_Operating_System.Call;
 
 PACKAGE HAVK_Terminal.Graphics
 WITH

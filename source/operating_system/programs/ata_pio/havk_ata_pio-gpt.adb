@@ -6,7 +6,8 @@
 -------------------------------------------------------------------------------
 
 WITH
-   Ada.Unchecked_Deallocation;
+   Ada.Unchecked_Deallocation,
+   HAVK_Operating_System.Utility;
 
 PACKAGE BODY HAVK_ATA_PIO.GPT
 IS
@@ -18,9 +19,9 @@ IS
       Time_Middle           => UUID.Time_Middle,
       Time_High_And_Version => UUID.Time_High_And_Version,
       Sequence_And_Variant  =>
-         Shift_Right(Byte_Swap(UUID.Sequence_And_Variant), 48),
+         Shift_Right(Utility.Byte_Swap(UUID.Sequence_And_Variant), 48),
       Node                  =>
-         Shift_Right(Byte_Swap(UUID.Node), 16));
+         Shift_Right(Utility.Byte_Swap(UUID.Node), 16));
 
    PROCEDURE Get_Partition
      (New_Partition   : OUT partition;

@@ -91,14 +91,13 @@ PACKAGE Interfaces.C IS
 
    ------------------------------------
    -- Wide Character and Wide String --
-   -- Ravjot: I've disabled these since they're useless for me.
    ------------------------------------
 
-   -- type wchar_t is new Wide_Character;
-   -- for wchar_t'Size use Standard'Wchar_T_Size;
+   type wchar_t is new Wide_Character;
+   for wchar_t'Size use Standard'Wchar_T_Size;
 
-   -- wide_nul : constant wchar_t := wchar_t'First;
+   wide_nul : constant wchar_t := wchar_t'First;
 
-   -- type wchar_array is array (size_t range <>) of aliased wchar_t;
+   type wchar_array is array (size_t range <>) of aliased wchar_t;
 
 END Interfaces.C;

@@ -22,7 +22,7 @@ global__system_call_entry_address:
 # downwards, so the arguments are pushed in reverse to the record shown in the
 # system call handler package in the Ada code. Note that before this is called,
 # the stack must be 16-byte aligned, as `MOVDQA` is used instead of `MOVDQU`.
-.MACRO REGISTER_ARGUMENTS_TO_STACK_ARGUMENTS
+.MACRO REGISTER_ARGUMENTS_TO_STACK_ARGUMENTS POINTER_REGISTER:req
 	# Push the SIMD registers first.
 	SUB RSP, 16 * 17 # RSP must be aligned after this.
 	M_SAVE_XMM_REGISTERS RSP
@@ -37,11 +37,20 @@ global__system_call_entry_address:
 	PUSH RDI
 	PUSH R11 # Task's RFLAGS.
 	PUSH RCX # Task's RIP.
+
+	# The stack cannot be 16-byte aligned before the call instruction, as
+	# that places a return address onto the stack and would ruin alignment
+	# upon the actual entry; thus, increasing it is necessary until
+	# another field in the arguments record/structure is added or removed.
+	MOV \POINTER_REGISTER, RSP
+	SUB RSP, 8
 .ENDM
 # Be sure to use this after any and all function calls, as we don't want
 # anything in here to be modified at all. The user should be seeing all these
 # values.
 .MACRO STACK_ARGUMENTS_TO_REGISTER_ARGUMENTS
+	ADD RSP, 8
+
 	POP RCX
 	POP R11
 	POP RDI
@@ -65,21 +74,24 @@ assembly__system_call_entry:
 	# stack loaded into RSP, so change it for the system call stack.
 
 	# Get the task's ring 0 kernel stack (four bytes into the TSS).
-	# Don't clobber RSP just yet, as we need to store their stack pointer.
-	# Don't touch RBP. The rest of the calls shouldn't either.
+	# Don't clobber RSP and RBP just yet, as we need to store their stack
+	# pointer and their stack frame pointer.
 	MOV RAX, [RIP + global__task_state_segment + 4]
 
-	SUB RAX, 16 # Create enough room for a pointer while keeping alignment.
+	SUB RAX, 8 # Create enough room for a pointer.
 	MOV [RAX], RSP # Save their stack.
 	MOV RSP, RAX # Now we're using the task's kernel stack.
+
+	PUSH RBP # Save their stack frame base while realigning the stack too.
+	MOV RBP, RSP # Create our own stack frame.
 
 	# Load the kernel's page layout, as we need it to handle system calls.
 	MOV RAX, [RIP + global__kernel_page_map_base_address]
 	MOV CR3, RAX
 	# Ready to handle the call.
 
-	REGISTER_ARGUMENTS_TO_STACK_ARGUMENTS
-	MOV RDI, RSP # RDI is the pointer to the arguments now.
+	REGISTER_ARGUMENTS_TO_STACK_ARGUMENTS RDI
+	# RDI is the pointer to the arguments on the stack now.
 
 	CALL ada__system_call_handler
 
@@ -88,6 +100,7 @@ assembly__system_call_entry:
 	STACK_ARGUMENTS_TO_REGISTER_ARGUMENTS
 
 	# Load the user's stack again that was stored on the kernel stack.
+	POP RBP
 	MOV RSP, [RSP]
 
 	# Handled the call. Enter ring 3 again.

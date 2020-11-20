@@ -5,6 +5,9 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   Ada.Unchecked_Conversion;
+
 PACKAGE BODY HAVK_ATA_PIO
 WITH
    Refined_State => (Drive_State => NULL)

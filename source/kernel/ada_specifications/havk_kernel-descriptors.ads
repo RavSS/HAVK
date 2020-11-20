@@ -100,9 +100,9 @@ IS
       Base_Address_High        AT 7 RANGE 0 .. 07;
    END RECORD;
 
-   -- The IDT gate entry differs a bit from x86.
-   -- For x86-64, there seems to be a few more fields.
-   -- https://wiki.osdev.org/Interrupt_Descriptor_Table#Structure_AMD64
+   -- The IDT gate entry differs a bit from x86. For x86-64, there seems to be
+   -- a few more fields.
+   -- READ: https://wiki.osdev.org/Interrupt_Descriptor_Table#Structure_AMD64
    -- The call gates are not mentioned on the OSDev Wiki IDT page.
    -- I dug them out of AMD's AMD64 Architecture Programmer's Manual.
    -- It also doesn't mention 64-bit redefines and 0x4 to 0x7 gates becoming
@@ -123,14 +123,14 @@ IS
       Gate            : interrupt_descriptor_table_gate_type := interrupt_gate;
       -- If not a storage segment and an interrupt or trap gate, then
       -- this must be set to zero. I am going to set it to that by default.
-      Storage_Segment : boolean                              := false;
+      Storage_Segment : boolean := false;
       -- Minimum privilege level for the descriptor that is trying to
-      -- call the interrupt. Useful so userspace doesn't mess with
+      -- call the interrupt. Useful so user space doesn't mess with
       -- kernel space interrupts for hardware etc.
-      DPL             : number RANGE 0 .. 3                  := 0;
+      DPL             : number RANGE 0 .. 3 := 0;
       -- Whether the interrupt is currently active. Set to zero by default,
       -- so all the blank interrupts are not set to present.
-      Present         : boolean                              := false;
+      Present         : boolean := false;
    END RECORD;
    FOR interrupt_descriptor_table_gate_attributes USE RECORD
       Gate                AT 0 RANGE 0 .. 3;
@@ -178,39 +178,56 @@ IS
    -- stacks during interrupts and the Interrupt Stack Table (IST) that
    -- indicates which interrupt handler gets which stack.
    TYPE task_state_segment IS RECORD
-      Reserved_1 : number RANGE 0 .. 2**32 - 1 := 000;
-      RSP_Ring_0 : address                     := 000;
-      RSP_Ring_1 : address                     := 000;
-      RSP_Ring_2 : address                     := 000;
-      Reserved_2 : number                      := 000;
-      IST_1      : address                     := 000;
-      IST_2      : address                     := 000;
-      IST_3      : address                     := 000;
-      IST_4      : address                     := 000;
-      IST_5      : address                     := 000;
-      IST_6      : address                     := 000;
-      IST_7      : address                     := 000;
-      Reserved_3 : number                      := 000;
-      Reserved_4 : number RANGE 0 .. 2**16 - 1 := 000;
-      -- IOPB disabled by default (byte size of TSS).
-      IOPB       : number RANGE 0 .. 2**16 - 1 := 104;
+      Reserved_1  : number  RANGE 0 .. 2**32 - 1 := 0;
+      RSP_Ring_0  : address := 0;
+      RSP_Ring_1  : address := 0;
+      RSP_Ring_2  : address := 0;
+      Reserved_2  : number  := 0;
+      IST_1       : address := 0;
+      IST_2       : address := 0;
+      IST_3       : address := 0;
+      IST_4       : address := 0;
+      IST_5       : address := 0;
+      IST_6       : address := 0;
+      IST_7       : address := 0;
+      Reserved_3  : number  := 0;
+      Reserved_4  : number  RANGE 0 .. 2**16 - 1 := 0;
+      -- If the IOPB offset is set to the byte size length of the actual TSS
+      -- plus one (104 bytes), then the IOPB is disabled; otherwise, the CPU
+      -- calculates the I/O permission bitmap from the TSS descriptor's base
+      -- address. Since I've placed the IOPB right after the offset, the offset
+      -- still remains at 104 bytes. Removing the bitmap and its end or placing
+      -- all ones into it is another method of removing the IOPB, but the space
+      -- required is not too much for it to matter.
+      IOPB_Offset : address RANGE 0 .. 2**16 - 1 := 104;
+      -- The gap between the offset and the actual bitmap itself can house
+      -- anything, like task data. There's apparently some VM8086 (16-bit
+      -- emulation) extension settings in here along with interrupt redirects,
+      -- but that's not usable for us, at least according to AMD's manual in
+      -- long mode. By default, I've made it so all ports and port access sizes
+      -- are unrestricted.
+      IOPB        : bits(0 .. 2**16 - 1) := (OTHERS => 0);
+      -- This is apparently necessary and Intel says it's required.
+      IOPB_End    : number RANGE 16#FF# .. 16#FF# := 16#FF#;
    END RECORD;
    FOR task_state_segment USE RECORD
-      Reserved_1   AT 000 RANGE 0 .. 31;
-      RSP_Ring_0   AT 004 RANGE 0 .. 63;
-      RSP_Ring_1   AT 012 RANGE 0 .. 63;
-      RSP_Ring_2   AT 020 RANGE 0 .. 63;
-      Reserved_2   AT 028 RANGE 0 .. 63;
-      IST_1        AT 036 RANGE 0 .. 63;
-      IST_2        AT 044 RANGE 0 .. 63;
-      IST_3        AT 052 RANGE 0 .. 63;
-      IST_4        AT 060 RANGE 0 .. 63;
-      IST_5        AT 068 RANGE 0 .. 63;
-      IST_6        AT 076 RANGE 0 .. 63;
-      IST_7        AT 084 RANGE 0 .. 63;
-      Reserved_3   AT 092 RANGE 0 .. 63;
-      Reserved_4   AT 100 RANGE 0 .. 15;
-      IOPB         AT 102 RANGE 0 .. 15;
+      Reserved_1     AT 0000 RANGE 0 .. 00031;
+      RSP_Ring_0     AT 0004 RANGE 0 .. 00063;
+      RSP_Ring_1     AT 0012 RANGE 0 .. 00063;
+      RSP_Ring_2     AT 0020 RANGE 0 .. 00063;
+      Reserved_2     AT 0028 RANGE 0 .. 00063;
+      IST_1          AT 0036 RANGE 0 .. 00063;
+      IST_2          AT 0044 RANGE 0 .. 00063;
+      IST_3          AT 0052 RANGE 0 .. 00063;
+      IST_4          AT 0060 RANGE 0 .. 00063;
+      IST_5          AT 0068 RANGE 0 .. 00063;
+      IST_6          AT 0076 RANGE 0 .. 00063;
+      IST_7          AT 0084 RANGE 0 .. 00063;
+      Reserved_3     AT 0092 RANGE 0 .. 00063;
+      Reserved_4     AT 0100 RANGE 0 .. 00015;
+      IOPB_Offset    AT 0102 RANGE 0 .. 00015;
+      IOPB           AT 0104 RANGE 0 .. 65535;
+      IOPB_End       AT 8296 RANGE 0 .. 00015;
    END RECORD;
 
    -- The TSS descriptor that goes inside the GDT for long mode so that the
@@ -270,7 +287,7 @@ IS
    DS_Ring_3 : CONSTANT number := 16#20# OR 3;
    CS_Ring_3 : CONSTANT number := 16#28# OR 3;
 
-   -- These go inside the GDTR and IDTR registers to describle the size of
+   -- These go inside the GDTR and IDTR registers to describe the size of
    -- their respective tables.
    TYPE descriptor_table_register IS RECORD
       Table_Size   : number RANGE 0 .. 2**16 - 1;

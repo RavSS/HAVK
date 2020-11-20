@@ -6,6 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
+   HAVK_Operating_System.Utility,
    HAVK_Terminal.Font;
 USE
    HAVK_Terminal.Font;
@@ -42,7 +43,7 @@ IS
             EXIT WHEN Pixel_Location >= Framebuffer_Elements;
 
             IF
-               Bit_Test(X_Line, X_Index)
+               Utility.Bit_Test(X_Line, X_Index)
             THEN
                Framebuffer(Pixel_Location) := Foreground_Colour;
             ELSE
