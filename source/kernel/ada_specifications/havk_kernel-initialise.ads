@@ -15,11 +15,14 @@ WITH
 -- This package contains all of the initialisation routines for the other
 -- packages. The reason is to keep the main procedures more readable.
 PACKAGE HAVK_Kernel.Initialise
+WITH
+   Abstract_State => Boot_Configuration_State
 IS
    -- Prepares the descriptor tables, which is necessary for interrupts
    -- and switching DPLs etc.
    PROCEDURE Descriptor_Tables
-   RENAMES Descriptors.Load;
+   RENAMES
+      Descriptors.Load;
 
    -- Set up the Advanced Programmable Interrupt Controllers (APICs) depending
    -- on which ones are available. This also verifies the ACPI tables.
@@ -39,7 +42,8 @@ IS
 
    -- Initialises the system call instruction's handler by preparing the MSRs.
    PROCEDURE System_Call_Instruction
-   RENAMES System_Call.Handler.Set_MSRs;
+   RENAMES
+      System_Call.Handler.Set_MSRs;
 
    -- Retrieves the date and time in ISO 8601 format of when the current
    -- running version of the kernel was compiled and built. The format returned
@@ -54,7 +58,7 @@ IS
       Inline => true;
 
    -- Checks the boot configuration options.
-   -- TODO: This probably deserves its own package, as a bit of parsing logic
+   -- TODO: This probably deserves its own package, as a lot of parsing logic
    -- is contained in here.
    PROCEDURE Boot_Configuration_Check;
 
@@ -65,7 +69,8 @@ IS
    -- Prepare the heap, as certain functionality like manipulating virtual
    -- addresses requires dynamic memory.
    PROCEDURE Dynamic_Memory
-   RENAMES Memory.Frames.Prepare_Kernel_Heap;
+   RENAMES
+      Memory.Frames.Prepare_Kernel_Heap;
 
    -- Sets up the mechanisms for multi-tasking and leaves kernel-level
    -- initialisation. Everything that doesn't have support for concurrency
@@ -75,17 +80,18 @@ IS
       No_Return => true;
 
 PRIVATE
-   Initialise_Tag         : CONSTANT string := "INIT";
+   Initialise_Tag : CONSTANT string := "INIT";
 
-   -- The root server program that will start everything else up.
-   Initialiser_Name       : CONSTANT string := "Initialiser";
-   Initialiser_Address    : Memory.canonical_address := 0;
-   Initialiser_Size       : number := 0;
+   TYPE boot_file IS LIMITED RECORD
+      Present      : boolean := false;
+      Name         : string(1 .. 64) := (OTHERS => NUL);
+      File_Address : Memory.canonical_address := 0;
+      File_Size    : number := 0;
+      Executable   : boolean := false;
+   END RECORD;
 
-   -- An ATA PIO driver with the bare essentials to start loading files off the
-   -- EFI system partition (ESP).
-   ATA_PIO_Name           : CONSTANT string := "ATA PIO Driver";
-   ATA_PIO_Driver_Address : Memory.canonical_address := 0;
-   ATA_PIO_Driver_Size    : number := 0;
+   Boot_Files : ARRAY(number RANGE 1 .. 32) OF boot_file
+   WITH
+      Part_Of => Boot_Configuration_State;
 
 END HAVK_Kernel.Initialise;

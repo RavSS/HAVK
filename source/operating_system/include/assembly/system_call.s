@@ -6,52 +6,49 @@
 ###############################################################################
 
 .STRUCT 0
-	OPERATION: # RDI.
+	OPERATION: # RAX.
 .STRUCT OPERATION + 8
-	ARGUMENT_1: # RSI.
+	ARGUMENT_1: # RDI.
 .STRUCT ARGUMENT_1 + 8
-	ARGUMENT_2: # RDX.
+	ARGUMENT_2: # RSI.
 .STRUCT ARGUMENT_2 + 8
-	ARGUMENT_3: # R8.
+	ARGUMENT_3: # RDX.
 .STRUCT ARGUMENT_3 + 8
-	ARGUMENT_4: # R9.
+	ARGUMENT_4: # R8.
 .STRUCT ARGUMENT_4 + 8
-	ARGUMENT_5: # R10.
+	ARGUMENT_5: # R9.
 .STRUCT ARGUMENT_5 + 8
 
 .SECTION .text
 
 .GLOBAL system_call
 .TYPE system_call, @function
-# (RDI => a pointer to the system call state) >> (RAX => an error code)
+# (RDI => a pointer to the system call state) >> (RAX => an error status)
 system_call:
 	PUSH RDI # Need to recover it later. Keep it in register/cache for now.
-	MOV RSI, [RDI + ARGUMENT_1]
-	MOV RDX, [RDI + ARGUMENT_2]
-	MOV R8, [RDI + ARGUMENT_3]
-	MOV R9, [RDI + ARGUMENT_4]
-	MOV R10, [RDI + ARGUMENT_5]
-	MOV RDI, [RDI + OPERATION]
+	MOV RAX, [RDI + OPERATION]
+	MOV RSI, [RDI + ARGUMENT_2]
+	MOV RDX, [RDI + ARGUMENT_3]
+	MOV R8, [RDI + ARGUMENT_4]
+	MOV R9, [RDI + ARGUMENT_5]
+	MOV RDI, [RDI + ARGUMENT_1]
 
 	SYSCALL # Enter the kernel. Does not touch the user's stack.
 
-	POP RDI
-	MOV [RDI + ARGUMENT_5], R10
-	MOV [RDI + ARGUMENT_4], R9
-	MOV [RDI + ARGUMENT_3], R8
-	MOV [RDI + ARGUMENT_2], RDX
-	MOV [RDI + ARGUMENT_1], RSI
+	POP R11 # R11 itself contains nothing usable after return.
+	MOV [R11 + ARGUMENT_1], RDI
+	MOV [R11 + ARGUMENT_2], RSI
+	MOV [R11 + ARGUMENT_3], RDX
+	MOV [R11 + ARGUMENT_4], R8
+	MOV [R11 + ARGUMENT_5], R9
 
 	RET
 
 .GLOBAL system_call_xmm
 .TYPE system_call_xmm, @function
 # (RDI => a pointer to the system call state,
-#  RSI => a pointer to the 256-byte memory area) >> (RAX => an error code)
+#  RSI => a pointer to the 256-byte memory area) >> (RAX => an error status)
 system_call_xmm:
-	1:
-		CMP RSI, 0x0
-		JE 1b
 	MOVDQU XMM0, [RSI + 16 * 0]
 	MOVDQU XMM1, [RSI + 16 * 1]
 	MOVDQU XMM2, [RSI + 16 * 2]

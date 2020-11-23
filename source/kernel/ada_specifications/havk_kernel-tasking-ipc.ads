@@ -10,9 +10,8 @@ WITH
 
 -- Handles simple message passing as of now. Currently, each message can hold
 -- the amount of byte space inside all of the 16 XMM registers; hence, only SSE
--- is supported.
--- TODO: Switch to AVX, as the YMM registers are bigger (double the total
--- space) and most systems after i.e. Sandy Bridge should have AVX support.
+-- is supported. AVX support (YMM and ZMM registers) is avoided for now, since
+-- the gain is not worth the compatibility probing.
 -- TODO: This is a multiple copy method of IPC, which isn't efficient and
 -- requires a system call. Later on, implement IPC via virtual memory or page
 -- sharing... or don't, as the point here by using these registers is to
@@ -28,69 +27,51 @@ IS
       XMM AT 0 RANGE 0 .. (128 * Intrinsics.XMM_registers'length) - 1;
    END RECORD;
 
-   -- Place a message in the message buffer.
+   -- Place a message in a specific task's message box.
    PROCEDURE Send_Message
      (Sender       : IN number;
       Receiver     : IN number;
-      Port         : IN number;
+      Header       : IN number;
+      Subheader    : IN number;
       Data         : IN message_data;
-      Length       : IN number;
-      Error_Status : OUT error);
+      Error_Status : OUT error)
+   WITH
+      Post => Error_Status IN no_error | index_error | attempt_error;
 
-   -- Get the oldest message in the message buffer. Note that you cannot
-   -- specify the oldest message by a particular sender for the purpose of
-   -- forcing users to obtain the actual oldest message first.
+   -- Retrieve a message from a specific sender.
    PROCEDURE Receive_Message
-     (Sender       : OUT number;
+     (Sender       : IN number;
       Receiver     : IN number;
-      Port         : OUT number;
+      Header       : OUT number;
+      Subheader    : OUT number;
       Data         : OUT message_data;
-      Length       : OUT number;
-      Error_Status : OUT error);
+      Error_Status : OUT error)
+   WITH
+      Post => Error_Status IN no_error | index_error | attempt_error;
 
 PRIVATE
-   -- The limit for the amount of messages that can be stored.
-   SUBTYPE message_limit IS number RANGE 1 .. 1024;
-
-   Message_Data_Max_Length : CONSTANT number :=
-     (message_data'size AND number'last)
-   WITH
-      Annotate => (GNATprove, False_Positive, "range check might fail",
-                   "The bit size can't be outside the range.");
-
-   TYPE message IS RECORD
-      -- Indicates whether or not the message spot is free.
-      Used     : boolean := false;
-      -- The task index of the sending task.
-      Sender   : task_limit := task_limit'first;
-      -- The task index of the receiving task.
-      Receiver : task_limit := task_limit'first;
-      -- The port the message will be delivered to.
-      -- TODO: I have not yet defined the semantics around this very well.
-      Port     : number := 0;
+   TYPE message_box IS RECORD
+      -- Indicates whether or not the message spot is free i.e. has been
+      -- received by the receiver. When this is false, the contents of the
+      -- components below it should be completely ignored and be ready for
+      -- overwriting.
+      Used      : boolean := false;
+      -- A 64-bit header field. Potentially useful for a port number etc.
+      Header    : number := 0;
+      -- A 64-bit subheader field. Could be used for data length etc.
+      Subheader : number := 0;
       -- The message data that is type-defined elsewhere.
-      Data     : message_data;
-      -- The bit length of the message.
-      Length   : number RANGE 0 .. Message_Data_Max_Length := 0;
-   END RECORD
-   WITH
-      Alignment => 16;
+      Data      : message_data;
+   END RECORD;
 
-   -- The buffer for where message records are stored. The oldest messages are
-   -- closest to the first index and the newest messages are appended. I've yet
-   -- again avoided a pointer based structure, as I couldn't manage to do it
-   -- due to move permissions. Yes, pointers (or no copying at all) would be
-   -- the sensible thing to do here, but I don't want to turn SPARK mode off.
-   Messages : ARRAY(message_limit) OF message
+   -- The first index is the index of the receiving task and the second index
+   -- is the index of which the receiving task wishes to receive a message
+   -- from. Notice that there is no allocation here and it grows exponentially
+   -- in size with the task limit. This means that IPC is guaranteed to work,
+   -- as allocation can never fail. This might change in the future if I make
+   -- the data buffers bigger, but for now, it's acceptable.
+   Messages : ARRAY(task_limit, task_limit) OF message_box
    WITH
-      Part_Of   => IPC_State,
-      Alignment => 16;
-
-   -- Removes the message at the specified index and always makes sure that
-   -- there's at least one space left.
-   PROCEDURE Drop_Message
-     (Message_Index : IN message_limit)
-   WITH
-      Post => NOT Messages(Messages'last).Used;
+      Part_Of => IPC_State;
 
 END HAVK_Kernel.Tasking.IPC;

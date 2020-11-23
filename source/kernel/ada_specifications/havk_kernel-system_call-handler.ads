@@ -37,41 +37,41 @@ PRIVATE
       -- RCX is clobbered by `SYSCALL` and it puts the instruction's RIP into
       -- the RCX register itself. Changing this will return the task to another
       -- place in the user's code.
-      RCX_RIP    : Memory.canonical_address;
+      Call_Address   : Memory.canonical_address;
       -- Similar to the RCX register, the R11 register is clobbered as well and
       -- gets replaced with the value of RFLAGS before `SYSCALL` was executed.
       -- There should be little reason to modify this.
-      R11_RFLAGS : Intrinsics.general_register;
+      Call_Flags     : Intrinsics.general_register;
       -- Validate this before reading it.
-      RDI        : operation;
-      -- This is argument 1.
-      RSI        : Intrinsics.general_register;
-      -- This is argument 2.
-      RDX        : Intrinsics.general_register;
-      -- This is argument 3.
-      R8         : Intrinsics.general_register;
-      -- This is argument 4.
-      R9         : Intrinsics.general_register;
-      -- This is argument 5.
-      R10        : Intrinsics.general_register;
+      Operation_Call : operation; -- RAX upon entry.
+      -- The arguments begin here according to the System V x86-64 ABI.
+      -- The RCX register is skipped.
+      -- TODO: Maybe add in R10 instead where RCX is in user tasks, which is
+      -- how the Linux kernel does it.
+      Argument_1     : Intrinsics.general_register; -- RDI.
+      Argument_2     : Intrinsics.general_register; -- RSI.
+      Argument_3     : Intrinsics.general_register; -- RDX.
+      Argument_4     : Intrinsics.general_register; -- R8.
+      Argument_5     : Intrinsics.general_register; -- R9.
       -- Not passed by the user, but returned by us.
-      RAX        : Intrinsics.general_register;
+      Error_Status   : Intrinsics.general_register; -- RAX when finished.
       -- User data in all XMM registers.
-      XMM        : Intrinsics.XMM_registers;
+      XMM_State      : Intrinsics.XMM_registers;
    END RECORD
    WITH
       Convention => Assembler;
    FOR arguments USE RECORD
-      RCX_RIP    AT 00 RANGE 0 .. 63;
-      R11_RFLAGS AT 08 RANGE 0 .. 63;
-      RDI        AT 16 RANGE 0 .. 63;
-      RSI        AT 24 RANGE 0 .. 63;
-      RDX        AT 32 RANGE 0 .. 63;
-      R8         AT 40 RANGE 0 .. 63;
-      R9         AT 48 RANGE 0 .. 63;
-      R10        AT 56 RANGE 0 .. 63;
-      RAX        AT 64 RANGE 0 .. 63; -- Clobbers RAX, not just EAX.
-      XMM        AT 72 RANGE 0 .. (128 * Intrinsics.XMM_registers'length) - 1;
+      Call_Address   AT 00 RANGE 0 .. 63;
+      Call_Flags     AT 08 RANGE 0 .. 63;
+      Operation_Call AT 16 RANGE 0 .. 63;
+      Argument_1     AT 24 RANGE 0 .. 63;
+      Argument_2     AT 32 RANGE 0 .. 63;
+      Argument_3     AT 40 RANGE 0 .. 63;
+      Argument_4     AT 48 RANGE 0 .. 63;
+      Argument_5     AT 56 RANGE 0 .. 63;
+      Error_Status   AT 64 RANGE 0 .. 63;
+      XMM_State      AT 72 RANGE
+         0 .. (128 * Intrinsics.XMM_registers'length) - 1;
    END RECORD;
 
    -- This procedure passes the arguments to an operation according to the

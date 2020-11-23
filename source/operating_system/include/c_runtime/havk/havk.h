@@ -62,12 +62,12 @@ typedef enum system_call_error
 
 typedef struct system_call_arguments
 {
-	uint64_t operation; // RDI.
-	uint64_t argument_1; // RSI.
-	uint64_t argument_2; // RDX.
-	uint64_t argument_3; // R8.
-	uint64_t argument_4; // R9.
-	uint64_t argument_5; // R10.
+	uint64_t operation; // RAX.
+	uint64_t argument_1; // RDI.
+	uint64_t argument_2; // RSI.
+	uint64_t argument_3; // RDX.
+	uint64_t argument_4; // R8.
+	uint64_t argument_5; // R9.
 } PACKED sysargs_ht;
 
 // The base for the IRQs, starting with the ISA IRQs first for the PIT.

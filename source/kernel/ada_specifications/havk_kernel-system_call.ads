@@ -7,7 +7,8 @@
 
 WITH
    Ada.Unchecked_Conversion,
-   HAVK_Kernel.Intrinsics;
+   HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Memory;
 USE TYPE
    HAVK_Kernel.Intrinsics.general_register,
    HAVK_Kernel.Intrinsics.XMM_registers;
@@ -46,20 +47,14 @@ PRIVATE
       Convention => C;
 
    -- This system call does nothing and only logs the arguments passed.
-   -- @param RSI Argument 1.
-   -- @param RDX Argument 2.
-   -- @param R8 Argument 3.
-   -- @param R9 Argument 4.
-   -- @param R10 Argument 5.
-   -- @param RAX An error status.
    PROCEDURE Null_Operation_Call
-     (RSI : IN Intrinsics.general_register;
-      RDX : IN Intrinsics.general_register;
-      R8  : IN Intrinsics.general_register;
-      R9  : IN Intrinsics.general_register;
-      R10 : IN Intrinsics.general_register;
-      RAX : OUT Intrinsics.general_register;
-      RIP : IN Intrinsics.general_register);
+     (Argument_1   : IN Intrinsics.general_register;
+      Argument_2   : IN Intrinsics.general_register;
+      Argument_3   : IN Intrinsics.general_register;
+      Argument_4   : IN Intrinsics.general_register;
+      Argument_5   : IN Intrinsics.general_register;
+      Call_Address : IN Memory.canonical_address;
+      Error_Status : OUT Intrinsics.general_register);
 
    -- This simply marks the task it was called from to be removed later and
    -- stores the exit code for future reference. An infinite loop should be
@@ -67,127 +62,116 @@ PRIVATE
    -- a remaining time slice left.
    -- TODO: Right now, an exit code of anything above zero is considered an
    -- error. This perhaps should be expanded.
-   -- @param RSI Exit code returned by the task.
+   -- @param Argument_1 Exit code returned by the task.
    PROCEDURE Exit_Task_Operation_Call
-     (RSI : IN Intrinsics.general_register);
+     (Argument_1 : IN Intrinsics.general_register);
 
-   -- Obtains the oldest message sent to the task that called this operation.
-   -- @param RSI The sending task's index/identity. This is not supplied by the
-   -- task, but is rather returned to indicate who truly send the message data.
-   -- @param RDX The length of the data. It will be at or below the total XMM
-   -- bit space, which is 2048 bits or 256 bytes. This is only provided for
-   -- convenience, as you could use your own header in the data itself.
-   -- @param R8 The port the message was sent to.
-   -- @param XMM A buffer of data which fits inside all XMM registers.
-   -- @param RAX An error status.
+   -- Receives a message from a particular task.
+   -- @param Argument_1 The sending task's index/identity which the task wishes
+   -- to receive a message from.
+   -- @param Argument_2 A 64-bit "header" field. Can be anything.
+   -- @param Argument_3 A 64-bit "subheader" field. Can be anything.
+   -- @param Argument_4 A buffer of data which fits inside all XMM registers.
    PROCEDURE Receive_Message_Operation_Call
-     (RSI : OUT Intrinsics.general_register;
-      RDX : OUT Intrinsics.general_register;
-      R8  : OUT Intrinsics.general_register;
-      XMM : OUT Intrinsics.XMM_registers;
-      RAX : OUT Intrinsics.general_register);
+     (Argument_1   : IN Intrinsics.general_register;
+      Argument_2   : OUT Intrinsics.general_register;
+      Argument_3   : OUT Intrinsics.general_register;
+      Argument_4   : OUT Intrinsics.XMM_registers;
+      Error_Status : OUT Intrinsics.general_register);
 
    -- Creates a new message directed towards the task index specified and holds
-   -- it in a buffer until it is received.
-   -- @param RSI The receiving task's index/identity.
-   -- @param RDX The length of the data. Must be at or below the total XMM bit
-   -- space, which is 2048 bits or 256 bytes. This is only provided for
-   -- convenience, as you could use your own header in the data itself.
-   -- @param R8 The port the message will be sent to.
-   -- @param XMM A buffer of data which fits inside all XMM registers.
-   -- @param RAX An error status.
+   -- it in a message box until it is received.
+   -- @param Argument_1 The receiving task's index/identity.
+   -- @param Argument_2 A 64-bit "header" field. Can be anything.
+   -- @param Argument_3 A 64-bit "subheader" field. Can be anything.
+   -- @param Argument_4 A buffer of data which fits inside all XMM registers.
    PROCEDURE Send_Message_Operation_Call
-     (RSI : IN Intrinsics.general_register;
-      RDX : IN Intrinsics.general_register;
-      R8  : IN Intrinsics.general_register;
-      XMM : IN Intrinsics.XMM_registers;
-      RAX : OUT Intrinsics.general_register);
+     (Argument_1   : IN Intrinsics.general_register;
+      Argument_2   : IN Intrinsics.general_register;
+      Argument_3   : IN Intrinsics.general_register;
+      Argument_4   : IN Intrinsics.XMM_registers;
+      Error_Status : OUT Intrinsics.general_register);
 
    -- Returns the task index/identity and the task's string name.
-   -- @param RSI The task index/identity. If this is zero, then the status of
-   -- the calling task is returned.
-   -- @param XMM The task's status. See the "task_status" type in the
+   -- @param Argument_1 The task index/identity. If this is zero, then the
+   -- status of the calling task is returned.
+   -- @param Argument_2 The task's status. See the "task_status" type in the
    -- "HAVK_Kernel.Tasking" package for its representation.
-   -- @param RAX An error status.
    PROCEDURE Identify_Task_Operation_Call
-     (RSI : IN Intrinsics.general_register;
-      XMM : OUT Intrinsics.XMM_registers;
-      RAX : OUT Intrinsics.general_register);
+     (Argument_1   : IN Intrinsics.general_register;
+      Argument_2   : OUT Intrinsics.XMM_registers;
+      Error_Status : OUT Intrinsics.general_register);
 
    -- Loads an ELF file off the current task's kernel buffer.
-   -- @param XMM The name for the newly created task.
-   -- @param RAX An error status.
+   -- @param Argument_1 The name for the newly created task.
    PROCEDURE Load_ELF_Operation_Call
-     (XMM : IN Intrinsics.XMM_registers;
-      RAX : OUT Intrinsics.general_register);
+     (Argument_1   : IN Intrinsics.XMM_registers;
+      Error_Status : OUT Intrinsics.general_register);
 
    -- Increases the total heap area of the task's memory space by a single
    -- physical frame (4 KiB page).
-   -- @param RSI The new end of the heap memory area (if successful).
-   -- @param RAX An error status.
+   -- @param Argument_1 The new end of the heap memory area (if successful).
    PROCEDURE Heap_Increase_Operation_Call
-     (RSI : OUT Intrinsics.general_register;
-      RAX : OUT Intrinsics.general_register);
+     (Argument_1   : OUT Intrinsics.general_register;
+      Error_Status : OUT Intrinsics.general_register);
 
    -- This system call simply ends the time slice for the operation caller.
-   -- @param RAX An error status. This always returns no error.
    PROCEDURE Yield_Operation_Call
-     (RAX : OUT Intrinsics.general_register);
+     (Error_Status : OUT Intrinsics.general_register);
 
    -- Simply outputs a string to the UART.
    -- TODO: Right now, any task can call this. It's only for debugging user
    -- tasks at this stage. In the future, giving a specified "logging program"
    -- the capability to call this would be good.
-   -- @param XMM The 256-byte string. Null characters are internally ignored.
-   -- @param RAX An error status. As of now, no error can occur.
+   -- @param Argument_1 The 256-byte string. Null characters are internally
+   -- ignored.
    PROCEDURE Log_Operation_Call
-     (XMM : IN Intrinsics.XMM_registers;
-      RAX : OUT Intrinsics.general_register);
+     (Argument_1   : IN Intrinsics.XMM_registers;
+      Error_Status : OUT Intrinsics.general_register);
 
    -- This retrieves statistics for an IRQ vector.
    -- TODO: Define whether this is per-CPU or global.
    -- TODO: Don't let just any task call this.
-   -- @param RSI The IRQ vector that you wish to retrieve statistics for.
-   -- @param RDX The amount of times the IRQ has been triggered.
+   -- @param Argument_1 The IRQ vector that you wish to retrieve statistics
+   -- for.
+   -- @param Argument_2 The amount of times the IRQ has been triggered.
    PROCEDURE IRQ_Statistics_Operation_Call
-     (RSI : IN Intrinsics.general_register;
-      RDX : OUT Intrinsics.general_register;
-      RAX : OUT Intrinsics.general_register);
+     (Argument_1   : IN Intrinsics.general_register;
+      Argument_2   : OUT Intrinsics.general_register;
+      Error_Status : OUT Intrinsics.general_register);
 
    -- Interacts with a kernel buffer. Each task can have a single kernel buffer
    -- which belongs to itself.
-   -- @param RSI The operation to perform on the buffer.
+   -- @param Argument_1 The operation to perform on the buffer.
    -- 1 = Create, 2 = Reading, 3 = Writing, 4 = Delete.
-   -- @param RDX If creating, then this is the size of the buffer. If
+   -- @param Argument_2 If creating, then this is the size of the buffer. If
    -- reading/writing, then this is the one-based byte index of the buffer. If
    -- deleting, then this is ignored.
-   -- @param XMM This contains the data if you are reading the buffer or
+   -- @param Argument_3 This contains the data if you are reading the buffer or
    -- writing to buffer.
-   -- @param RAX An error status.
    PROCEDURE Buffer_Operation_Call
-     (RSI : IN Intrinsics.general_register;
-      RDX : IN Intrinsics.general_register;
-      XMM : IN OUT Intrinsics.XMM_registers;
-      RAX : OUT Intrinsics.general_register);
+     (Argument_1   : IN Intrinsics.general_register;
+      Argument_2   : IN Intrinsics.general_register;
+      Argument_3   : IN OUT Intrinsics.XMM_registers;
+      Error_Status : OUT Intrinsics.general_register);
 
    -- This hands over the framebuffer to a task by mapping it into the task's
    -- virtual memory.
    -- TODO: Right now, this just hands it over to any task.
    -- TODO: Does not yet support giving pixel formats that are defined via a
    -- bitmask.
-   -- @param RSI Returned framebuffer base address.
-   -- @param RDX Returned byte size of the framebuffer.
-   -- @param R8 63:32 = Width. 31:0 = Height.
-   -- @param R9 The amount of pixels in a scanline.
-   -- @param R10 The pixel format.
-   -- @param RAX An error status.
+   -- @param Argument_1 Returned framebuffer base address.
+   -- @param Argument_2 Returned byte size of the framebuffer.
+   -- @param Argument_3 63:32 = Width. 31:0 = Height.
+   -- @param Argument_4 The amount of pixels in a scanline.
+   -- @param Argument_5 The pixel format.
    PROCEDURE Framebuffer_Access_Operation_Call
-     (RSI : OUT Intrinsics.general_register;
-      RDX : OUT Intrinsics.general_register;
-      R8  : OUT Intrinsics.general_register;
-      R9  : OUT Intrinsics.general_register;
-      R10 : OUT Intrinsics.general_register;
-      RAX : OUT Intrinsics.general_register);
+     (Argument_1   : OUT Intrinsics.general_register;
+      Argument_2   : OUT Intrinsics.general_register;
+      Argument_3   : OUT Intrinsics.general_register;
+      Argument_4   : OUT Intrinsics.general_register;
+      Argument_5   : OUT Intrinsics.general_register;
+      Error_Status : OUT Intrinsics.general_register);
 
    -- A type to help with converting the data buffer to a string.
    TYPE XMM_registers_characters IS ARRAY(1 .. 256) OF ALIASED character

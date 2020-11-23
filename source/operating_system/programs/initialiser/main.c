@@ -30,7 +30,7 @@
 #define PS2_NAME "PS/2 Driver"
 
 // The name can be up to 64 bytes and the path can be up to 192 bytes.
-static syserr_ht load_file(const char *name, const char *path)
+static syserr_ht load_file(const char *const name, const char *const path)
 {
 	FILE *elf_file;
 	uint8_t *elf_file_buffer;
@@ -41,8 +41,9 @@ static syserr_ht load_file(const char *name, const char *path)
 
 	if (!elf_file)
 	{
+		// TODO: File functions are not returning proper errors yet.
 		log_string("Failed to open the ELF file.");
-		return PATH_ERROR;
+		return ATTEMPT_ERROR;
 	}
 
 	// I'm going to store the whole file in the task's memory just for the

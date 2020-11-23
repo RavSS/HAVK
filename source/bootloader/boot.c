@@ -251,6 +251,8 @@ union options_data
 #include <key_value_pair.h>
 #define HAVK_KEY "HAVK"
 #define BOOT_FILE_KEY "BOOT_FILE."
+#define BOOT_FILE_PATH_SUBKEY ".PATH"
+#define UEFI_GOP_GRAPHICS_MODE_KEY "UEFI.GOP.GRAPHICS_MODE"
 
 // This gets passed to HAVK's entry function later on. I've just made it
 // into a structure for the sake of less parameters needing to be passed.
@@ -388,6 +390,24 @@ VOID *page_malloc(CONST UINT64 size)
 		= (EFI_PHYSICAL_ADDRESS) low_malloc(size + EFI_PAGE_SIZE);
 
 	return (VOID *)((zeroed_memory + 1 + EFI_PAGE_MASK) & ~EFI_PAGE_MASK);
+}
+
+// For reasons unknown, GNU-EFI's `strncmpa()` (`strncmp()` for ASCII strings)
+// returns an unsigned integer and thus is not an accurate implementation of
+// `strncmp()` or the similar `strcmp()`. Casting the `strncmpa()` result to
+// "INTN" seems to work depending on how the compiler feels during compilation,
+// so I've replaced it with a normal `strncmp()`.
+INTN strncmp(CONST CHAR8 *string_1, CONST CHAR8 *string_2, UINTN bytes)
+{
+	for (; --bytes; ++string_1, ++string_2)
+	{
+		if (!*string_1 || !*string_2 || *string_1 != *string_2)
+		{
+			return *string_1 - *string_2;
+		}
+	}
+
+	return 0;
 }
 
 // A function that prints some welcome information and sets up the environment.
@@ -1003,10 +1023,56 @@ UINTN read_screen_resolutions(CONST EFI_HANDLE CONST gop_handle)
 	return max_graphics_mode;
 }
 
-VOID set_screen_resolution(CONST UINTN max_graphics_mode)
+// This parses the configuration file for a GOP graphics mode and returns it.
+// Zero is returned if it could not be found.
+// TODO: This might not work as expected if there's two or more graphics modes
+// with the same resolution. A mode without e.g. a directly accessible
+// framebuffer may be returned as opposed to a mode with one (including the
+// same resolution).
+UINTN get_configuration_screen_resolution(
+	struct bootloader_arguments *CONST arguments)
+{
+	UINTN graphics_mode = 0;
+
+	for (UINTN i = 0; i < arguments->options_count; ++i)
+	{
+		// Below lengths are zero-based.
+		CHAR8 *CONST key = &arguments->options_string
+			[arguments->options[i].key_start];
+		CONST UINTN key_length = arguments->options[i].key_end
+			- arguments->options[i].key_start;
+		CHAR8 *CONST value = &arguments->options_string
+			[arguments->options[i].value_start];
+		CONST UINTN value_length = arguments->options[i].value_end
+			- arguments->options[i].value_start;
+
+		if ((key_length + 1
+			== ARRAY_LENGTH(UEFI_GOP_GRAPHICS_MODE_KEY) - 1)
+			&& !strncmp(key, (CONST CHAR8 *CONST)
+				UEFI_GOP_GRAPHICS_MODE_KEY,
+				ARRAY_LENGTH(UEFI_GOP_GRAPHICS_MODE_KEY) - 1))
+		{
+			// Can't be bothered to convert the `char*` value to
+			// `CHAR16*` for GNU-EFI's `Atoi()`.
+			for (UINTN a = 0; a <= value_length; ++a)
+			{
+				graphics_mode *= 10;
+				graphics_mode += value[a] - '0';
+			}
+
+			return graphics_mode;
+		}
+	}
+
+	return graphics_mode;
+}
+
+VOID set_screen_resolution(struct bootloader_arguments *CONST arguments,
+	CONST UINTN max_graphics_mode)
 {
 	EFI_GRAPHICS_OUTPUT_MODE_INFORMATION *selected_mode_information;
-	UINTN selected_mode = 0;
+	UINTN selected_mode
+		= get_configuration_screen_resolution(arguments);
 
 	// Enable the cursor. Helpful for user input. Ignore if it succeeded
 	// or not, as it's not vital. It can sometimes fail.
@@ -1016,23 +1082,26 @@ VOID set_screen_resolution(CONST UINTN max_graphics_mode)
 
 	do // Now handle the inputted graphics mode from the user.
 	{
-		// Ignore this option when debugging, as the resolution
-		// probably doesn't matter and this directive saves some time.
-		#ifdef HAVK_GDB_DEBUG
-			selected_mode = 1;
-			Print(u"! GRAPHICS MODE AUTOMATICALLY SELECTED.\r\n");
-			continue;
-		#endif
-
-		Print(u"ENTER THE GRAPHICS MODE (1 to %u)", max_graphics_mode);
-
-		Input(u": ", buffer, BUFFER_SIZE);
-		Print(u"\r\n");
-		selected_mode = Atoi(buffer);
+		// Will not be zero on the first loop if the user specified a
+		// mode in the configuration file we just parsed.
+		if (!selected_mode)
+		{
+			Print(u"ENTER THE GRAPHICS MODE (1 to %u)",
+				max_graphics_mode);
+			Input(u": ", buffer, BUFFER_SIZE);
+			Print(u"\r\n");
+			selected_mode = Atoi(buffer);
+		}
+		else
+		{
+			Print(u"CONFIGURATION FILE GRAPHICS MODE: %u\r\n",
+				selected_mode);
+		}
 
 		if (selected_mode < 1 || selected_mode > max_graphics_mode)
 		{
 			Print(u"GRAPHICS MODE IS OUT OF RANGE\r\n");
+			selected_mode = 0;
 			continue;
 		}
 
@@ -1399,30 +1468,21 @@ VOID switch_page_layout(struct uefi_page_structure *CONST page_structure)
 	);
 }
 
-// For reasons unknown, GNU-EFI's `strncmpa()` (`strncmp()` for ASCII strings)
-// returns an unsigned integer and thus is not an accurate implementation of
-// `strncmp()` or the similar `strcmp()`. Casting the `strncmpa()` result to
-// "INTN" seems to work depending on how the compiler feels during compilation,
-// so I've replaced it with a normal `strncmp()`.
-INTN strncmp(CONST CHAR8 *string_1, CONST CHAR8 *string_2,
-	UINTN bytes)
-{
-	while (bytes-- && *string_1++ == *string_2++);
-
-	return bytes ? *string_1 - *string_2 : 0;
-}
-
 // The boot files are mapped upon entry if they're in the range that I cover
 // when I'm building my own paging structure. The kernel will map them
 // according to the memory map if they're not mapped anyway.
 VOID load_boot_files(CONST EFI_FILE_PROTOCOL *CONST root_directory,
 	struct bootloader_arguments *CONST arguments)
 {
-	// If the key is smaller than or equal to the boot file prefix
-	// indicator I use, then it's not a boot_file or the boot file name
-	// itself is not specified.
+	// We're looking for a key that has the boot file prefix key and a
+	// suffix key indicating a path. A subkey in-between them will indicate
+	// an index or a group of some sort. The kernel will interpret that on
+	// its own. So in other words, this looks for a pair's key which is
+	// similar to "BOOT_FILE.*.PATH" and it will store additional
+	// information for the pair's option/entry.
 	for (UINTN i = 0; i < arguments->options_count; ++i)
 	{
+		// Below lengths are zero-based.
 		CHAR8 *CONST key = &arguments->options_string
 			[arguments->options[i].key_start];
 		CONST UINTN key_length = arguments->options[i].key_end
@@ -1432,18 +1492,28 @@ VOID load_boot_files(CONST EFI_FILE_PROTOCOL *CONST root_directory,
 		CONST UINTN value_length = arguments->options[i].value_end
 			- arguments->options[i].value_start;
 
-		// If it's the key we're looking for, then it has to longer
-		// than the "base key".
-		if (key_length <= ARRAY_LENGTH(BOOT_FILE_KEY))
+		// If it's the key we're looking for, then it has to be at
+		// least as long as the following key.
+		if (key_length + 1 <
+			ARRAY_LENGTH(BOOT_FILE_KEY "?" BOOT_FILE_PATH_SUBKEY)
+				- 1)
 		{
 			continue;
 		}
 
-		// Only needs to match the first part of the key, even if the
-		// whole key is longer. The "sub-key" at minimum is at least a
-		// single character.
+		// Check if the key prefix matches.
 		if (strncmp(key, (CONST CHAR8 *CONST) BOOT_FILE_KEY,
-			ARRAY_LENGTH(BOOT_FILE_KEY)))
+			ARRAY_LENGTH(BOOT_FILE_KEY) - 1))
+		{
+			continue;
+		}
+
+		// Check if the key suffix matches. Whatever is in-between is
+		// ignored for our purposes.
+		if (strncmp(&key[key_length
+				- (ARRAY_LENGTH(BOOT_FILE_PATH_SUBKEY) - 2)],
+			(CONST CHAR8 *CONST) BOOT_FILE_PATH_SUBKEY,
+			ARRAY_LENGTH(BOOT_FILE_PATH_SUBKEY) - 2))
 		{
 			continue;
 		}
@@ -1581,11 +1651,13 @@ EFI_STATUS efi_main(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE *system_table)
 	arguments = malloc(sizeof(arguments), EfiLoaderData);
 	parse_configuration(root_directory, arguments);
 
-	// Let the user set the screen resolution. I just find the first GOP
-	// handle.
+	// Let the user set the screen resolution, either interactively or if
+	// they've specified a resolution in the configuration file. I just
+	// find the first GOP handle.
 	// TODO: Is it possible to use multiple GOP handles for multiple
 	// monitor setups?
-	set_screen_resolution(read_screen_resolutions(get_gop_handle()));
+	set_screen_resolution(arguments,
+		read_screen_resolutions(get_gop_handle()));
 
 	// Open the kernel's ELF file.
 	havk = open_havk(root_directory, arguments);

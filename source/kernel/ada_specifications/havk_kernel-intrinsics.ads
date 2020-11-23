@@ -183,6 +183,7 @@ IS
    WITH
       Size        => 64,
       Object_Size => 64,
+      Convention  => Assembler,
       Annotate    => (GNATprove, No_Wrap_Around);
    PRAGMA Provide_Shift_Operators(general_register);
 
@@ -202,7 +203,8 @@ IS
    END RECORD
    WITH
       Unchecked_Union => true,
-      Object_Size     => 128;
+      Object_Size     => 128,
+      Convention      => Assembler;
    FOR XMM_register USE RECORD
       XMM_Bytes       AT 0 RANGE 0 .. 127;
       XMM_Words       AT 0 RANGE 0 .. 127;
@@ -216,6 +218,19 @@ IS
    WITH
       Size           => 128 * 16,
       Object_Size    => 128 * 16,
-      Component_Size => 128;
+      Component_Size => 128,
+      Convention     => Assembler;
+
+   -- MMX registers are also just 64-bit registers. The upper 12 bits used in
+   -- the ST{0,7} x87 registers go unused.
+   SUBTYPE MMX_register IS general_register;
+
+   -- There are eight MMX registers and they overlap with the x87 registers.
+   TYPE MMX_registers IS ARRAY(number RANGE 0 .. 7) OF MMX_register
+   WITH
+      Size           => 64 * 8,
+      Object_Size    => 64 * 8,
+      Component_Size => 64,
+      Convention     => Assembler;
 
 END HAVK_Kernel.Intrinsics;

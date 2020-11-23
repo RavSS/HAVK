@@ -140,7 +140,9 @@ IS
       -- address.
       Boot_File_Address : address RANGE address'first .. 2**47 - 1;
       Boot_File_Size    : number;
-   END RECORD;
+   END RECORD
+   WITH
+      Convention => C;
    FOR configuration_data USE RECORD
       Boot_File_Address AT 0 RANGE 0 .. 63;
       Boot_File_Size    AT 8 RANGE 0 .. 63;
@@ -153,7 +155,9 @@ IS
       Value_Start_Index : number RANGE 0 .. 2**32 - 1;
       Value_End_Index   : number RANGE 0 .. 2**32 - 1;
       Data              : configuration_data;
-   END RECORD;
+   END RECORD
+   WITH
+      Convention => C;
    FOR configuration_option USE RECORD
       Key_Start_Index   AT 00 RANGE 0 .. 031;
       Key_End_Index     AT 04 RANGE 0 .. 031;
@@ -163,13 +167,13 @@ IS
    END RECORD;
 
    -- The array of configuration options the bootloader hands over.
-   TYPE configuration_options IS ARRAY(number RANGE <>) OF configuration_option
+   TYPE configuration_options IS ARRAY(number RANGE <>) OF
+      ALIASED configuration_option
    WITH
-      Pack       => true,
       Convention => C;
 
    -- Represents the configuration file in a simple flat character array.
-   TYPE configuration_string IS ARRAY(number RANGE <>) OF character
+   TYPE configuration_string IS ARRAY(number RANGE <>) OF ALIASED character
    WITH
       Component_Size => 8,
       Convention     => C;

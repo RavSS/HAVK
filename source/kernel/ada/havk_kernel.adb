@@ -208,4 +208,72 @@ IS
       RETURN image_string
    IS
      (Image(number(Value), Base => Base, Padding => Padding));
+
+   FUNCTION Scan
+     (Imaged : IN string)
+      RETURN number
+   IS
+      Start_Index : natural RANGE 0 .. Imaged'last := 0;
+      End_Index   : natural RANGE 0 .. Imaged'last := 0;
+      Value       : number := 0;
+   BEGIN
+      FOR -- Find the start index.
+         Index IN Imaged'range
+      LOOP
+         IF
+            Imaged(Index) IN '0' .. '9'
+         THEN
+            Start_Index := Index;
+            EXIT WHEN true;
+         END IF;
+      END LOOP;
+
+      FOR -- Find the end index.
+         Index IN REVERSE Imaged'range
+      LOOP
+         IF
+            Imaged(Index) IN '0' .. '9'
+         THEN
+            End_Index := Index;
+            EXIT WHEN true;
+         END IF;
+      END LOOP;
+
+      IF -- Failed to find a starting (most significant) number.
+         Start_Index NOT IN Imaged'range OR ELSE
+         End_Index NOT IN Imaged'range
+      THEN
+         RETURN number'last;
+      END IF;
+
+      FOR -- Now do the actual conversion.
+         ASCII_Digit OF Imaged(Start_Index .. End_Index)
+      LOOP
+         IF -- Make sure that all characters in-between are all ASCII digits.
+            ASCII_Digit NOT IN '0' .. '9'
+         THEN
+            RETURN number'last;
+         END IF;
+
+         IF
+            Value /= 0
+         THEN
+            FOR -- An inefficient way of doing this, but the provers accept it.
+               Overflow_Check IN number RANGE 1 .. 10
+            LOOP
+               IF
+                  Value >= Value * Overflow_Check
+               THEN
+                  RETURN number'last;
+               END IF;
+            END LOOP;
+         END IF;
+
+         Value := (Value * 10) +
+           (character'pos(ASCII_Digit) - character'pos('0'));
+      END LOOP;
+
+      RETURN Value;
+   END Scan;
+
 END HAVK_Kernel;

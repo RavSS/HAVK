@@ -24,8 +24,7 @@ IS
       Call_Arguments : arguments :=
         (Operation_Call => send_message_operation,
          Argument_1     => general_register(Storage_Task),
-         Argument_2     => general_register(FILE'size / Storage_Unit),
-         Argument_3     => general_register(Storage_Task_Port),
+         Argument_2     => general_register(Storage_Task_Port),
          OTHERS         => <>);
 
       New_File       : FILE_pointer := NEW FILE;
@@ -68,11 +67,13 @@ IS
 
       LOOP -- TODO: Need much better message handling than this...
          Call_Arguments.Operation_Call := receive_message_operation;
+         Call_Arguments.Argument_1 := general_register(Storage_Task);
+         Call_Arguments.Argument_2 := general_register(Storage_Task_Port);
 
          IF
             System_Call(Call_Arguments, New_File) /= attempt_error     AND THEN
             Call_Arguments.Argument_1 = general_register(Storage_Task) AND THEN
-            Call_Arguments.Argument_3 = general_register(Storage_Task_Port)
+            Call_Arguments.Argument_2 = general_register(Storage_Task_Port)
          THEN
             RETURN New_File;
          END IF;
@@ -104,8 +105,7 @@ IS
       Sending_Arguments   : arguments :=
         (Operation_Call => send_message_operation,
          Argument_1     => general_register(Storage_Task),
-         Argument_2     => general_register(FILE'size / Storage_Unit),
-         Argument_3     => general_register(Storage_Task_Port),
+         Argument_2     => general_register(Storage_Task_Port),
          OTHERS         => <>);
 
       Receiving_Arguments : arguments;
@@ -140,17 +140,25 @@ IS
          END IF;
 
          New_File_State := Open_File.ALL;
-         System_Call(Sending_Arguments, New_File_State'access);
+
+         IF
+            System_Call(Sending_Arguments, New_File_State'access) /= no_error
+         THEN
+            RETURN Buffer_Offset / Element_Size;
+         END IF;
 
          Blocking_Receive : LOOP
             Receiving_Arguments.Operation_Call := receive_message_operation;
+            Receiving_Arguments.Argument_1 := general_register(Storage_Task);
+            Receiving_Arguments.Argument_2 :=
+               general_register(Storage_Task_Port);
 
             EXIT Blocking_Receive WHEN
                System_Call(Receiving_Arguments, New_File_State'access) =
                   no_error AND THEN
                Receiving_Arguments.Argument_1 = general_register(Storage_Task)
                   AND THEN
-               Receiving_Arguments.Argument_3 =
+               Receiving_Arguments.Argument_2 =
                   general_register(Storage_Task_Port);
 
             -- Reuse the variable for yielding.

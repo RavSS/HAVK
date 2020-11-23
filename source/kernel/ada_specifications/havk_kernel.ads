@@ -143,14 +143,14 @@ IS
    LF  : CONSTANT character := character'val(10);
    CR  : CONSTANT character := character'val(13);
 
-   -- Since there's no secondary stack (anymore), the string returned is padded
-   -- with null characters which should be ignored by I/O utilities.
+   -- Since there's no secondary stack, the string returned is padded with null
+   -- characters which should be ignored by I/O utilities.
    SUBTYPE image_string IS string(1 .. 64);
 
    -- Imaging function for numeric values. An improvement over the image
    -- attribute is the ability to set a base and that this is also not reliant
    -- on the runtime image functions which the attribute makes a call to. There
-   -- is also no secondarys stack involved. Note that the "Padding" parameter
+   -- is also no secondary stack involved. Note that the "Padding" parameter
    -- indicates a minimum number of (visible) characters in the return string.
    -- TODO: Add binary and integer/negative number imaging.
    FUNCTION Image
@@ -171,6 +171,17 @@ IS
    WITH
       Pre => Base IN 10 | 16 AND THEN
              Padding <= image_string'last;
+
+   -- This scans a string and returns the first unsigned numeric value it can
+   -- find. It returns the maximum value possible if no ASCII numbers were
+   -- found or if the size indicated is simply too large to fit inside 64 bits.
+   -- TODO: Support different bases if needed, along with prefixes i.e. "0x",
+   -- "0c", "0b", and "-".
+   FUNCTION Scan
+     (Imaged : IN string)
+      RETURN number
+   WITH
+      Pre => Imaged'length > 0;
 
    -- Stores a log in the main kernel log collection variable.
    PROCEDURE Log

@@ -19,6 +19,8 @@ WITH
    HAVK_Kernel.PIT;
 
 PACKAGE BODY HAVK_Kernel.Initialise
+WITH
+   Refined_State => (Boot_Configuration_State => Boot_Files)
 IS
    PROCEDURE Interrupt_Controllers
    IS
@@ -257,9 +259,6 @@ IS
    END CPU_Feature_Check;
 
    PROCEDURE Boot_Configuration_Check
-   WITH
-      Refined_Post => Initialiser_Address /= 0 AND THEN
-                      ATA_PIO_Driver_Address /= 0
    IS
       USE TYPE
          UEFI.configuration_string;
@@ -281,6 +280,15 @@ IS
          Length(UEFI.Bootloader_Arguments.Configuration_String_Address,
             natural'last);
 
+      -- TODO: Unfortunately, `gnatprove` can't analyse some array type
+      -- conversions for strings (even though it compiles and works seemingly
+      -- well). A solution is to use a buffer with an appropriate range, but
+      -- this comes at the cost of having to do pointless copies instead of
+      -- just reading the configuration file/string as it is. This could be
+      -- removed in the future.
+      Temporary_Buffer      : string(1 .. 512) := (OTHERS => NUL);
+      Temporary_Buffer_End  : natural RANGE 0 .. Temporary_Buffer'last;
+
       Configuration         : CONSTANT UEFI.configuration_string
         (0 .. number(Configuration_String_Length))
       WITH
@@ -298,85 +306,147 @@ IS
          Convention => C,
          Address    => UEFI.Bootloader_Arguments.Configuration_Options_Address;
 
-      Initialiser_Key    : CONSTANT UEFI.configuration_string :=
-         "BOOT_FILE.INITIALISER_ELF";
-      ATA_PIO_Driver_Key : CONSTANT UEFI.configuration_string :=
-         "BOOT_FILE.ATA_PIO_ELF";
+      Boot_File_Key_Prefix            : CONSTANT string := "BOOT_FILE.";
+      Boot_File_Key_Name_Suffix       : CONSTANT string := ".NAME";
+      Boot_File_Key_Path_Suffix       : CONSTANT string := ".PATH";
+      Boot_File_Key_Executable_Suffix : CONSTANT string := ".EXECUTABLE";
+      Boot_File_Index                 : number;
    BEGIN
       FOR
          Option OF Configuration_Options
       LOOP
-         IF
-            Option.Key_Start_Index IN Configuration'range AND THEN
-            Option.Key_End_Index IN Configuration'range
+         IF -- A lot of sanity checking. These could be put into assumptions.
+            Option.Key_Start_Index IN Configuration'range      AND THEN
+            Option.Key_End_Index IN Configuration'range        AND THEN
+            Option.Value_Start_Index IN Configuration'range    AND THEN
+            Option.Value_End_Index IN Configuration'range      AND THEN
+            Option.Key_Start_Index <= Option.Key_End_Index     AND THEN
+            Option.Value_Start_Index <= Option.Value_End_Index
          THEN
+            Temporary_Buffer_End := 0;
+
+            FOR
+               ASCII_Index IN Option.Key_Start_Index .. Option.Key_End_Index
+            LOOP
+               -- Due to the buffer workaround, I've had to introduce a hard
+               -- limit to the buffer itself, which limits keys and values to a
+               -- specific size.
+               EXIT WHEN Temporary_Buffer_End = Temporary_Buffer'last;
+               Temporary_Buffer_End := Temporary_Buffer_End + 1;
+               Temporary_Buffer(Temporary_Buffer_End) :=
+                  Configuration(ASCII_Index);
+            END LOOP;
+
             IF
-               Configuration(Option.Key_Start_Index .. Option.Key_End_Index) =
-                  Initialiser_Key
+               Temporary_Buffer(Boot_File_Key_Prefix'range) =
+                  Boot_File_Key_Prefix
             THEN
-               Initialiser_Address := Option.Data.Boot_File_Address;
-               Initialiser_Size    := Option.Data.Boot_File_Size;
-               Log("Initialisation program found at 0x" &
-                  Image(Initialiser_Address) & '.', Tag => Initialise_Tag);
-            ELSIF
-               Configuration(Option.Key_Start_Index .. Option.Key_End_Index) =
-                  ATA_PIO_Driver_Key
-            THEN
-               ATA_PIO_Driver_Address := Option.Data.Boot_File_Address;
-               ATA_PIO_Driver_Size    := Option.Data.Boot_File_Size;
-               Log("Initial ATA PIO driver found at 0x" &
-                  Image(ATA_PIO_Driver_Address) & '.', Tag => Initialise_Tag);
+               Boot_File_Index := Scan(Temporary_Buffer);
+
+               -- TODO: This needs to be moved elsewhere and the comparison
+               -- logic should be reused instead of repeated for each suffix.
+               IF
+                  Boot_File_Index IN Boot_Files'range
+               THEN
+                  IF -- Parse pairs with the ".NAME" key suffix.
+                     Temporary_Buffer_End -
+                       (Boot_File_Key_Name_Suffix'length - 1) IN
+                           Temporary_Buffer'range AND THEN
+                     Temporary_Buffer(Temporary_Buffer_End -
+                       (Boot_File_Key_Name_Suffix'length - 1) ..
+                           Temporary_Buffer_End) = Boot_File_Key_Name_Suffix
+                  THEN
+                     -- The name field in the boot files record is null-padded.
+                     Temporary_Buffer := (OTHERS => NUL);
+                     Temporary_Buffer_End := 0;
+
+                     FOR
+                        ASCII_Index IN
+                           Option.Value_Start_Index .. Option.Value_End_Index
+                     LOOP
+                        EXIT WHEN Temporary_Buffer_End = Temporary_Buffer'last;
+                        Temporary_Buffer_End := Temporary_Buffer_End + 1;
+                        Temporary_Buffer(Temporary_Buffer_End) :=
+                           Configuration(ASCII_Index);
+                     END LOOP;
+
+                     Boot_Files(Boot_File_Index).Name := Temporary_Buffer
+                       (Boot_Files(Boot_File_Index).Name'range);
+                  ELSIF -- Parse pairs with the ".PATH" key suffix.
+                     Temporary_Buffer_End -
+                       (Boot_File_Key_Path_Suffix'length - 1) IN
+                           Temporary_Buffer'range AND THEN
+                     Temporary_Buffer(Temporary_Buffer_End -
+                       (Boot_File_Key_Path_Suffix'length - 1) ..
+                           Temporary_Buffer_End) = Boot_File_Key_Path_Suffix
+                  THEN
+                     -- The bootloader stores special information for this
+                     -- pair's options. Namely the file address and file size.
+                     Boot_Files(Boot_File_Index).File_Address :=
+                        Option.Data.Boot_File_Address;
+                     Boot_Files(Boot_File_Index).File_Size :=
+                        Option.Data.Boot_File_Size;
+
+                     Boot_Files(Boot_File_Index).Present := true;
+                  ELSIF -- Parse pairs with the ".EXECUTABLE" key suffix.
+                     Temporary_Buffer_End -
+                       (Boot_File_Key_Executable_Suffix'length - 1) IN
+                           Temporary_Buffer'range AND THEN
+                     Temporary_Buffer(Temporary_Buffer_End -
+                       (Boot_File_Key_Executable_Suffix'length - 1) ..
+                           Temporary_Buffer_End) =
+                              Boot_File_Key_Executable_Suffix
+                  THEN
+                     Boot_Files(Boot_File_Index).Executable :=
+                        Configuration(Option.Value_Start_Index ..
+                           Option.Value_End_Index) = "Y";
+                  END IF;
+               END IF;
             END IF;
          END IF;
       END LOOP;
-
-      IF -- We can't continue if any of these are missing.
-         Initialiser_Address = 0
-      THEN
-         RAISE Panic
-         WITH
-            Source_Location & " - No initialisation program found.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "We cannot continue if the bootloader did not load it.");
-      ELSIF
-         ATA_PIO_Driver_Address = 0
-      THEN
-         RAISE Panic
-         WITH
-            Source_Location & " - No initial ATA PIO driver found.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "We cannot continue if the bootloader did not load it.");
-      END IF;
    END Boot_Configuration_Check;
 
    PROCEDURE Begin_Tasking
    IS
-      Error_Check : error;
+      Error_Check  : error;
+      Tasks_Loaded : boolean := false;
    BEGIN
-      Tasking.ELF.Load(Initialiser_Address, Initialiser_Size, Initialiser_Name,
-         Error_Check);
+      FOR
+         Loaded_Boot_File OF Boot_Files
+      LOOP
+         IF
+            Loaded_Boot_File.Present AND THEN
+            Loaded_Boot_File.Executable
+         THEN
+            Tasking.ELF.Load(Loaded_Boot_File.File_Address,
+               Loaded_Boot_File.File_Size, Loaded_Boot_File.Name, Error_Check);
+
+            IF
+               Error_Check /= no_error
+            THEN
+               RAISE Panic
+               WITH
+                  Source_Location & " - Failed to load """ &
+                     Loaded_Boot_File.Name & """.";
+               PRAGMA Annotate(GNATprove, Intentional,
+                  "exception might be raised",
+                  "We shouldn't continue if it fails to load.");
+            END IF;
+
+            Tasks_Loaded := true;
+         END IF;
+      END LOOP;
 
       IF
-         Error_Check /= no_error
+         NOT Tasks_Loaded
       THEN
          RAISE Panic
          WITH
-            Source_Location & " - Failed to load the initialiser program.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "We cannot continue if it fails to load. External error.");
-      END IF;
-
-      Tasking.ELF.Load(ATA_PIO_Driver_Address, ATA_PIO_Driver_Size,
-         ATA_PIO_Name, Error_Check);
-
-      IF
-         Error_Check /= no_error
-      THEN
-         RAISE Panic
-         WITH
-            Source_Location & " - Failed to load the ATA PIO driver.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "We cannot continue if it fails to load. External error.");
+            Source_Location & " - Did not find any task to load.";
+         PRAGMA Annotate(GNATprove, Intentional,
+            "exception might be raised",
+            "We cannot continue if we did not load any task at all.");
       END IF;
 
       Log("Now beginning multi-tasking environment.", Tag => Initialise_Tag);

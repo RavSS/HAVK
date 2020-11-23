@@ -28,7 +28,7 @@ IS
             Tag => System_Call_Tag, Warn => true);
          RETURN;
       ELSIF
-         NOT Values.RDI'valid
+         NOT Values.Operation_Call'valid
       THEN
          Log("Task """ & Caller_Status.Name &
             """ called a non-existent system operation.",
@@ -37,57 +37,72 @@ IS
       END IF;
 
       CASE
-         Values.RDI
-      IS -- Format the syntax for this so we really know what we're passing.
-         WHEN null_operation
-         =>   Null_Operation_Call
-                (Values.RSI, Values.RDX, Values.R8, Values.R9, Values.R10,
-                 Values.RAX, Intrinsics.general_register(Values.RCX_RIP));
+         Values.Operation_Call
+      IS
+         WHEN null_operation               => Null_Operation_Call
+           (Values.Argument_1,
+            Values.Argument_2,
+            Values.Argument_3,
+            Values.Argument_4,
+            Values.Argument_5,
+            Values.Call_Address,
+            Values.Error_Status);
 
-         WHEN exit_task_operation
-         =>   Exit_Task_Operation_Call
-                (Values.RSI);
+         WHEN exit_task_operation          => Exit_Task_Operation_Call
+           (Values.Argument_1);
 
-         WHEN receive_message_operation
-         =>   Receive_Message_Operation_Call
-                (Values.RSI, Values.RDX, Values.R8, Values.XMM, Values.RAX);
+         WHEN receive_message_operation    => Receive_Message_Operation_Call
+           (Values.Argument_1,
+            Values.Argument_2,
+            Values.Argument_3,
+            Values.XMM_State,
+            Values.Error_Status);
 
-         WHEN send_message_operation
-         =>   Send_Message_Operation_Call
-                (Values.RSI, Values.RDX, Values.R8, Values.XMM, Values.RAX);
+         WHEN send_message_operation       => Send_Message_Operation_Call
+           (Values.Argument_1,
+            Values.Argument_2,
+            Values.Argument_3,
+            Values.XMM_State,
+            Values.Error_Status);
 
-         WHEN identify_task_operation
-         =>   Identify_Task_Operation_Call
-                (Values.RSI, Values.XMM, Values.RAX);
+         WHEN identify_task_operation      => Identify_Task_Operation_Call
+           (Values.Argument_1,
+            Values.XMM_State,
+            Values.Error_Status);
 
-         WHEN load_elf_operation
-         =>   Load_ELF_Operation_Call
-                (Values.XMM, Values.RAX);
+         WHEN load_elf_operation           => Load_ELF_Operation_Call
+           (Values.XMM_State,
+            Values.Error_Status);
 
-         WHEN heap_increase_operation
-         =>   Heap_Increase_Operation_Call
-                (Values.RSI, Values.RAX);
+         WHEN heap_increase_operation      => Heap_Increase_Operation_Call
+           (Values.Argument_1,
+            Values.Error_Status);
 
-         WHEN yield_operation
-         =>   Yield_Operation_Call
-                (Values.RAX);
+         WHEN yield_operation              => Yield_Operation_Call
+           (Values.Error_Status);
 
-         WHEN log_operation
-         =>   Log_Operation_Call
-                (Values.XMM, Values.RAX);
+         WHEN log_operation                => Log_Operation_Call
+           (Values.XMM_State,
+            Values.Error_Status);
 
-         WHEN irq_statistics_operation
-         =>   IRQ_Statistics_Operation_Call
-                (Values.RSI, Values.RDX, Values.RAX);
+         WHEN irq_statistics_operation     => IRQ_Statistics_Operation_Call
+           (Values.Argument_1,
+            Values.Argument_2,
+            Values.Error_Status);
 
-         WHEN buffer_operation
-         =>   Buffer_Operation_Call
-                (Values.RSI, Values.RDX, Values.XMM, Values.RAX);
+         WHEN buffer_operation             => Buffer_Operation_Call
+           (Values.Argument_1,
+            Values.Argument_2,
+            Values.XMM_State,
+            Values.Error_Status);
 
-         WHEN framebuffer_access_operation
-         =>   Framebuffer_Access_Operation_Call
-                (Values.RSI, Values.RDX, Values.R8, Values.R9, Values.R10,
-                 Values.RAX);
+         WHEN framebuffer_access_operation => Framebuffer_Access_Operation_Call
+           (Values.Argument_1,
+            Values.Argument_2,
+            Values.Argument_3,
+            Values.Argument_4,
+            Values.Argument_5,
+            Values.Error_Status);
       END CASE;
    END System_Call_Handler;
 

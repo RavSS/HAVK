@@ -75,61 +75,64 @@ BEGIN
       Tag => Main_Tag);
 
    LOOP -- Begin the request loop.
-      Call_Arguments.Operation_Call := receive_message_operation;
-      Error_Check := System_Call(Call_Arguments, Temporary_File_State);
+      FOR
+         Task_Index IN general_register RANGE 1 .. 256
+      LOOP
+         Call_Arguments.Operation_Call := receive_message_operation;
+         Call_Arguments.Argument_1 := Task_Index;
+         Error_Check := System_Call(Call_Arguments, Temporary_File_State);
 
-      IF
-         Error_Check = no_error                    AND THEN
-         Call_Arguments.Argument_3 = general_register(Storage_Task_Port)
-            AND THEN
-         Temporary_File_State.ALL.File_Error'valid AND THEN
-         Temporary_File_State.Buffer_Length IN
-            Temporary_File_State.Buffer'first + 1 ..
-               Temporary_File_State.Buffer'last + 1
-      THEN
-         FOR
-            Index IN Temporary_File_State.File_Path'range
-         LOOP
-            Temporary_File_Path(positive(Index + 1)) := character'val
-              (Temporary_File_State.File_Path(Index));
-         END LOOP;
-
-         IF -- If they give a size, then they want to do a file read/write.
-            Temporary_File_State.File_Size /= 0
+         IF
+            Error_Check = no_error                    AND THEN
+            Call_Arguments.Argument_2 = general_register(Storage_Task_Port)
+               AND THEN
+            Temporary_File_State.ALL.File_Error'valid AND THEN
+            Temporary_File_State.Buffer_Length IN
+               Temporary_File_State.Buffer'first + 1 ..
+                  Temporary_File_State.Buffer'last + 1
          THEN
-            IF
-               NOT Temporary_File_State.Write_Request
-            THEN
-               FAT.Read_File(ESP_File_System, Temporary_File_Path,
-                  Temporary_File_State.Buffer'address, Error_Check,
-                  Base_Byte => number(Temporary_File_State.File_Offset + 1),
-                  Byte_Size => number(Temporary_File_State.Buffer_Length));
+            FOR
+               Index IN Temporary_File_State.File_Path'range
+            LOOP
+               Temporary_File_Path(positive(Index + 1)) := character'val
+                 (Temporary_File_State.File_Path(Index));
+            END LOOP;
 
-               Temporary_File_State.File_Error := Error_Check;
-            ELSE
-               -- TODO: Writing is not yet implemented in my FAT driver.
-               Temporary_File_State.File_Error := attempt_error;
-            END IF;
-         ELSE -- Otherwise, just check the file.
-            FAT.Check_File(ESP_File_System, Temporary_File_Path,
-               Error_Check, ESP_File);
-
-            IF
-               Error_Check = no_error
+            IF -- If they give a size, then they want to do a file read/write.
+               Temporary_File_State.File_Size /= 0
             THEN
-               Temporary_File_State.File_Size := size_t(ESP_File.Size);
-            ELSE
-               Temporary_File_State.File_Error := Error_Check;
+               IF
+                  NOT Temporary_File_State.Write_Request
+               THEN
+                  FAT.Read_File(ESP_File_System, Temporary_File_Path,
+                     Temporary_File_State.Buffer'address, Error_Check,
+                     Base_Byte => number(Temporary_File_State.File_Offset + 1),
+                     Byte_Size => number(Temporary_File_State.Buffer_Length));
+
+                  Temporary_File_State.File_Error := Error_Check;
+               ELSE
+                  -- TODO: Writing is not yet implemented in my FAT driver.
+                  Temporary_File_State.File_Error := attempt_error;
+               END IF;
+            ELSE -- Otherwise, just check the file.
+               FAT.Check_File(ESP_File_System, Temporary_File_Path,
+                  Error_Check, ESP_File);
+
+               IF
+                  Error_Check = no_error
+               THEN
+                  Temporary_File_State.File_Size := size_t(ESP_File.Size);
+               ELSE
+                  Temporary_File_State.File_Error := Error_Check;
+               END IF;
             END IF;
+
+            Call_Arguments.Operation_Call := send_message_operation;
+            System_Call(Call_Arguments, Temporary_File_State);
+         ELSE
+            Call_Arguments.Operation_Call := yield_operation;
+            System_Call(Call_Arguments);
          END IF;
-
-         Call_Arguments.Operation_Call := send_message_operation;
-         Call_Arguments.Argument_2 := FILE'size / 8;
-
-         System_Call(Call_Arguments, Temporary_File_State);
-      ELSE
-         Call_Arguments.Operation_Call := yield_operation;
-         System_Call(Call_Arguments);
-      END IF;
+      END LOOP;
    END LOOP;
 END Main;

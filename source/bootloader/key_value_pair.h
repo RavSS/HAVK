@@ -18,7 +18,7 @@
 
 /* Should be an unsigned type that can hold index values. */
 #ifndef KVP_INDEX_TYPE
-	#define KVP_INDEX_TYPE unsigned long;
+	#define KVP_INDEX_TYPE unsigned long
 #endif
 
 #ifndef KVP_ENTRY_ATTRIBUTES
@@ -29,6 +29,8 @@
 #ifndef KVP_ENTRY_DATA_FIELDS
 	#define KVP_ENTRY_DATA_FIELDS
 #endif
+
+/* For now, only tokens that can fit inside a byte (char) are supported. */
 
 #ifndef KVP_ASSIGNER
 	#define KVP_ASSIGNER '='
@@ -63,116 +65,88 @@ static void kvp_clear_entry(kvp_entry *const entry)
 	for (i = sizeof(kvp_entry); i--; *entry_byte++ = 0);
 }
 
-/* Returns the index of the next line, with the return value being +1 after the
-/  delimiter itself. Returns zero if no more lines could be interpreted. */
-static kvp_uint kvp_next_line(const char *const data, kvp_uint start,
-	const kvp_uint size)
+/* The main parser logic. If the latter two arguments are zero, then it just
+/  counts as many pairs as it can without filling in the entries array. */
+static kvp_uint kvp_parser(const char *const data, const kvp_uint size,
+	kvp_entry *const entries, const kvp_uint max_count)
 {
-	while (start++ < size && data[start] != kvp_delimiter);
-	return ++start < size && data[start] ? start : 0;
-}
+	kvp_uint line_start, line_assigner, line_end, count;
 
-/* Returns one on success and zero on failure, depending on if the line could
-/  be parsed properly. Also outputs the starting index for the value string.
-/  Expects the data pointer to point towards the start of the line, unlike
-/  other functions here. That also means the value string's start will be
-/  relative to the start of the data pointer. */
-static char kvp_read_line(const char *const data,
-	kvp_uint *const value_start_offset)
-{
-	kvp_uint i;
-	char key_set, value_set;
-
-	for (i = 0, key_set = 0, value_set = 0; data[i] != kvp_delimiter; ++i)
+	for (line_start = 0, count = 0; line_start < size;)
 	{
-		if (data[i] == KVP_ASSIGNER)
+		if (data[line_start] == kvp_delimiter) /* Empty line check. */
 		{
-			if (!key_set)
-			{
-				key_set = 1;
-			}
-			else
-			{
-				return 0; /* Double usage of the assigner. */
-			}
-		}
-		else if (key_set && !value_set)
-		{
-			value_set = 1;
-			*value_start_offset = i;
-		}
-	}
-
-	return key_set && value_set;
-}
-
-static kvp_uint kvp_count(const char *const data, const kvp_uint size)
-{
-	kvp_uint i, count, next_line, ignored;
-
-	for (i = 0, count = 0; i < size; i = next_line)
-	{
-		next_line = kvp_next_line(data, i, size);
-
-		if (data[i] == KVP_LINE_COMMENT)
-		{
-			if (!next_line)
-			{
-				break;
-			}
-
+			++line_start;
 			continue;
 		}
 
-		/* Ignore the value index. */
-		count += kvp_read_line(&data[i], &ignored);
-
-		if (!next_line)
+		for (line_assigner = 0, line_end = line_start;; ++line_end)
 		{
-			break;
+			if (line_end >= size)
+			{
+				/* If there was no assignment, then exit from
+				/  here early. */
+				if (!line_assigner)
+				{
+					return count;
+				}
+
+				/* No empty newline after the final line in the
+				/  file was found, but we still need to parse
+				/  the final line itself. */
+				--line_end; /* Don't go over the file's end. */
+				break;
+			}
+			else if (data[line_end] == KVP_ASSIGNER)
+			{
+				/* If two or more assignment tokens appear,
+				/  then the last assignment token will be used
+				/  and the rest will appear as part of the key
+				/  for the pair itself. */
+				line_assigner = line_end;
+			}
+			else if (data[line_end] == kvp_delimiter)
+			{
+				--line_end; /* Don't include the delimiter. */
+				break;
+			}
+			else if (!data[line_end])
+			{
+				/* A null byte in the buffer is erroneous. */
+				return 0;
+			}
 		}
+
+		/* Must not be a comment and must have both a key and a value
+		/  of some length for it to be considered as a valid pair. */
+		if (data[line_start] != KVP_LINE_COMMENT
+			&& line_assigner != 0 /* Must have an assignment. */
+			&& line_assigner != line_start
+			&& line_assigner != line_end)
+		{
+			if (entries && count < max_count)
+			{
+				kvp_clear_entry(&entries[count]);
+				entries[count].key_start = line_start;
+				entries[count].key_end = line_assigner - 1;
+				entries[count].value_start = line_assigner + 1;
+				entries[count].value_end = line_end;
+			}
+
+			++count;
+		}
+
+		line_start = line_end + 1;
 	}
 
 	return count;
 }
 
-static void kvp_parse(const char *const data, const kvp_uint size,
-	kvp_entry *const entries, const kvp_uint pair_count)
-{
-	kvp_uint i, pair, next_line, value_start_offset;
+/* Counts the number of entries in the key-value-pair file. */
+#define kvp_count(x, y) kvp_parser((x), (y), 0, 0)
 
-	for (i = 0, pair = 0; i < size && pair < pair_count; i = next_line)
-	{
-		next_line = kvp_next_line(data, i, size);
-
-		if (data[i] == KVP_LINE_COMMENT)
-		{
-			if (!next_line)
-			{
-				break;
-			}
-
-			continue;
-		}
-
-		value_start_offset = 0; /* Silence the unused warning. */
-		if (kvp_read_line(&data[i], &value_start_offset))
-		{
-			kvp_clear_entry(&entries[pair]);
-			value_start_offset += i; // Relative to absolute.
-
-			entries[pair].key_start = i;
-			entries[pair].key_end = value_start_offset - 2;
-			entries[pair].value_start = value_start_offset;
-			while (data[++value_start_offset] != kvp_delimiter);
-			entries[pair++].value_end = value_start_offset - 1;
-		}
-
-		if (!next_line)
-		{
-			break;
-		}
-	}
-}
+/* Parses the key-value-pair file and puts pairs into entries. Requires a
+/  memory area which can hold up to "a" number of entries. */
+#define kvp_parse(x, y, z, a) kvp_parser((x), (y), (z), (a))
 
 #endif

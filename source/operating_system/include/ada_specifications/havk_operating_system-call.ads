@@ -77,12 +77,12 @@ IS
      (source => XMM_registers, target => XMM_string);
 
    TYPE arguments IS RECORD
-      Operation_Call : operation := null_operation;                -- RDI.
-      Argument_1     : general_register := general_register'first; -- RSI.
-      Argument_2     : general_register := general_register'first; -- RDX.
-      Argument_3     : general_register := general_register'first; -- R8.
-      Argument_4     : general_register := general_register'first; -- R9.
-      Argument_5     : general_register := general_register'first; -- R10.
+      Operation_Call : operation := null_operation;                -- RAX.
+      Argument_1     : general_register := general_register'first; -- RDI.
+      Argument_2     : general_register := general_register'first; -- RSI.
+      Argument_3     : general_register := general_register'first; -- RDX.
+      Argument_4     : general_register := general_register'first; -- R8.
+      Argument_5     : general_register := general_register'first; -- R9.
    END RECORD
    WITH
       Convention => C;
