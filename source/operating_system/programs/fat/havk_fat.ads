@@ -1,12 +1,19 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System ATA PIO Driver                   --
--- Filename        -- havk_ata_pio-fat.ads                                   --
+-- Program         -- HAVK Operating System FAT Implementation               --
+-- Filename        -- havk_fat.ads                                           --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_ATA_PIO.GPT;
+   System,
+   HAVK_Operating_System,
+   HAVK_Operating_System.Global,
+   HAVK_Operating_System.Utility;
+USE
+   System,
+   HAVK_Operating_System,
+   HAVK_Operating_System.Utility;
 
 -- A package that details the FAT file system (mostly FAT16 for early boot
 -- purposes). For now, it merely attempts to read the file system, but it
@@ -20,8 +27,21 @@ WITH
 -- verification aren't fully adequate, although runtime errors in the Ada code
 -- itself are unlikely to happen.
 -- TODO: Make a virtual file system to abstract from FAT's specific details.
-PACKAGE HAVK_ATA_PIO.FAT
+PACKAGE HAVK_FAT
+WITH
+   SPARK_Mode     => on,
+   Abstract_State =>
+   (
+      Drive_State
+      WITH
+         External => (Async_Readers, Async_Writers,
+                         Effective_Reads, Effective_Writes)
+   )
 IS
+   USE
+      Global.ATA,
+      Global.Drive_Manager;
+
    -- A context/state type. What's inside should be hidden from the rest of the
    -- operating system to avoid modifications by mistake, as it's not relevant
    -- to them.
@@ -57,7 +77,7 @@ IS
    -- recorded in the "file_system" type itself.
    PROCEDURE Get_File_System
      (New_FAT_Context : OUT file_system;
-      FAT_Partition   : IN GPT.partition)
+      FAT_Partition   : IN partition)
    WITH
       Pre => FAT_Partition.Present;
 
@@ -308,9 +328,9 @@ PRIVATE
       Modification_Time : standard_file_time;
       -- The last date at which the file entry was modified.
       Modification_Date : standard_file_date;
-      -- The entry's first cluster number. This's relevant to all FAT versions.
-      -- If this is zero (along with the higher two bytes), then this links
-      -- back to the root directory.
+      -- The entry's first cluster number. This is relevant to all FAT
+      -- versions. If this is zero (along with the higher two bytes), then this
+      -- links back to the root directory.
       Cluster_Low       : number RANGE 0 .. 2**16 - 1 := 0;
       -- The size of the file in bytes. FAT is unfortunately limited to 4 GiB
       -- files.
@@ -395,7 +415,7 @@ PRIVATE
       -- A copy of the partition information for where the FAT file system was
       -- found etc. Required to get the correct drive and calculate the correct
       -- relative LBAs as opposed to absolute LBAs.
-      Drive_Partition             : GPT.partition;
+      Drive_Partition             : partition;
       -- A copy of the BIOS Parameter Block, as it contains much important
       -- information to do with traversing the file system.
       BPB                         : BIOS_parameter_block;
@@ -453,24 +473,6 @@ PRIVATE
       TYPE object(<>) IS PRIVATE;
       TYPE access_object IS ACCESS object;
    PROCEDURE FAT_Read
-     (FAT_Context     : IN file_system;
-      Sector_Base     : IN logical_block_address;
-      Sector_Count    : IN number;
-      Object_Location : IN access_object)
-   WITH
-      Inline => true,
-      Pre    => FAT_Context.FAT_Version = FAT16 AND THEN
-                Sector_Count IN 1 .. 2**16 - 1  AND THEN
-                FAT_Context.Drive_Partition.LBA_First + Sector_Base IN
-                   FAT_Context.Drive_Partition.LBA_First ..
-                      FAT_Context.Drive_Partition.LBA_Last;
-
-   -- Does some light abstractions for writing sectors to the FAT partition.
-   -- Essentially the same as using `PIO_Write()`.
-   GENERIC
-      TYPE object(<>) IS PRIVATE;
-      TYPE access_object IS ACCESS object;
-   PROCEDURE FAT_Write
      (FAT_Context     : IN file_system;
       Sector_Base     : IN logical_block_address;
       Sector_Count    : IN number;
@@ -576,4 +578,17 @@ PRIVATE
                 File_Entry.Cluster_Low) < invalid_cluster_16'first,
       Post => Error_Status IN no_error; -- TODO: Add more error checking.
 
-END HAVK_ATA_PIO.FAT;
+   -- Added in to interact with the drive management task.
+   -- TODO: This is heavily rushed. Needs to be reworked a bit.
+   PROCEDURE PIO_Read
+     (Drive_Partition : IN partition;
+      Sector_Base     : IN logical_block_address;
+      Sector_Count    : IN number;
+      Destination     : IN address;
+      Secondary_Bus   : IN boolean := false;
+      Secondary_Drive : IN boolean := false)
+   WITH
+      Global => (In_Out => (CPU_Port_State, Drive_State)),
+      Pre    => Sector_Count IN 1 .. 2**16 - 1;
+
+END HAVK_FAT;

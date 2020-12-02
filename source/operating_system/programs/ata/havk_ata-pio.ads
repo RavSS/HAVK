@@ -1,5 +1,5 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System ATA PIO Driver                   --
+-- Program         -- HAVK Operating System ATA Driver                       --
 -- Filename        -- havk_ata_pio.ads                                       --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
@@ -8,10 +8,12 @@
 WITH
    System,
    HAVK_Operating_System,
+   HAVK_Operating_System.Global,
    HAVK_Operating_System.Utility;
 USE
    System,
    HAVK_Operating_System,
+   HAVK_Operating_System.Global,
    HAVK_Operating_System.Utility;
 
 -- This package facilitates a very basic disk driver (ATA PIO) that is to be
@@ -24,8 +26,9 @@ USE
 -- 4096 bytes. For now, 512 is hardcoded into many places, including the child
 -- packages of this package. To resolve it, I would need to interpret the
 -- Identify command's 512-byte "IDENTIFY DEVICE data" structure/record.
-PACKAGE HAVK_ATA_PIO
+PACKAGE HAVK_ATA.PIO
 WITH
+   SPARK_Mode     => on,
    Abstract_State =>
    (
       Drive_State
@@ -34,11 +37,8 @@ WITH
                          Effective_Reads, Effective_Writes)
    )
 IS
-   -- A type for indicating the LBA (logical block addressing) value, which is
-   -- a CHS (cylinder-head-sector) tuple. Usually, each sector (the LBA value)
-   -- represents 512 bytes, but not always. The current standard is LBA48.
-   -- Note that this should not be seen as a memory address, just a number.
-   SUBTYPE logical_block_address IS number RANGE 0 .. 2**48 - 1;
+   USE
+      Global.ATA;
 
    -- Reads values from the LBA/sector to a destination in memory.
    -- A sector count of zero is technically valid, but to avoid confusion,
@@ -338,4 +338,4 @@ PRIVATE
    WITH
       Global => (In_Out => CPU_Port_State, Input => Drive_State);
 
-END HAVK_ATA_PIO;
+END HAVK_ATA.PIO;

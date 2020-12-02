@@ -15,7 +15,9 @@ IS
 
    -- Operating system program projects go below.
    FOR project_files  USE
-     ("./programs/ata_pio/HAVK_ATA_PIO.gpr",
+     ("./programs/ata/HAVK_ATA.gpr",
+      "./programs/drive_manager/HAVK_Drive_Manager.gpr",
+      "./programs/fat/HAVK_FAT.gpr",
       "./programs/initialiser/HAVK_Initialiser.gpr",
       "./programs/ipc_tester/HAVK_IPC_Tester.gpr",
       "./programs/terminal/HAVK_Terminal.gpr",

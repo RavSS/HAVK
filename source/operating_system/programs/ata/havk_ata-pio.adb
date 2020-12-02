@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System ATA PIO Driver                   --
--- Filename        -- havk_ata_pio.adb                                       --
+-- Program         -- HAVK Operating System ATA Driver                       --
+-- Filename        -- havk_ata-pio.adb                                       --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -8,7 +8,7 @@
 WITH
    Ada.Unchecked_Conversion;
 
-PACKAGE BODY HAVK_ATA_PIO
+PACKAGE BODY HAVK_ATA.PIO
 WITH
    Refined_State => (Drive_State => NULL)
 IS
@@ -352,4 +352,4 @@ IS
          ELSE cache_flush), Secondary_Bus);
    END PIO_Write;
 
-END HAVK_ATA_PIO;
+END HAVK_ATA.PIO;

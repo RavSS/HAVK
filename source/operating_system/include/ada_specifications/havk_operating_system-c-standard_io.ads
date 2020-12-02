@@ -24,13 +24,11 @@ IS
    -- during runtime.
    -- TODO: Implement some sort of task dictionary or something instead of
    -- hardcoding these in.
-   Storage_Task      : uint64_t := 2;
-   Storage_Task_Port : uint64_t := 1000;
+   Storage_Task : CONSTANT general_register := 4;
 
-   -- This is the state that gets passed around by tasks. Both ends are
-   -- expected to update it according to what they're trying to do. No storage
-   -- of a file state is technically required on the filesystem's end. Every
-   -- field inside this record is implementation-defined.
+   -- Every field inside this record is implementation-defined. The way this
+   -- works is that a file state is sent to the storage task and then the
+   -- storage task decides to send back file data.
    -- TODO: I can pack this further by picking more sensible types.
    TYPE FILE IS RECORD
       -- Represents the file path of the file itself.
@@ -43,27 +41,18 @@ IS
       -- The current byte offset/position of the file. This is a zero-based
       -- index.
       File_Offset   : size_t := 0;
-      -- The errors the task has encountered (if any). Be sure to check for
-      -- validity in case a task changes the error value into an unrecognised
-      -- enumeration.
-      File_Error    : error := no_error;
       -- If false, then this is doing a read request.
       Write_Request : bool := false;
-      -- This is where data will be read into and written out of.
-      Buffer        : ALIASED char_array(0 .. 090) := (OTHERS => 0);
-      -- The buffer length to read from and write to.
-      Buffer_Length : size_t := 1;
+      -- This controls the amount of incoming/outgoing data during a read or
+      -- write over a series of messages.
+      Buffer_Size   : size_t := 0;
+      Padding       : bytes(169 .. 256);
    END RECORD
    WITH
       Size              => 2048,
       Object_Size       => 2048,
       Convention        => C,
-      Dynamic_Predicate => Buffer_Length IN Buffer'first + 1 .. Buffer'last + 1
-                              AND THEN
-                          (IF File_Size /= 0 THEN File_Offset < File_Size);
-
-   PRAGMA Compile_Time_Error(FILE'size /= 2048,
-      "The data is not a perfect fit for packing into the XMM registers.");
+      Dynamic_Predicate => (IF File_Size /= 0 THEN File_Offset < File_Size);
 
    TYPE FILE_pointer IS ACCESS ALL FILE
    WITH

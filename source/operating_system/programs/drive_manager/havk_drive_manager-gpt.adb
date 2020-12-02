@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
--- Program         -- HAVK Operating System ATA PIO Driver                   --
--- Filename        -- havk_ata_pio-gpt.adb                                   --
+-- Program         -- HAVK Operating System Drive Manager                    --
+-- Filename        -- havk_drive_manager-gpt.adb                             --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
@@ -9,7 +9,7 @@ WITH
    Ada.Unchecked_Deallocation,
    HAVK_Operating_System.Utility;
 
-PACKAGE BODY HAVK_ATA_PIO.GPT
+PACKAGE BODY HAVK_Drive_Manager.GPT
 IS
    FUNCTION Resolve_UUID
      (UUID : IN unique_identifier)
@@ -136,4 +136,4 @@ IS
       END LOOP;
    END Get_Partition;
 
-END HAVK_ATA_PIO.GPT;
+END HAVK_Drive_Manager.GPT;

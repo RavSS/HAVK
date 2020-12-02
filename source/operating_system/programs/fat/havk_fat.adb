@@ -6,13 +6,17 @@
 -------------------------------------------------------------------------------
 
 WITH
-   Ada.Unchecked_Deallocation,
    System.Case_Util,
+   Ada.Unchecked_Deallocation,
+   HAVK_Operating_System.Call,
    HAVK_Operating_System.Call.Logging;
 USE
+   HAVK_Operating_System.Call,
    HAVK_Operating_System.Call.Logging;
 
-PACKAGE BODY HAVK_ATA_PIO.FAT
+PACKAGE BODY HAVK_FAT
+WITH
+   Refined_State => (Drive_State => NULL)
 IS
    FUNCTION Get_FAT_Version
      (FAT_Context : IN file_system)
@@ -22,7 +26,7 @@ IS
 
    PROCEDURE Get_File_System
      (New_FAT_Context : OUT file_system;
-      FAT_Partition   : IN GPT.partition)
+      FAT_Partition   : IN partition)
    IS
       -- Temporary type to save stack space.
       TYPE access_boot_record IS ACCESS boot_record;
@@ -34,7 +38,7 @@ IS
         (Boot_Record_Access : IN access_boot_record)
          RETURN address
       WITH
-         Import => true,
+         Import     => true,
          Convention => Intrinsic,
          Pre        => Boot_Record_Access /= NULL,
          Post       => To_Address'result /= 0;
@@ -46,8 +50,12 @@ IS
       First_Root_Directory_Sector : logical_block_address;
       First_Data_Sector           : logical_block_address;
    BEGIN
-      PIO_Read(FAT_Partition.LBA_First, 1, To_Address(FAT_Boot_Record),
-         FAT_Partition.Secondary_Bus, FAT_Partition.Secondary_Drive);
+      PIO_Read(FAT_Partition,
+         FAT_Partition.LBA_First, 1,
+         To_Address(FAT_Boot_Record),
+         FAT_Partition.Secondary_Bus,
+         FAT_Partition.Secondary_Drive);
+
       New_FAT_Context := (FAT_Version => unknown, OTHERS => <>);
 
       IF -- The first byte will always be 0xEB. Second one may be different.
@@ -160,33 +168,13 @@ IS
          Convention => Intrinsic;
    BEGIN
       PIO_Read
-        (FAT_Context.Drive_Partition.LBA_First + Sector_Base,
+        (FAT_Context.Drive_Partition,
+         FAT_Context.Drive_Partition.LBA_First + Sector_Base,
          Sector_Count,
          To_Address(Object_Location),
          Secondary_Bus   => FAT_Context.Drive_Partition.Secondary_Bus,
          Secondary_Drive => FAT_Context.Drive_Partition.Secondary_Drive);
    END FAT_Read;
-
-   PROCEDURE FAT_Write
-     (FAT_Context     : IN file_system;
-      Sector_Base     : IN logical_block_address;
-      Sector_Count    : IN number;
-      Object_Location : IN access_object)
-   IS
-      FUNCTION To_Address
-        (Object_Access : IN access_object)
-         RETURN address
-      WITH
-         Import     => true,
-         Convention => Intrinsic;
-   BEGIN
-      PIO_Write
-        (FAT_Context.Drive_Partition.LBA_First + Sector_Base,
-         Sector_Count,
-         To_Address(Object_Location),
-         Secondary_Bus   => FAT_Context.Drive_Partition.Secondary_Bus,
-         Secondary_Drive => FAT_Context.Drive_Partition.Secondary_Drive);
-   END FAT_Write;
 
    PROCEDURE Get_Next_Cluster
      (FAT_Context   : IN file_system;
@@ -670,7 +658,7 @@ IS
       ELSIF
         (Shift_Left(File_Entry.Cluster_High, 16) OR File_Entry.Cluster_Low) <
             invalid_cluster_16'first AND THEN
-         File_Entry.File_Size /= 0 AND THEN
+         File_Entry.File_Size /= 0         AND THEN
          Base_Byte <= File_Entry.File_Size AND THEN
          Byte_Size <= (File_Entry.File_Size - Base_Byte) + 1
       THEN
@@ -681,4 +669,68 @@ IS
       END IF;
    END Read_File;
 
-END HAVK_ATA_PIO.FAT;
+   PROCEDURE PIO_Read
+     (Drive_Partition : IN partition;
+      Sector_Base     : IN logical_block_address;
+      Sector_Count    : IN number;
+      Destination     : IN address;
+      Secondary_Bus   : IN boolean := false;
+      Secondary_Drive : IN boolean := false)
+   IS
+      FUNCTION System_Call IS NEW Call.System_Call_Generic_Data_Function
+        (generic_data => partitioned_PIO_request);
+
+      TYPE sector_parts IS ARRAY(number RANGE <>, number RANGE <>) OF
+         XMM_registers
+      WITH
+         Component_Size => 2048,
+         Pack           => true;
+
+      Drive_Manager_Task  : CONSTANT general_register := 3;
+      Call_Arguments      : arguments;
+      Request_Data        : ALIASED partitioned_PIO_request;
+      Sector_Data         : XMM_registers;
+      Sectors_Destination : sector_parts(1 .. Sector_Count, 1 .. 2)
+      WITH
+         Import  => true,
+         Address => Destination;
+   BEGIN
+      FOR
+         Sector_Index IN 1 .. Sector_Count
+      LOOP
+         Request_Data :=
+           (Sector_Base     => Sector_Base + (Sector_Index - 1),
+            Secondary_Bus   => Secondary_Bus,
+            Secondary_Drive => Secondary_Drive,
+            Write_Request   => false,
+            Partition_Data  => Drive_Partition,
+            OTHERS          => <>);
+
+         LOOP
+            Call_Arguments :=
+              (send_message_operation, Drive_Manager_Task, OTHERS => <>);
+
+            EXIT WHEN
+               System_Call(Call_Arguments, Request_Data'access) = no_error;
+
+            Call_Arguments := (yield_operation, OTHERS => <>);
+            System_Call(Call_Arguments);
+         END LOOP;
+
+         Call_Arguments :=
+           (receive_message_operation, Drive_Manager_Task, OTHERS => <>);
+
+         FOR
+            Sector_Part_Index IN number RANGE 1 .. 2
+         LOOP
+            LOOP
+               EXIT WHEN System_Call(Call_Arguments, Sector_Data) = no_error;
+            END LOOP;
+
+            Sectors_Destination(Sector_Index, Sector_Part_Index) :=
+               Sector_Data;
+         END LOOP;
+      END LOOP;
+   END PIO_Read;
+
+END HAVK_FAT;

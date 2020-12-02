@@ -401,7 +401,8 @@ IS
       END IF;
 
       Error_Status := no_error;
-      Log("ELF loaded successfully.", Tag => ELF_Tag);
+      Log("ELF loaded successfully as task """ & Task_Name & """.",
+         Tag => ELF_Tag);
    END Load;
 
 END HAVK_Kernel.Tasking.ELF;

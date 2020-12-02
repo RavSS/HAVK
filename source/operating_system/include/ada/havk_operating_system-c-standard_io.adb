@@ -23,8 +23,7 @@ IS
 
       Call_Arguments : arguments :=
         (Operation_Call => send_message_operation,
-         Argument_1     => general_register(Storage_Task),
-         Argument_2     => general_register(Storage_Task_Port),
+         Argument_1     => Storage_Task,
          OTHERS         => <>);
 
       New_File       : FILE_pointer := NEW FILE;
@@ -66,16 +65,21 @@ IS
       END IF;
 
       LOOP -- TODO: Need much better message handling than this...
-         Call_Arguments.Operation_Call := receive_message_operation;
-         Call_Arguments.Argument_1 := general_register(Storage_Task);
-         Call_Arguments.Argument_2 := general_register(Storage_Task_Port);
+         Call_Arguments :=
+           (Operation_Call => receive_message_operation,
+            Argument_1     => Storage_Task,
+            OTHERS         => <>);
 
          IF
-            System_Call(Call_Arguments, New_File) /= attempt_error     AND THEN
-            Call_Arguments.Argument_1 = general_register(Storage_Task) AND THEN
-            Call_Arguments.Argument_2 = general_register(Storage_Task_Port)
+            System_Call(Call_Arguments, New_File) = no_error
          THEN
-            RETURN New_File;
+            IF
+               Call_Arguments.Argument_2 /= 0
+            THEN
+               RETURN NULL; -- An error is present.
+            ELSE
+               RETURN New_File;
+            END IF;
          END IF;
 
          Call_Arguments.Operation_Call := yield_operation;
@@ -102,97 +106,67 @@ IS
       Open_File     : IN FILE_pointer)
       RETURN size_t
    IS
-      Sending_Arguments   : arguments :=
+      Call_Arguments : arguments :=
         (Operation_Call => send_message_operation,
-         Argument_1     => general_register(Storage_Task),
-         Argument_2     => general_register(Storage_Task_Port),
+         Argument_1     => Storage_Task,
          OTHERS         => <>);
 
-      Receiving_Arguments : arguments;
-
-      Buffer              : char_array(0 .. (Element_Size * Element_Count) - 1)
+      Buffer         : char_array(0 .. (Element_Size * Element_Count) - 1)
       WITH
          Import  => true,
          Address => Data_Buffer.ALL'address;
-
-      New_File_State      : ALIASED FILE;
-      Buffer_Offset       : size_t := Buffer'first;
+      Buffer_Offset  : size_t RANGE Buffer'first .. Buffer'last + 1 :=
+         Buffer'first;
+      Buffer_Data    : XMM_registers;
    BEGIN
       IF
-         Open_File.File_Error /= no_error OR ELSE
-         Open_File.File_Size = 0          OR ELSE
+         Open_File.File_Size = 0 OR ELSE
          Open_File.File_Offset >= Open_File.File_Size - 1
       THEN
          RETURN 0;
       END IF;
 
-      Open_File.Buffer_Length := Open_File.Buffer'last + 1;
+      Open_File.Buffer_Size := Buffer'last + 1;
 
-      WHILE
-         Buffer_Offset < Buffer'last
-      LOOP
-         IF
-            Open_File.File_Offset + (Open_File.Buffer_Length - 1) >=
-               Open_File.File_Size
-         THEN
-            Open_File.Buffer_Length :=
-               Open_File.File_Size - Open_File.File_Offset;
-         END IF;
+      IF
+         System_Call(Call_Arguments, Open_File) /= no_error
+      THEN
+         RETURN 0;
+      END IF;
 
-         New_File_State := Open_File.ALL;
+      Buffer_Copying : LOOP
+         Receive_Block : LOOP -- TODO: Need better message handling than this.
+            Call_Arguments :=
+              (Operation_Call => receive_message_operation,
+               Argument_1     => Storage_Task,
+               OTHERS         => <>);
 
-         IF
-            System_Call(Sending_Arguments, New_File_State'access) /= no_error
-         THEN
-            RETURN Buffer_Offset / Element_Size;
-         END IF;
+            IF
+               System_Call(Call_Arguments, Buffer_Data) = no_error
+            THEN
+               EXIT Receive_Block WHEN Call_Arguments.Argument_2 = 0;
+               RETURN Buffer_Offset / Element_Size; -- TODO: Store error.
+            END IF;
 
-         Blocking_Receive : LOOP
-            Receiving_Arguments.Operation_Call := receive_message_operation;
-            Receiving_Arguments.Argument_1 := general_register(Storage_Task);
-            Receiving_Arguments.Argument_2 :=
-               general_register(Storage_Task_Port);
+            Call_Arguments :=
+              (Operation_Call => yield_operation,
+               OTHERS         => <>);
+            System_Call(Call_Arguments);
+         END LOOP Receive_Block;
 
-            EXIT Blocking_Receive WHEN
-               System_Call(Receiving_Arguments, New_File_State'access) =
-                  no_error AND THEN
-               Receiving_Arguments.Argument_1 = general_register(Storage_Task)
-                  AND THEN
-               Receiving_Arguments.Argument_2 =
-                  general_register(Storage_Task_Port);
-
-            -- Reuse the variable for yielding.
-            Receiving_Arguments.Operation_Call := yield_operation;
-            System_Call(Receiving_Arguments);
-         END LOOP Blocking_Receive;
-
-         Open_File.ALL := New_File_State;
-
-         IF
-            Open_File.File_Error /= no_error
-         THEN
-            RETURN Buffer_Offset / Element_Size; -- Current element count read.
-         END IF;
-
-         IF
-            Buffer_Offset + (Open_File.Buffer_Length - 1) NOT IN Buffer'range
-         THEN
-            Open_File.Buffer_Length := (Buffer'last - Buffer_Offset) + 1;
-         END IF;
-
-         Buffer
-           (Buffer_Offset .. Buffer_Offset + (Open_File.Buffer_Length - 1)) :=
-               Open_File.Buffer(0 .. Open_File.Buffer_Length - 1);
-
-         -- Update the offset relative to the file.
-         Open_File.File_Offset :=
-            Open_File.File_Offset + (IF Open_File.Buffer_Length > 1 THEN
-               Open_File.Buffer_Length - 1 ELSE 1);
-
-         -- Update the offset relative to the user's buffer.
-         Buffer_Offset := Buffer_Offset + (IF Open_File.Buffer_Length > 1 THEN
-            Open_File.Buffer_Length - 1 ELSE 1);
-      END LOOP;
+         FOR
+            Data_Block OF Buffer_Data
+         LOOP
+            FOR
+               Byte_Index IN Data_Block.XMM_Bytes'range
+            LOOP
+               EXIT Buffer_Copying WHEN Buffer_Offset = Open_File.Buffer_Size;
+               Buffer(Buffer_Offset) := char(Data_Block.XMM_Bytes(Byte_Index));
+               Buffer_Offset := Buffer_Offset + 1;
+               Open_File.File_Offset := Open_File.File_Offset + 1;
+            END LOOP;
+         END LOOP;
+      END LOOP Buffer_Copying;
 
       RETURN Element_Count;
    END File_Read;

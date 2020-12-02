@@ -34,6 +34,7 @@ static syserr_ht load_file(const char *const name, const char *const path)
 {
 	FILE *elf_file;
 	uint8_t *elf_file_buffer;
+	char task_name_buffer[256];
 	size_t elf_file_size;
 	sysargs_ht arguments;
 
@@ -98,8 +99,9 @@ static syserr_ht load_file(const char *const name, const char *const path)
 	}
 
 	arguments.operation = LOAD_ELF_OPERATION;
-	strncpy(elf_file_buffer, name, 256); // Reuse the buffer.
-	if (system_call(&arguments) != NO_ERROR)
+	memset(task_name_buffer, 0, ARRAY_LENGTH(task_name_buffer));
+	strcpy(task_name_buffer, name);
+	if (system_call_xmm(&arguments, task_name_buffer) != NO_ERROR)
 	{
 		free(elf_file_buffer);
 		fclose(elf_file);
@@ -126,8 +128,7 @@ static syserr_ht load_file(const char *const name, const char *const path)
 MACRO_BEGIN\
 	if (load_file(x, y) != NO_ERROR)\
 	{\
-		log_string(\
-			"Failed to properly load the following program: "\
+		log_string("Failed to properly load the following program: "\
 			"\"" y "\".");\
 		return EXIT_FAILURE;\
 	}\
