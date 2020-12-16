@@ -6,11 +6,9 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Interrupts.Exceptions,
-   HAVK_Kernel.Interrupts.ISA_IRQs,
-   HAVK_Kernel.Memory;
+   HAVK_Kernel.Interrupts.ISA_IRQs;
 
 PACKAGE BODY HAVK_Kernel.Descriptors
 WITH
@@ -79,12 +77,11 @@ IS
          047 => Interrupt_Entry(ISR_047_Stub'address), -- IRQ 15.
 
          -- HAVK-specific interrupt vectors.
-         048 => Interrupt_Entry(ISR_048_Stub'address), -- LAPIC.
-         049 => Interrupt_Entry(ISR_049'address), -- Task switching.
+         048 => Interrupt_Entry(ISR_048_Stub'address), -- LAPIC (tasking).
 
          -- Cover the disabled PIC and the APIC (spurious) interrupt vectors.
-         -- It is okay if both overlap. Use an IST entry just in case.
-         OTHERS => Interrupt_Entry(ISR_Default'address, IST => 1)
+         -- It is okay if both overlap.
+         OTHERS => Interrupt_Entry(ISR_Default'address)
       );
    END Reset_Interrupt_Descriptor_Table;
 
@@ -124,12 +121,6 @@ IS
 
       PROCEDURE Set_Addresses
       IS
-         -- Reused as a stack for the IST.
-         Entry_Stack_Address : CONSTANT Memory.canonical_address
-         WITH
-            Import        => true,
-            Convention    => Assembler,
-            External_Name => "global__entry_stack_base_address";
       BEGIN
          GDT.Descriptor_TSS64.Descriptor_TSS.Base_Address_Low :=
             TSS'address AND 2**16 - 1;
@@ -143,7 +134,7 @@ IS
 
          GDTR.Base_Address := GDT'address;
          IDTR.Base_Address := IDT'address;
-         TSS.IST_1         := Entry_Stack_Address;
+         TSS.RSP_Ring_0    := Entry_Stack_Address;
       END Set_Addresses;
    BEGIN
       Intrinsics.Disable_Interrupts;

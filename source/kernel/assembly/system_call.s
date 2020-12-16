@@ -11,8 +11,8 @@
 
 # Instead of using the address attribute in Ada, I'll create a pointer here.
 # Reduces the amount of code needed to be written or any SPARK mode exclusions.
-.GLOBAL global__system_call_entry_address
-global__system_call_entry_address:
+.GLOBAL assembly__system_call_entry_address
+assembly__system_call_entry_address:
 	.QUAD assembly__system_call_entry
 
 .SECTION .isolated_text
@@ -73,7 +73,7 @@ assembly__system_call_entry:
 	# clobber RSP and RBP just yet, as we need to store their stack
 	# pointer and their stack frame pointer. Use R10 as the temporary
 	# register.
-	MOV R10, [RIP + global__task_state_segment + 4]
+	MOV R10, [RIP + ada__task_state_segment + 4]
 
 	SUB R10, 8 # Create enough room for a pointer.
 	MOV [R10], RSP # Save their stack.
@@ -83,7 +83,7 @@ assembly__system_call_entry:
 	MOV RBP, RSP # Create our own stack frame.
 
 	# Load the kernel's page layout, as we need it to handle system calls.
-	MOV R10, [RIP + global__kernel_page_map_base_address]
+	MOV R10, [RIP + assembly__kernel_page_map_base_address]
 	MOV CR3, R10
 	# Ready to handle the call.
 

@@ -37,12 +37,14 @@ IS
    -- pages are 1-gibibyte, where only the latter may not be supported by the
    -- processor. It can be checked in CPUID's output (bit 26 of EAX).
    -- TODO: Replace the subtype with an enumeration when using Ada 202X.
-   SUBTYPE page_frame_variant IS number   RANGE 4 * KiB .. 1 * GiB
-   WITH
-      Static_Predicate => page_frame_variant IN 4 * KiB | 2 * MiB | 1 * GiB;
-   Page        : CONSTANT page_frame_variant := 4 * KiB;
-   Huge_Page   : CONSTANT page_frame_variant := 2 * MiB;
-   Giant_Page  : CONSTANT page_frame_variant := 1 * GiB; -- Needs CPU support.
+   TYPE page_frame_variant IS
+     (page_size,
+      huge_page_size,
+      giant_page_size);
+   FOR page_frame_variant USE
+     (page_size       => 4 * KiB,
+      huge_page_size  => 2 * MiB,
+      giant_page_size => 1 * GiB); -- Needs CPU support.
 
    -- This is the main type that is passed around outside of this package. The
    -- fields inside it should not be touched by other packages.
@@ -66,18 +68,18 @@ IS
       Virtual_Address : IN address)
       RETURN address
    WITH
-      Pre => Virtual_Address MOD address(Page) = 0;
+      Pre => Virtual_Address MOD page_size'enum_rep = 0;
 
    -- Converts a size in bytes to a certain amount of pages (depending on the
    -- page frame variant).
    FUNCTION Size_To_Pages
      (Size      : IN number;
-      Alignment : IN page_frame_variant := Page)
+      Alignment : IN page_frame_variant := page_size)
       RETURN number
    WITH
       Inline => true,
       Post   => Size_To_Pages'result <=
-                   number(address'last / address(Alignment));
+                   number(address'last / Alignment'enum_rep);
 
    -- Maps a virtual address to a physical address. Handles all page sizes.
    -- While it does align pages for the caller just to be sure, it rounds
@@ -90,11 +92,11 @@ IS
      (Layout           : IN OUT page_layout;
       Virtual_Address  : IN address;
       Physical_Address : IN address;
-      Page_Size        : IN page_frame_variant :=  Page;
-      Present          : IN boolean            :=  true;
-      Write_Access     : IN boolean            := false;
-      User_Access      : IN boolean            := false;
-      No_Execution     : IN boolean            :=  true)
+      Page_Size_Type   : IN page_frame_variant := page_size;
+      Present          : IN boolean := true;
+      Write_Access     : IN boolean := false;
+      User_Access      : IN boolean := false;
+      No_Execution     : IN boolean := true)
    WITH -- You can either write or execute. You can also do neither.
       Pre => (IF Write_Access THEN No_Execution);
 
@@ -107,11 +109,11 @@ IS
       Virtual_Address  : IN address;
       Physical_Address : IN address;
       Size             : IN number;
-      Page_Size        : IN page_frame_variant :=  Page;
-      Present          : IN boolean            :=  true;
-      Write_Access     : IN boolean            := false;
-      User_Access      : IN boolean            := false;
-      No_Execution     : IN boolean            :=  true)
+      Page_Size_Type   : IN page_frame_variant := page_size;
+      Present          : IN boolean := true;
+      Write_Access     : IN boolean := false;
+      User_Access      : IN boolean := false;
+      No_Execution     : IN boolean := true)
    WITH
       Inline => true, -- See `Map_Address` for the explanation about W^X.
       Pre    => (IF Write_Access THEN No_Execution);
@@ -120,10 +122,10 @@ IS
    PROCEDURE Kernel_Map_Address
      (Virtual_Address  : IN address;
       Physical_Address : IN address;
-      Page_Size        : IN page_frame_variant :=  Page;
-      Present          : IN boolean            :=  true;
-      Write_Access     : IN boolean            := false;
-      No_Execution     : IN boolean            :=  true)
+      Page_Size_Type   : IN page_frame_variant := page_size;
+      Present          : IN boolean :=  true;
+      Write_Access     : IN boolean := false;
+      No_Execution     : IN boolean :=  true)
    WITH -- See `Map_Address()` for the explanation about W^X.
       Pre => (IF Write_Access THEN No_Execution);
 
@@ -132,10 +134,10 @@ IS
      (Virtual_Address  : IN address;
       Physical_Address : IN address;
       Size             : IN number;
-      Page_Size        : IN page_frame_variant :=  Page;
-      Present          : IN boolean            :=  true;
-      Write_Access     : IN boolean            := false;
-      No_Execution     : IN boolean            :=  true)
+      Page_Size_Type   : IN page_frame_variant := page_size;
+      Present          : IN boolean := true;
+      Write_Access     : IN boolean := false;
+      No_Execution     : IN boolean := true)
    WITH
       Inline => true, -- See `Map_Address()` for the explanation about W^X.
       Pre    => (IF Write_Access THEN No_Execution);
@@ -156,7 +158,7 @@ IS
       RETURN address
    WITH
       Inline => true,
-      Post   => Get_Page_Map_Address'result MOD address(Page) = 0;
+      Post   => Get_Page_Map_Address'result MOD page_size'enum_rep = 0;
 
 PRIVATE
    Paging_Tag : CONSTANT string := "PAGING";
@@ -341,28 +343,28 @@ PRIVATE
       ALIASED map_entry
    WITH
       Component_Size => 64,
-      Alignment      => Page;
+      Alignment      => page_size'enum_rep;
 
    -- Level 3 structure. A page directory pointer table with 512 entries.
    TYPE directory_pointer_table IS ARRAY(page_mask) OF
       ALIASED directory_pointer_entry
    WITH
       Component_Size => 64,
-      Alignment      => Page;
+      Alignment      => page_size'enum_rep;
 
    -- Level 2 structure. A page directory table with 512 entries.
    TYPE directory_table         IS ARRAY(page_mask) OF
       ALIASED directory_entry
    WITH
       Component_Size => 64,
-      Alignment      => Page;
+      Alignment      => page_size'enum_rep;
 
    -- Level 1 structure. A page table with 512 entries.
    TYPE page_table              IS ARRAY(page_mask) OF
       ALIASED page_entry
    WITH
       Component_Size => 64,
-      Alignment      => Page;
+      Alignment      => page_size'enum_rep;
 
    -- Access types that should point towards a table in the kernel's heap.
    -- A pointer table is guaranteed to be allocated, as the map table is not
@@ -422,7 +424,7 @@ PRIVATE
    WITH
       Inline => true,
       Pre    => Value <= 2**40 - 1,
-      Post   => Decode_Table'result MOD address(Page) = 0;
+      Post   => Decode_Table'result MOD page_size'enum_rep = 0;
 
    -- This sets the value of the CR3 register for the current core.
    PROCEDURE Write_CR3

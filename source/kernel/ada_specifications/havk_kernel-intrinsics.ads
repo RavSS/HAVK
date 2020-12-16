@@ -214,7 +214,7 @@ IS
 
    -- This array type can hold the total data stored in the XMM registers.
    -- The array index is identical to the register name's index.
-   TYPE XMM_registers IS ARRAY(number RANGE 0 .. 15) OF XMM_register
+   TYPE XMM_registers IS ARRAY(number RANGE 0 .. 15) OF ALIASED XMM_register
    WITH
       Size           => 128 * 16,
       Object_Size    => 128 * 16,
@@ -226,11 +226,12 @@ IS
    SUBTYPE MMX_register IS general_register;
 
    -- There are eight MMX registers and they overlap with the x87 registers.
-   TYPE MMX_registers IS ARRAY(number RANGE 0 .. 7) OF MMX_register
+   TYPE MMX_registers IS ARRAY(number RANGE 0 .. 7) OF ALIASED MMX_register
    WITH
-      Size           => 64 * 8,
-      Object_Size    => 64 * 8,
-      Component_Size => 64,
-      Convention     => Assembler;
+      Size                    => 64 * 8,
+      Object_Size             => 64 * 8,
+      Component_Size          => 64,
+      Default_Component_Value => MMX_register'first,
+      Convention              => Assembler;
 
 END HAVK_Kernel.Intrinsics;

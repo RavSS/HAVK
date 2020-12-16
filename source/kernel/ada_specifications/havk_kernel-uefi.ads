@@ -261,6 +261,6 @@ IS
    WITH
       Import     => true,
       Convention => Assembler,
-      Link_Name  => "global__bootloader_arguments";
+      Link_Name  => "assembly__bootloader_arguments";
 
 END HAVK_Kernel.UEFI;

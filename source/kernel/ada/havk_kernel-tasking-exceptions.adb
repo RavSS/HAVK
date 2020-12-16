@@ -16,7 +16,7 @@ IS
       -- Let the active task killer handle the panic when the active task is
       -- neither dead or alive.
       WHILE
-         Tasks(Active_Task) = NULL
+         NOT Tasks(Active_Task).Present
       LOOP
          Tasking.Kill_Active_Task(1);
       END LOOP;

@@ -28,12 +28,15 @@
 	#define CONFIGURATION_LOCATION "\\EFI\\BOOT\\BOOT.CFG"
 #endif
 
-// These are not required to be present, but they're just for sanity checking.
+// These are required to be present (at least in the final build), but
+// otherwise they're just for sanity checking. The reason for their existence
+// is partly due to alignment and the introduction of other linker sections
+// that aren't the standard ones i.e. the isolated sections.
 #ifndef VIRTUAL_BASE_SYMBOL // Should be placed at the virtual address base.
-	#define VIRTUAL_BASE_SYMBOL "global__kernel_virtual_base"
+	#define VIRTUAL_BASE_SYMBOL "linker__kernel_virtual_base"
 #endif
 #ifndef KERNEL_SIZE_SYMBOL // Total aligned size of all allocated sections.
-	#define KERNEL_SIZE_SYMBOL "global__kernel_size"
+	#define KERNEL_SIZE_SYMBOL "linker__kernel_size"
 #endif
 
 // Global variables.
@@ -1401,20 +1404,18 @@ VOID default_mappings(struct elf64_file *CONST havk_elf,
 {
 	CONST EFI_VIRTUAL_ADDRESS havk_virtual_base_check
 		= symbol_address(havk_elf,
-		(CONST CHAR8 *)VIRTUAL_BASE_SYMBOL, FALSE);
-	#undef VIRTUAL_BASE_SYMBOL
+		(CONST CHAR8 *)VIRTUAL_BASE_SYMBOL, TRUE);
 
 	CONST UINT64 havk_size // Will almost never be aligned to 2-MiB.
 		= HUGE_PAGE_ALIGN(symbol_address(havk_elf,
-		(CONST CHAR8 *)KERNEL_SIZE_SYMBOL, FALSE)) + HUGE_PAGE_SIZE;
-	#undef KERNEL_SIZE_SYMBOl
+		(CONST CHAR8 *)KERNEL_SIZE_SYMBOL, TRUE)) + HUGE_PAGE_SIZE;
 
 	// The symbol value is zero if it's not found; however, that's
 	// acceptable. Check the size later.
 	if (havk_virtual_base_check
 		&& havk_virtual_base_check != havk_virtual_base)
 	{
-		Print(u"VIRTUAL BASE IS AMBIGIOUS (%llX)\r\n",
+		Print(u"VIRTUAL BASE IS AMBIGUOUS (%llX)\r\n",
 			havk_virtual_base_check);
 	}
 

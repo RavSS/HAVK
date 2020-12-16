@@ -25,7 +25,7 @@ PRIVATE
    WITH
       Import        => true,
       Convention    => Assembler,
-      External_Name => "global__system_call_entry_address";
+      External_Name => "assembly__system_call_entry_address";
 
    -- A pointer to this record is passed to the system call handler. That way
    -- we can provide a return code without using functions in Ada. Passing the

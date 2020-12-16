@@ -20,7 +20,7 @@ IS
    BEGIN
       IF -- Check if the task index is valid and if the task exists.
          Task_Index NOT IN Tasks'range OR ELSE
-         Tasks(Task_Index) = NULL
+         NOT Tasks(Task_Index).Present
       THEN
          End_Address  := 0;
          Error_Status := index_error;
@@ -31,9 +31,10 @@ IS
          Tasks(Task_Index).Heap_End := user_memory_address'first;
       ELSIF -- This shouldn't be reached on systems, but the check is needed.
          Tasks(Task_Index).Heap_End >=
-            user_memory_address'last - address(Paging.Page - 1)
+            user_memory_address'last - (Paging.page_size'enum_rep - 1)
       THEN
-         End_Address  := user_memory_address'last - address(Paging.Page - 1);
+         End_Address  := user_memory_address'last -
+           (Paging.page_size'enum_rep - 1);
          Error_Status := attempt_error;
          RETURN;
       END IF;
@@ -57,7 +58,7 @@ IS
          User_Access      => true);
 
       Tasks(Task_Index).Heap_End := -- Now extend the heap end address.
-         Tasks(Task_Index).Heap_End + address(Paging.Page);
+         Tasks(Task_Index).Heap_End + Paging.page_size'enum_rep;
 
       End_Address  := Tasks(Task_Index).Heap_End;
       Error_Status := no_error;

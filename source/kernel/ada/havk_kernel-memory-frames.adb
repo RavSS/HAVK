@@ -44,7 +44,7 @@ IS
       END Undesirable_Attributes;
 
       Frame_Base_Address : CONSTANT page_address :=
-         page_address(Frame_Index * Paging.Page);
+         page_address(Frame_Index * Paging.page_size'enum_rep);
       Missing_Frame      : boolean := false;
    BEGIN
       FOR
@@ -54,7 +54,7 @@ IS
             Region /= NULL AND THEN
             Frame_Base_Address IN Region.Start_Address_Physical ..
                Region.Start_Address_Physical +
-               address(Region.Number_Of_Pages * Paging.Page)
+               address(Region.Number_Of_Pages * Paging.page_size'enum_rep)
          THEN
             -- Memory descriptors inside the memory map can and will often
             -- share memory ranges. So, we just check if the frame is reserved
@@ -83,14 +83,18 @@ IS
       Frame_Count        : IN frame_limit := 1)
    WITH
       Refined_Post => (IF Frame_Base_Address /= Null_Frame_Address THEN
-                          number(Frame_Base_Address)
-                             IN Paging.Page * Physical_Frames'first ..
-                                Paging.Page * Physical_Frames'last
-                             AND THEN
+                          number(Frame_Base_Address)  IN
+                             Paging.page_size'enum_rep *
+                                Physical_Frames'first ..
+                                   Paging.page_size'enum_rep *
+                                      Physical_Frames'last AND THEN
                           number(Frame_Base_Address +
-                             page_address(Paging.Page * (Frame_Count - 1)))
-                                IN Paging.Page * Physical_Frames'first ..
-                                   Paging.Page * Physical_Frames'last)
+                             page_address(Paging.page_size'enum_rep *
+                               (Frame_Count - 1))) IN
+                                   Paging.page_size'enum_rep *
+                                      Physical_Frames'first ..
+                                         Paging.page_size'enum_rep *
+                                            Physical_Frames'last)
    IS
       End_Frame : number;
    BEGIN
@@ -112,7 +116,8 @@ IS
                Physical_Frames(Frame_Index).Used  := true;
             END LOOP;
 
-            Frame_Base_Address := page_address(Base_Frame * Paging.Page);
+            Frame_Base_Address :=
+               page_address(Base_Frame * Paging.page_size'enum_rep);
             RETURN;
          END IF;
       END LOOP;
@@ -127,9 +132,10 @@ IS
       Frame_Count        : IN frame_limit := 1)
    IS
       Base_Frame : CONSTANT number :=
-         number(Frame_Base_Address / address(Paging.Page));
+         number(Frame_Base_Address / Paging.page_size'enum_rep);
       End_Frame  : CONSTANT number := number(Frame_Base_Address +
-        address(Base_Frame + (Paging.Page * (Frame_Count - 1)) / Paging.Page));
+         address(Base_Frame + (Paging.page_size'enum_rep * (Frame_Count - 1)) /
+            Paging.page_size'enum_rep));
    BEGIN
       IF
          Base_Frame IN Physical_Frames'range AND THEN

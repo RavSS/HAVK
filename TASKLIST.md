@@ -1,5 +1,5 @@
 # Tasklist for the HAVK operating system and kernel
-### Last Updated: 2020-12-02
+### Last Updated: 2020-12-17
 #### High priority
 - The kernel crashes on AMD systems (but not Intel systems) during
   some point in which my descriptor tables are prepared and loaded, which
@@ -12,10 +12,13 @@
 - Implement user-space signal handling so user tasks can handle interrupts.
   Currently needed for better PS/2 operability. Could work as a part of the
   high-priority task queue.
-- Rework context switching so the entire register state is stored not on a
-  kernel stack but rather in a defined structure. This will make it easier to
-  do context switching within a system call as opposed to just preemption via
-  LAPIC timer.
+- Rework the system call for yielding so that it doesn't just zero out the
+  time slice and instead does a proper context switch. Same goes for the exit
+  task operation. This will lead to a performance gain due to how the current
+  scheduler is implemented.
+- Allow interrupts (including context switches) during system calls. An
+  extremely noticeable performance penalty is currently present due to some
+  tasks starving out other tasks by being heavily dependent on system calls.
 
 #### Low priority
 - Set the LAPIC timer to one-shot mode whenever a task is switched. This
@@ -23,7 +26,9 @@
   pointless interruptions.
 - Implement FAT12 and FAT32 support, along with a VFAT driver.
 - Improve the capabilities of the ATA PIO operations, particularly error
-  checking.
+  checking. In regards to tasking, the tasks which depend on the ATA driver
+  task expect no sudden task terminations and cannot reset themselves
+  accordingly.
 - Trampoline the APs so we can use more than one core. I'd like to avoid
   concurrency issues and performance is not a demand, so leave this out until
   the tasking system is solid.
@@ -31,8 +36,6 @@
 - Rework the physical frame allocator.
 - Make the build system better and more convenient for proving operating
   system tasks programmed in SPARK.
-- Let the bootloader configuration file exert more control over boot-time
-  options i.e. the display resolution.
 - Handle the CPU exceptions which currently aren't handled by the tasking
   functionality, as they occasionally are raised by tasks due to errors.
 - Come up with a way to make IPC interfaces cleaner from a programming

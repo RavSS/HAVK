@@ -34,15 +34,17 @@ IS
    -- This type will be used by the interrupt handler stubs to increment the
    -- respective counters. Note that the value will eventually wrap around, but
    -- that is acceptable. The stub expects packed 8-byte elements.
-   TYPE interrupt_counters IS ARRAY(number RANGE 0 .. 255) OF number
+   TYPE interrupt_counters IS ARRAY(number RANGE 0 .. 255) OF ALIASED quadword
    WITH
       Default_Component_Value => 00,
       Component_Size          => 64;
+
    Counters : ALIASED interrupt_counters := (OTHERS => 0)
    WITH
-      Export        => true,
-      Convention    => Assembler,
-      External_Name => "ada__interrupt_counters";
+      Export         => true,
+      Convention     => Assembler,
+      External_Name  => "ada__interrupt_counters",
+      Linker_Section => ".isolated_bss";
 
    PRAGMA Warnings(off, "unused variable ""Interrupt_Frame""",
       Reason => "The ISRs should take the parameter in regardless of usage.");
@@ -69,15 +71,5 @@ IS
       Export        => true,
       Convention    => Assembler,
       External_Name => "ada__interrupt_handler_048";
-
-   -- Raising this causes a context switch and shifts the task. This does not
-   -- use an assembly stub; instead, the routine specially deals with the
-   -- interrupt.
-   PROCEDURE ISR_049
-   WITH
-      Import         => true,
-      Convention     => Assembler,
-      External_Name  => "assembly__switch_task",
-      Linker_Section => ".isolated_text";
 
 END HAVK_Kernel.Interrupts;

@@ -5,6 +5,10 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
 -------------------------------------------------------------------------------
 
+WITH
+   HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Memory;
+
 -- Handles the CPU's descriptor functionality, which is necessary for many
 -- things, such as privilege level shifts and processor interrupts.
 PACKAGE HAVK_Kernel.Descriptors
@@ -174,6 +178,16 @@ IS
       Zeroed                 AT 12 RANGE 0 .. 31;
    END RECORD;
 
+   -- Reused as the (ring 0) interrupt stack in the TSS. Tasks don't need their
+   -- own stack for interrupts, as no data is saved to them. The interrupt
+   -- frame is recreated every time manually. The one placed by the CPU is not
+   -- kept and used for exiting the interrupt handler.
+   Entry_Stack_Address : CONSTANT Memory.canonical_address
+   WITH
+      Import        => true,
+      Convention    => Assembler,
+      External_Name => "assembly__entry_stack_base_address";
+
    -- Previously used for hardware tasking, but now it's used for switching
    -- stacks during interrupts and the Interrupt Stack Table (IST) that
    -- indicates which interrupt handler gets which stack.
@@ -282,10 +296,18 @@ IS
    END RECORD;
 
    -- Descriptor indices with the RPL calculated for ring 0 and ring 3.
-   CS_Ring_0 : CONSTANT number := 16#08# OR 0;
-   DS_Ring_0 : CONSTANT number := 16#10# OR 0;
-   DS_Ring_3 : CONSTANT number := 16#20# OR 3;
-   CS_Ring_3 : CONSTANT number := 16#28# OR 3;
+   CS_Ring_0    : CONSTANT number := 16#08# OR 0;
+   DS_Ring_0    : CONSTANT number := 16#10# OR 0;
+   DS_Ring_3    : CONSTANT number := 16#20# OR 3;
+   CS_Ring_3    : CONSTANT number := 16#28# OR 3;
+
+   -- These MSRs hold the base addresses of the associated segment registers.
+   -- GS should be used for whatever the kernel needs a quick pointer to.
+   -- Probably to hold current CPU/task information. FS should probably be
+   -- controlled by programs for thread local storage like the System V ABI
+   -- indicates.
+   IA32_FS_BASE : CONSTANT Intrinsics.model_specific_register := 16#C0000100#;
+   IA32_GS_BASE : CONSTANT Intrinsics.model_specific_register := 16#C0000101#;
 
    -- These go inside the GDTR and IDTR registers to describe the size of
    -- their respective tables.
@@ -319,7 +341,7 @@ IS
       Export         => true,
       Convention     => Assembler,
       Linker_Section => ".isolated_data",
-      External_Name  => "global__task_state_segment";
+      External_Name  => "ada__task_state_segment";
 
    -- Loads the descriptor table registers with the GDT and IDT specified
    -- within this package.

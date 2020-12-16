@@ -5,6 +5,8 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
+-- This package contains exception handling for tasks.
+-- TODO: Many handlers are missing e.g. a general protection fault handler.
 PACKAGE HAVK_Kernel.Tasking.Exceptions
 IS
    -- Handles page faults caused by tasks.
@@ -22,6 +24,6 @@ PRIVATE
    PROCEDURE Null_Task_Check
    WITH
       Inline => true,
-      Post   => Tasks(Active_Task) /= NULL;
+      Post   => Tasks(Active_Task).Present;
 
 END HAVK_Kernel.Tasking.Exceptions;

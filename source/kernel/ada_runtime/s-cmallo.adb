@@ -40,11 +40,11 @@ PACKAGE BODY System.C.Malloc IS
    -- void pointers into pointers to an address value, along with changing the
    -- symbols to reflect my code style.
    Heap_Start : address;
-   PRAGMA Import(Assembler, Heap_Start, "global__kernel_heap_base");
+   PRAGMA Import(Assembler, Heap_Start, "ada__kernel_heap_base");
    --  The address of the variable is the start of the heap
 
    Heap_End : address;
-   PRAGMA Import(Assembler, Heap_End, "global__kernel_heap_end");
+   PRAGMA Import(Assembler, Heap_End, "ada__kernel_heap_end");
    --  The address of the variable is the end of the heap
 
    -- RavSS: I've added an atomic lock to this package so it can be used for

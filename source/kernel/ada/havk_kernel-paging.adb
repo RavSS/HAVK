@@ -53,11 +53,11 @@ IS
      (Layout           : IN OUT page_layout;
       Virtual_Address  : IN address;
       Physical_Address : IN address;
-      Page_Size        : IN page_frame_variant :=  Page;
-      Present          : IN boolean            :=  true;
-      Write_Access     : IN boolean            := false;
-      User_Access      : IN boolean            := false;
-      No_Execution     : IN boolean            :=  true)
+      Page_Size_Type   : IN page_frame_variant := page_size;
+      Present          : IN boolean := true;
+      Write_Access     : IN boolean := false;
+      User_Access      : IN boolean := false;
+      No_Execution     : IN boolean := true)
    IS
       -- Make sure to see "Figure 5-17. 4-Kbyte Page Translation-Long Mode"
       -- in the AMD64 system programming manual before you touch anything.
@@ -104,7 +104,7 @@ IS
       -- Points to a physical frame, regardless of page frame size.
       L0 : CONSTANT number RANGE 0 .. 2**40 - 1 :=
          Encode_Table(address(Memory.Align(number(Physical_Address),
-            Page_Size)));
+            Page_Size_Type'enum_rep)));
    BEGIN
       -- TODO: Find a way to model the CPU doing a page-walk (if that is even
       -- possible without library level static page structures).
@@ -140,10 +140,11 @@ IS
       END IF;
 
       IF
-         Page_Size /= Giant_Page
+         Page_Size_Type /= giant_page_size
       THEN
          IF
-            L3(L3_Offset).Pointer = 0 OR ELSE L3(L3_Offset).Huge
+            L3(L3_Offset).Pointer = 0 OR ELSE
+            L3(L3_Offset).Huge
          THEN
             L2 := NEW directory_table;
          ELSE
@@ -152,7 +153,8 @@ IS
       END IF;
 
       IF
-         Page_Size /= Giant_Page AND THEN L2 = NULL
+         Page_Size_Type /= giant_page_size AND THEN
+         L2 = NULL
       THEN
          RAISE Panic
          WITH
@@ -164,10 +166,11 @@ IS
       END IF;
 
       IF
-         Page_Size = Page
+         Page_Size_Type = page_size
       THEN
          IF
-            L2(L2_Offset).Pointer = 0 OR ELSE L2(L2_Offset).Huge
+            L2(L2_Offset).Pointer = 0 OR ELSE
+            L2(L2_Offset).Huge
          THEN
             L1 := NEW page_table;
          ELSE
@@ -176,7 +179,8 @@ IS
       END IF;
 
       IF
-         Page_Size = Page AND THEN L1 = NULL
+         Page_Size_Type = page_size AND THEN
+         L1 = NULL
       THEN
          RAISE Panic
          WITH
@@ -194,7 +198,7 @@ IS
       Layout.L4(L4_Offset).NX           := false;
 
       IF -- Handle the mapping in giant pages and return.
-         Page_Size = Giant_Page
+         Page_Size_Type = giant_page_size
       THEN
          -- Bits 29 to 0 are zero for physical page frame addresses when the
          -- page size is 1 GiB. Just pretend that the "Huge" record field
@@ -217,7 +221,7 @@ IS
       L3(L3_Offset).NX                  := false;
 
       IF -- Handle the mapping in huge pages and return.
-         Page_Size = Huge_Page
+         Page_Size_Type = huge_page_size
       THEN
          -- Bits 20 to 0 are zero for physical page frame addresses when the
          -- page size is 2 MiB.
@@ -251,13 +255,13 @@ IS
       Virtual_Address  : IN address;
       Physical_Address : IN address;
       Size             : IN number;
-      Page_Size        : IN page_frame_variant :=  Page;
-      Present          : IN boolean            :=  true;
-      Write_Access     : IN boolean            := false;
-      User_Access      : IN boolean            := false;
-      No_Execution     : IN boolean            :=  true)
+      Page_Size_Type   : IN page_frame_variant := page_size;
+      Present          : IN boolean := true;
+      Write_Access     : IN boolean := false;
+      User_Access      : IN boolean := false;
+      No_Execution     : IN boolean := true)
    IS
-      Pages : CONSTANT number := Size_To_Pages(Size, Page_Size);
+      Pages : CONSTANT number := Size_To_Pages(Size, Page_Size_Type);
    BEGIN
       IF -- There will be a wrap-around problem if we're mapping zero pages.
          Pages = 0
@@ -267,60 +271,60 @@ IS
 
       -- Start from zero first so we can efficiently map the base addresses.
       FOR
-         Page_Index IN 0 .. Pages - 1
+         Page_Index IN address RANGE 0 .. address(Pages) - 1
       LOOP
          Map_Address
            (Layout,
-            Virtual_Address  + address(Page_Size * Page_Index),
-            Physical_Address + address(Page_Size * Page_Index),
-            Page_Size       =>     Page_Size,
-            Present         =>       Present,
-            Write_Access    =>  Write_Access,
-            User_Access     =>   User_Access,
-            No_Execution    =>  No_Execution);
+            Virtual_Address  + (Page_Size_Type'enum_rep * Page_Index),
+            Physical_Address + (Page_Size_Type'enum_rep * Page_Index),
+            Page_Size_Type => Page_Size_Type,
+            Present        => Present,
+            Write_Access   => Write_Access,
+            User_Access    => User_Access,
+            No_Execution   => No_Execution);
       END LOOP;
    END Map_Address_Range;
 
    PROCEDURE Kernel_Map_Address
      (Virtual_Address  : IN address;
       Physical_Address : IN address;
-      Page_Size        : IN page_frame_variant :=  Page;
-      Present          : IN boolean            :=  true;
-      Write_Access     : IN boolean            := false;
-      No_Execution     : IN boolean            :=  true)
+      Page_Size_Type   : IN page_frame_variant := page_size;
+      Present          : IN boolean := true;
+      Write_Access     : IN boolean := false;
+      No_Execution     : IN boolean := true)
    IS
    BEGIN
       Map_Address
         (Layout           => Kernel_Page_Layout,
-         Virtual_Address  =>    Virtual_Address,
-         Physical_Address =>   Physical_Address,
-         Page_Size        =>          Page_Size,
-         Present          =>            Present,
-         Write_Access     =>       Write_Access,
-         User_Access      =>              false,
-         No_Execution     =>       No_Execution);
+         Virtual_Address  => Virtual_Address,
+         Physical_Address => Physical_Address,
+         Page_Size_Type   => Page_Size_Type,
+         Present          => Present,
+         Write_Access     => Write_Access,
+         User_Access      => false,
+         No_Execution     => No_Execution);
    END Kernel_Map_Address;
 
    PROCEDURE Kernel_Map_Address_Range
      (Virtual_Address  : IN address;
       Physical_Address : IN address;
       Size             : IN number;
-      Page_Size        : IN page_frame_variant :=  Page;
-      Present          : IN boolean            :=  true;
-      Write_Access     : IN boolean            := false;
-      No_Execution     : IN boolean            :=  true)
+      Page_Size_Type   : IN page_frame_variant := page_size;
+      Present          : IN boolean := true;
+      Write_Access     : IN boolean := false;
+      No_Execution     : IN boolean := true)
    IS
    BEGIN
       Map_Address_Range
         (Layout           => Kernel_Page_Layout,
-         Virtual_Address  =>    Virtual_Address,
-         Physical_Address =>   Physical_Address,
-         Size             =>               Size,
-         Page_Size        =>          Page_Size,
-         Present          =>            Present,
-         Write_Access     =>       Write_Access,
-         User_Access      =>              false,
-         No_Execution     =>       No_Execution);
+         Virtual_Address  => Virtual_Address,
+         Physical_Address => Physical_Address,
+         Size             => Size,
+         Page_Size_Type   => Page_Size_Type,
+         Present          => Present,
+         Write_Access     => Write_Access,
+         User_Access      => false,
+         No_Execution     => No_Execution);
    END Kernel_Map_Address_Range;
 
    PROCEDURE Deallocate_Mappings -- TODO: Maybe split this up.
@@ -412,7 +416,7 @@ IS
       Virtual_Address : IN address)
       RETURN address
    WITH
-      Refined_Post => Resolve_Address'result MOD address(Page) = 0
+      Refined_Post => Resolve_Address'result MOD page_size'enum_rep = 0
    IS
       -- See the `Map_Address()` procedure for more information.
       L4_Offset : CONSTANT page_mask :=
@@ -493,17 +497,17 @@ IS
    END Resolve_Address;
 
    FUNCTION Size_To_Pages
-     (Size         : IN number;
-      Alignment    : IN page_frame_variant := Page)
+     (Size      : IN number;
+      Alignment : IN page_frame_variant := page_size)
       RETURN number
    IS
       Aligned_Size : CONSTANT number :=
-         Memory.Align(Size, Alignment, Round_Up => true);
+         Memory.Align(Size, Alignment'enum_rep, Round_Up => true);
    BEGIN
       -- Read the manuals to see which lower bits need to be zeroed.
       -- It should be rather obvious from the alignment itself.
-      RETURN Shift_Right(Aligned_Size, (IF Alignment = Page THEN 12
-         ELSIF Alignment = Huge_Page THEN 21 ELSE 30));
+      RETURN Shift_Right(Aligned_Size, (IF Alignment = page_size THEN 12
+         ELSIF Alignment = huge_page_size THEN 21 ELSE 30));
    END Size_To_Pages;
 
    PROCEDURE Load

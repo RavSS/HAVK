@@ -36,13 +36,7 @@ USE TYPE
 -- task or active thread. Need to define them much more accurately.
 PACKAGE HAVK_Kernel.Tasking
 WITH
-   Abstract_State =>
-   (
-      Tasking_State
-      WITH
-         External => (Async_Readers, Async_Writers,
-                      Effective_Reads, Effective_Writes)
-   )
+   Abstract_State => Tasking_State
 IS
    -- The limits of a task's name.
    SUBTYPE task_name_string IS string(1 .. 64);
@@ -74,8 +68,7 @@ IS
       Initial_Frames : IN number;
       Error_Status   : OUT error)
    WITH
-      Global => (In_Out => (Tasking_State, Descriptors.TSS,
-                            Paging.Kernel_Page_Layout_State,
+      Global => (In_Out => (Tasking_State, Paging.Kernel_Page_Layout_State,
                             SPARK.Heap.Dynamic_Memory,
                             Memory.Frames.Frame_Allocator_State),
                  Input  => (Memory.Kernel_Virtual_Base,
@@ -87,7 +80,8 @@ IS
                             Memory.Kernel_Isolated_BSS_Size,
                             UEFI.Bootloader_Arguments,
                             UEFI.Memory_Map)),
-      Pre    => Initial_Frames IN 1 .. (2 * GiB) / Paging.Page AND THEN
+      Pre    => Initial_Frames IN 1 .. (2 * GiB) / Paging.page_size'enum_rep
+                   AND THEN
                 Task_Name'length <= task_name_string'length;
 
    -- This removes the task at the specified index.
@@ -114,11 +108,11 @@ IS
       Virtual_Address  : IN address;
       Physical_Address : IN address;
       Size             : IN number;
-      Page_Size        : IN Paging.page_frame_variant := Paging.Page;
-      Present          : IN boolean :=  true;
+      Page_Size_Type   : IN Paging.page_frame_variant := Paging.page_size;
+      Present          : IN boolean := true;
       Write_Access     : IN boolean := false;
       User_Access      : IN boolean := false;
-      No_Execution     : IN boolean :=  true)
+      No_Execution     : IN boolean := true)
    WITH
       Inline => true, -- See `Paging.Map_Address()` for info on W^X.
       Pre    => (IF Write_Access THEN No_Execution);
@@ -139,22 +133,20 @@ IS
    FUNCTION Get_Active_Task_Index
       RETURN number
    WITH
-      Volatile_Function => true,
-      Global            => (Input => Tasking_State);
+      Global => (Input => Tasking_State);
 
    -- Returns the status information for a task.
    FUNCTION Get_Task_Status
      (Task_Index : IN number)
       RETURN task_status
    WITH
-      Volatile_Function => true,
-      Global            => (Input => Tasking_State);
+      Global => (Input => Tasking_State);
 
-   -- Determines whether or not to switch tasks. Can also act as a task yield.
-   -- For now, this is just a bad round-robin implementation.
+   -- Determines whether or not to switch tasks. For now, this is just a bad
+   -- round-robin implementation.
    PROCEDURE Schedule
    WITH
-      Global => (In_Out => (Tasking_State, Descriptors.TSS));
+      Global => (In_Out => Tasking_State);
 
    -- Changes HAVK from a mono-tasking kernel to a multi-tasking kernel.
    -- Does not return. The first task is the first one entered.
@@ -174,45 +166,79 @@ PRIVATE
    -- and is thus reserved.
    SUBTYPE task_limit IS number RANGE 1 .. 256;
 
-   -- A record that stores the callee-saved registers. It should remain
-   -- consistent with the struct specified in "tasking.s". Other registers
-   -- (including the SIMD registers) are stored in a interrupt stub that an
-   -- inactive task will `REX.W IRET` from.
-   TYPE callee_saved_registers IS RECORD
-      RBX : Intrinsics.general_register := 0;
-      RBP : Intrinsics.general_register := 0;
-      -- This is the kernel stack in action. Its base address would be in the
-      -- TSS descriptor.
-      RSP : Intrinsics.general_register := 0;
-      R12 : Intrinsics.general_register := 0;
-      R13 : Intrinsics.general_register := 0;
-      R14 : Intrinsics.general_register := 0;
-      R15 : Intrinsics.general_register := 0;
+   -- A record that stores all registers of a task. It should remain consistent
+   -- with the struct specified in "tasking.s". Registers are put into the
+   -- record according to descending alphabetical order. Note that before you
+   -- change this, some assembly code relies on the CR3 value being at the
+   -- start of the record (at the base address).
+   TYPE register_state IS RECORD
+      CR3    : ALIASED Memory.page_address := 0;
+      CS     : ALIASED Intrinsics.general_register RANGE 0 .. 2**16 - 1 :=
+         Intrinsics.general_register(Descriptors.CS_Ring_3);
+      MMX    : ALIASED Intrinsics.MMX_registers;
+      R8     : ALIASED Intrinsics.general_register := 0;
+      R9     : ALIASED Intrinsics.general_register := 0;
+      R10    : ALIASED Intrinsics.general_register := 0;
+      R11    : ALIASED Intrinsics.general_register := 0;
+      R12    : ALIASED Intrinsics.general_register := 0;
+      R13    : ALIASED Intrinsics.general_register := 0;
+      R14    : ALIASED Intrinsics.general_register := 0;
+      R15    : ALIASED Intrinsics.general_register := 0;
+      RAX    : ALIASED Intrinsics.general_register := 0;
+      RBP    : ALIASED Intrinsics.general_register := 0;
+      RBX    : ALIASED Intrinsics.general_register := 0;
+      RCX    : ALIASED Intrinsics.general_register := 0;
+      RDI    : ALIASED Intrinsics.general_register := 0;
+      RDX    : ALIASED Intrinsics.general_register := 0;
+      RFLAGS : ALIASED Intrinsics.general_register := 0;
+      RIP    : ALIASED Memory.canonical_address := 0;
+      RSI    : ALIASED Intrinsics.general_register := 0;
+      RSP    : ALIASED Intrinsics.general_register := 0;
       -- All other segment indices are identical to the SS (except for the CS).
-      -- This is not actually loaded into the SS register, but rather the other
-      -- segment index registers. I am fairly certain the other registers aside
-      -- from CS, GS, FS, and of course SS, are not really used. Zero-extended
-      -- up to 64 bits when `MOV`'d, as these are actually special registers.
-      SS  : Intrinsics.general_register RANGE 0 .. 2**16 - 1 :=
+      -- The other registers aside from CS, GS, FS, and of course SS, are not
+      -- really used. Zero-extended up to 64 bits when `MOV`'d, as these are
+      -- actually special registers.
+      SS     : ALIASED Intrinsics.general_register RANGE 0 .. 2**16 - 1 :=
          Intrinsics.general_register(Descriptors.DS_Ring_3);
+      XMM    : ALIASED Intrinsics.XMM_registers;
    END RECORD
    WITH
       Convention  => Assembler,
-      Object_Size => (56 * 8) + 63 + 1;
-   FOR callee_saved_registers USE RECORD
-      RBX AT 00 RANGE 0 .. 63;
-      RBP AT 08 RANGE 0 .. 63;
-      RSP AT 16 RANGE 0 .. 63;
-      R12 AT 24 RANGE 0 .. 63;
-      R13 AT 32 RANGE 0 .. 63;
-      R14 AT 40 RANGE 0 .. 63;
-      R15 AT 48 RANGE 0 .. 63;
-      SS  AT 56 RANGE 0 .. 63;
+      Object_Size => (232 * 8) + 2047 + 1;
+   FOR register_state USE RECORD
+      CR3    AT 000 RANGE 0 .. 0063;
+      CS     AT 008 RANGE 0 .. 0063;
+      MMX    AT 016 RANGE 0 .. 0511;
+      R8     AT 080 RANGE 0 .. 0063;
+      R9     AT 088 RANGE 0 .. 0063;
+      R10    AT 096 RANGE 0 .. 0063;
+      R11    AT 104 RANGE 0 .. 0063;
+      R12    AT 112 RANGE 0 .. 0063;
+      R13    AT 120 RANGE 0 .. 0063;
+      R14    AT 128 RANGE 0 .. 0063;
+      R15    AT 136 RANGE 0 .. 0063;
+      RAX    AT 144 RANGE 0 .. 0063;
+      RBP    AT 152 RANGE 0 .. 0063;
+      RBX    AT 160 RANGE 0 .. 0063;
+      RCX    AT 168 RANGE 0 .. 0063;
+      RDI    AT 176 RANGE 0 .. 0063;
+      RDX    AT 184 RANGE 0 .. 0063;
+      RFLAGS AT 192 RANGE 0 .. 0063;
+      RIP    AT 200 RANGE 0 .. 0063;
+      RSI    AT 208 RANGE 0 .. 0063;
+      RSP    AT 216 RANGE 0 .. 0063;
+      SS     AT 224 RANGE 0 .. 0063;
+      XMM    AT 232 RANGE 0 .. 2047; -- TODO: Put this on a 16-byte boundary.
    END RECORD;
 
    -- Details a task's various states and settings. The index of the task
    -- itself is considered to be the task identity.
    TYPE task_control_block IS LIMITED RECORD
+      -- Whether the task control block is occupied. Should be set back to
+      -- false after being true only when the rest of the block no longer holds
+      -- any notable information and has been reset to its default values. If
+      -- this is false, then it is safe to use the current task control block.
+      Present               : boolean := false;
       -- The name of the task.
       Name                  : task_name_string := (OTHERS => NUL);
       -- Indicates the frame count of the task's initial code/data which is
@@ -226,21 +252,26 @@ PRIVATE
       -- The paging layout for the task and how it sees virtual memory. I've
       -- only given a task a single page layout for now.
       Virtual_Space         : Paging.page_layout;
-      -- The registers the context switcher will load and `REX.W IRET` to with.
-      State                 : ALIASED callee_saved_registers;
-      -- This goes inside the TSS so the CPU knows which stack to switch to on
-      -- an interrupt. The address must be the bottom of the stack, meaning
-      -- that it's the highest address and will grow downwards. It is also a
-      -- virtual address, as the task must have it mapped while making sure
-      -- it's unaware of the physical memory layout. Must be accessible by
-      -- ring 0 in all page layouts.
+      -- The registers saved and reloaded during context switches.
+      State                 : ALIASED register_state;
+      -- This is a kernel level stack that can store task data. The address
+      -- must be the bottom of the stack, meaning that it's the highest address
+      -- and will grow downwards. It is also a virtual address, as the task
+      -- must have it mapped while making sure it's unaware of the physical
+      -- memory layout. Must be accessible by ring 0 in all page layouts.
+      -- TODO: This is not used by anything currently. Interrupts are handled
+      -- on a single stack, which does not retain any useful information. Will
+      -- be used when system calls are interruptible and/or when multiprocessor
+      -- support is added in.
       Kernel_Stack          : Memory.page_address := 0;
       -- The byte size of the kernel stack. This should be a multiple of 4 KiB.
       Kernel_Stack_Size     : number := 0;
       -- This is the physical base of the kernel stack. It's also the address
       -- at which the stack grows downwards like the stack's virtual address.
       -- TODO: For now, I identity-map the kernel stack. I'll need to pick a
-      -- sensible virtual range in which to map these.
+      -- sensible virtual range in which to map these. A bug can likely occur
+      -- where the task's ELF code/data overlaps the kernel stack's mapping.
+      -- That would break some things.
       Kernel_Stack_Physical : Memory.page_address := 0;
       -- Indicates whether or not the task is alive.
       Alive                 : boolean := false;
@@ -248,7 +279,7 @@ PRIVATE
       -- A value of anything other than zero indicates an error of some sort.
       Exit_Code             : number := 0;
       -- Right now, I am just using round robin without a meaningful priority
-      -- algorithm, so this value is how many LAPIC timer interrupts the thread
+      -- algorithm, so this value is how many LAPIC timer interrupts the task
       -- is supposed to receive.
       -- TODO: Adjust this dynamically.
       Max_Ticks             : number RANGE 1 .. number'last := 10;
@@ -258,23 +289,18 @@ PRIVATE
       Heap_End              : Memory.page_address := 0;
    END RECORD
    WITH
-      Dynamic_Predicate => (IF Alive THEN
-                              Initial_Frames IN 1 .. (2 * GiB) / Paging.Page
-                                 AND THEN
+      Dynamic_Predicate => (IF NOT Present THEN NOT Alive) AND THEN
+                           (IF Alive THEN
+                              Initial_Frames IN 1 .. (2 * GiB) /
+                                 Paging.page_size'enum_rep AND THEN
                               Name /= (Name'range => NUL) AND THEN
                               Exit_Code = 0);
 
-   -- I've gone with a flat array instead of something like a linked list
-   -- because it's easier to prove with the current SPARK tools.
-   -- It's definitely possible, but simplicity is the focus.
-   TYPE access_task_control_block IS ACCESS task_control_block;
-   TYPE task_control_blocks IS ARRAY(task_limit) OF
-      access_task_control_block;
-
-   -- The main array of tasks. I avoided a linked list because it's harder
-   -- to prove and relies on pointers more. It's definitely possible to do
-   -- with SPARK's current tools, but I don't believe it is worth it.
-   Tasks       : task_control_blocks
+   -- The main array of tasks. I avoided a linked list because it's harder to
+   -- prove and relies on pointers more. It's definitely possible to do with
+   -- SPARK's current tools, but I don't believe it is worth it. Additionally,
+   -- this is all pre-allocated.
+   Tasks       : ARRAY(task_limit) OF task_control_block
    WITH
       Part_Of => Tasking_State;
 
@@ -304,7 +330,7 @@ PRIVATE
       Part_Of        => Tasking_State,
       Export         => true,
       Convention     => Assembler,
-      External_Name  => "global__tasking_enabled",
+      External_Name  => "ada__tasking_enabled",
       Linker_Section => ".isolated_bss";
 
    -- Tracks the current time slice for the active task.
@@ -313,7 +339,20 @@ PRIVATE
       Part_Of        => Tasking_State,
       Export         => true,
       Convention     => Assembler,
-      External_Name  => "global__tasking_countdown",
+      External_Name  => "ada__tasking_countdown",
+      Linker_Section => ".isolated_bss";
+
+   -- A pointer to the active task's context/register state. This is a
+   -- workaround for the assembly routine where context switching is performed
+   -- so it does not have to make a function call and can instead just address
+   -- the register state record directly; otherwise, the call would clobber the
+   -- user's register state without doing a double backup of it.
+   Active_Task_Context       : ALIASED Memory.canonical_address := 0
+   WITH
+      Part_Of        => Tasking_State,
+      Export         => true,
+      Convention     => Assembler,
+      External_Name  => "ada__tasking_context",
       Linker_Section => ".isolated_bss";
 
    -- Prepares an entry for the indicated task. By default the task is not
@@ -333,39 +372,12 @@ PRIVATE
    WITH
       Global => (In_Out => (Tasks, Paging.Kernel_Page_Layout_State,
                             Memory.Frames.Frame_Allocator_State),
-                 Input  => (UEFI.Memory_Map, SPARK.Heap.Dynamic_Memory)),
-      Pre    => Tasks(Task_Index) /= NULL,
-      Post   => Tasks(Task_Index) /= NULL AND THEN
+                 Input  => (UEFI.Memory_Map, UEFI.Bootloader_Arguments,
+                            SPARK.Heap.Dynamic_Memory,
+                            Memory.Kernel_Virtual_Base)),
+      Pre    => Tasks(Task_Index).Present,
+      Post   => Tasks(Task_Index).Present AND THEN
                 Error_Status IN no_error | attempt_error | memory_error;
-
-   -- Begins the first step of the tasking switch. This is where tasks go to
-   -- stand-by while other tasks take off from here after being active. This
-   -- effectively calls `INT 49`, which modifies the CR3 register, so this is
-   -- placed in the isolated text section to maintain mappings between the
-   -- kernel and all tasks.
-   PROCEDURE Round_Robin
-   WITH
-      Global         => (In_Out   => (Tasks, Active_Task, Countdown,
-                                      Descriptors.TSS),
-                         Proof_In => Enabled),
-      Linker_Section => ".isolated_text",
-      Pre            => Enabled AND THEN Tasks(Active_Task) /= NULL,
-      Post           => Enabled AND THEN Tasks(Active_Task) /= NULL;
-
-   -- Raises `INT 49`, which is the interrupt vector for the context switch
-   -- ISR. Do not redefine the external name to call the
-   -- `assembly__switch_task()` routine directly. This lets the context switch
-   -- itself be independent and additionally change the CR3 contents based on
-   -- which ring it was called from.
-   PROCEDURE Switch
-   WITH
-      Global         => (In_Out => (Tasks, Active_Task, Descriptors.TSS)),
-      Import         => true,
-      Convention     => Assembler,
-      External_Name  => "assembly__raise_interrupt_049",
-      Linker_Section => ".isolated_text",
-      Pre            => Tasks(Active_Task) /= NULL,
-      Post           => Tasks(Active_Task) /= NULL;
 
    -- This cleans up dead tasks and dead task threads.
    PROCEDURE Task_Cleaner
@@ -375,45 +387,27 @@ PRIVATE
                             Memory.Frames.Frame_Allocator_State),
                  Input  => Active_Task);
 
-   -- This stores the active task's stack and moves onto the next task.
-   -- It changes exactly what the `Get_*()` functions below return.
-   PROCEDURE Round_Robin_Cycle
+   -- Changes the active task and the pointer to the active task context based
+   -- on the round-robin scheduling algorithm.
+   PROCEDURE Round_Robin
    WITH
-      Global        => (In_Out   => (Active_Task, Descriptors.TSS),
-                        Input    => Tasks,
-                        Output   => Countdown,
-                        Proof_In => Enabled),
-      Export        => true,
-      Convention    => Assembler,
-      External_Name => "ada__round_robin_cycle",
-      Pre           => Enabled AND THEN
-                       Tasks(Active_Task) /= NULL,
-      Post          => Enabled                    AND THEN
-                       Tasks(Active_Task) /= NULL AND THEN
-                       Tasks(Active_Task).Alive;
+      Global => (In_Out   => Active_Task,
+                 Input    => Tasks,
+                 Output   => (Active_Task_Context, Countdown),
+                 Proof_In => Enabled),
+      Pre    => Enabled AND THEN
+                Tasks(Active_Task).Present,
+      Post   => Enabled                    AND THEN
+                Tasks(Active_Task).Present AND THEN
+                Tasks(Active_Task).Alive;
 
    -- Returns a thin pointer to the active task's state, which is a record for
-   -- callee-saved registers. Note that the task does not have to be alive.
-   FUNCTION Get_Active_Task_State
+   -- all registers. Note that the task does not have to be alive.
+   FUNCTION Get_Task_State_Address
+     (Task_Index : IN task_limit)
       RETURN Memory.canonical_address
    WITH
-      Global        => (Input => (Tasks, Active_Task), Proof_In => Enabled),
-      Export        => true,
-      Convention    => Assembler,
-      External_Name => "ada__get_active_task_state",
-      Pre           => Enabled AND THEN
-                       Tasks(Active_Task) /= NULL;
-
-   -- Returns the base address of the task's level 4 page map (PML4) to put
-   -- into the CR3 register. This is much easier to calculate in Ada.
-   FUNCTION Get_Active_Task_CR3
-      RETURN Memory.page_address
-   WITH
-      Global        => (Input => (Tasks, Active_Task), Proof_In => Enabled),
-      Export        => true,
-      Convention    => Assembler,
-      External_Name => "ada__get_active_task_cr3",
-      Pre           => Enabled AND THEN
-                       Tasks(Active_Task) /= NULL;
+      Global => (Input => (Tasks, Active_Task)),
+      Pre    => Tasks(Active_Task).Present;
 
 END HAVK_Kernel.Tasking;

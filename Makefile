@@ -148,7 +148,7 @@ endif
 ifeq ("$(QEMU_SOFTWARE_CPU)", "1")
 	QEMU_FLAGS+= -cpu qemu64,check
 else
-	QEMU_FLAGS+= -cpu host,+x2apic,enforce -enable-kvm
+	QEMU_FLAGS+= -cpu host,+x2apic,-fsgsbase,enforce -enable-kvm
 endif
 
 BOOTLOADER_NAME=boot

@@ -166,7 +166,7 @@ IS
             Paging.Kernel_Map_Address_Range
               (Region.Start_Address_Physical,
                Region.Start_Address_Physical,
-               Region.Number_Of_Pages * Paging.Page,
+               Region.Number_Of_Pages * Paging.page_size'enum_rep,
                Write_Access => false,
                No_Execution =>  true);
          END IF;
@@ -185,7 +185,7 @@ IS
       WITH
          Import     => true,
          Convention => Assembler,
-         Link_Name  => "global__bootloader_magic";
+         Link_Name  => "assembly__bootloader_magic";
    BEGIN
       IF -- Inform if the magic number is wrong or corrupted.
          Magic = 16#55_45_46_49#

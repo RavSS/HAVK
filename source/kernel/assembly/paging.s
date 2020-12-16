@@ -26,6 +26,6 @@ assembly__get_page_fault_address:
 # This is where we store the indicated kernel page layout. We only need the
 # level 4 page structure. It must be modified by some Ada code before
 # interrupts and/or tasking is enabled.
-.GLOBAL global__kernel_page_map_base_address
-global__kernel_page_map_base_address:
+.GLOBAL assembly__kernel_page_map_base_address
+assembly__kernel_page_map_base_address:
 	.SPACE 8

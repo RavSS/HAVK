@@ -62,9 +62,11 @@ IS
             NOT Attributes.Read_Protected
          THEN -- Count the conventional memory only. Ignore reserved memory.
             IF -- Overflow check. I'd rather not use an assumption.
-               Limit <= number'last - Paging.Page * Region.Number_Of_Pages
+               Limit <= number'last - Paging.page_size'enum_rep *
+                  Region.Number_Of_Pages
             THEN
-               Limit := Limit + Paging.Page * Region.Number_Of_Pages;
+               Limit :=
+                  Limit + Paging.page_size'enum_rep * Region.Number_Of_Pages;
             END IF;
          END IF;
       END LOOP;

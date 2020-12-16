@@ -65,7 +65,7 @@
 		CLD # READ: https://reviews.llvm.org/D18725
 
 		# Switch to the kernel's page layout.
-		MOV RAX, [RIP + global__kernel_page_map_base_address]
+		MOV RAX, [RIP + assembly__kernel_page_map_base_address]
 		MOV CR3, RAX
 
 		# Now increment the counter used for various statistics.
@@ -110,12 +110,7 @@
 		POP R11
 
 		.IF \RESET_LAPIC
-			# Reset the LAPIC by writing zero to the EOI
-			# MSR. Not needed for CPU exceptions etc.
-			XOR RAX, RAX
-			XOR RDX, RDX
-			MOV RCX, 0x80B # The EOI MSR index.
-			WRMSR
+			M_LAPIC_EOI
 		.ENDIF
 
 		POP RAX # Now restore them.
@@ -160,9 +155,6 @@
 .TYPE assembly__interrupt_handler_spurious, @function
 assembly__interrupt_handler_spurious:
 	REX.W IRET # TODO: Do I need to signal EOI?
-
-# HAVK-specific interrupt handler stubs.
-INTERRUPT_HANDLER_STUB 48 0 1 # LAPIC timer.
 
 # CPU exception handler stubs.
 INTERRUPT_HANDLER_STUB 0 0

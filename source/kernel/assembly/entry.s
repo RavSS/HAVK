@@ -12,26 +12,27 @@
 
 # System V ABI for x86-64 dictates that stacks grow downwards.
 .ALIGN 16 # 16-byte alignment required by the ABI for the stack.
-global__entry_stack_end:
+assembly__entry_stack_end:
 	.SPACE 32768 # Check alignment if you're going to change this.
-global__entry_stack_base: # 32 KiB 16-byte aligned stack.
+assembly__entry_stack_base: # 32 KiB 16-byte aligned stack.
 
 .SECTION .rodata
 
 # The entry stack will later be reused for other purposes, but during kernel
 # initialisation, it will be the sole stack used.
-.GLOBAL global__entry_stack_base_address
-global__entry_stack_base_address:
-	.QUAD global__entry_stack_base
+.GLOBAL assembly__entry_stack_base_address
+assembly__entry_stack_base_address:
+	.QUAD assembly__entry_stack_base
 
 .SECTION .bss
 
 # Space for bootloader information.
-.GLOBAL global__bootloader_arguments
-.GLOBAL global__bootloader_magic
-global__bootloader_arguments:
+.GLOBAL assembly__bootloader_arguments
+assembly__bootloader_arguments:
 	.SPACE 8 # Store the bootloader's argument pointer here.
-global__bootloader_magic:
+
+.GLOBAL assembly__bootloader_magic
+assembly__bootloader_magic:
 	.SPACE 8 # Store the bootloader's magic number here.
 
 .SECTION .text
@@ -44,8 +45,8 @@ assembly__entry:
 	# To avoid any clobbering, I'm saving the UEFI application's passed
 	# arguments/parameters pointer to a specific location in memory.
 	# The pointer was passed in the way of the x86-64 System V ABI.
-	MOV [RIP + global__bootloader_arguments], RDI
-	MOV [RIP + global__bootloader_magic], RSI
+	MOV [RIP + assembly__bootloader_arguments], RDI
+	MOV [RIP + assembly__bootloader_magic], RSI
 
 	# Something interesting to consider for GAS as opposed to NASM is that
 	# NASM assembles e.g. `MOV RAX, symbol` as a MOVABS instruction whereas
@@ -53,7 +54,7 @@ assembly__entry:
 	# to load a symbol is to use a LEA instruction with an address relative
 	# to RIP. I think it's also possible to accomplish this via sign
 	# extension, but this is easier.
-	LEA RSP, [RIP + global__entry_stack_base]
+	LEA RSP, [RIP + assembly__entry_stack_base]
 	MOV RBP, RSP
 
 	# This is more reliable here than in the bootloader. Should adhere to
@@ -97,5 +98,5 @@ assembly__entry:
 
 	# Begin to enter HAVK. It's proven to not return. A call is done
 	# instead of a direct jump because GCC realigns the stack for main
-	# procedures.
+	# procedures and it is expecting a 16-byte aligned stack upon entry.
 	CALL havk

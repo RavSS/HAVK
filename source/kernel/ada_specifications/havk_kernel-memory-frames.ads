@@ -20,7 +20,7 @@ WITH
    Abstract_State => (Frame_Allocator_State)
 IS
    SUBTYPE frame_limit IS number
-      RANGE 0 .. number(address'last / address(Paging.Page));
+      RANGE 0 .. number(address'last / Paging.page_size'enum_rep);
 
    -- Returns the base address of the next free frame in the first parameter.
    -- This is a quasi-function, as it's a function in the form of a procedure
@@ -49,7 +49,7 @@ IS
    -- range of consecutive frames is not available. The value below is outside
    -- the current limit of RAM for x86-64 (above 256 TiB).
    Null_Frame_Address : CONSTANT page_address :=
-      address'last - address(Paging.Page - 1);
+      address'last - (Paging.page_size'enum_rep - 1);
 
    -- Must be called before the "NEW" keyword can be used, as it gives
    -- consecutive frames to the kernel itself. The memory manager is in the
@@ -93,8 +93,8 @@ PRIVATE
    -- space, as the UEFI memory map only covers the actual RAM. May also want
    -- to change the default physical frame size to something like 2 MiB.
    TYPE frame_collection IS ARRAY
-     (number RANGE (16 * MiB) / Paging.Page .. (128 * GiB) / Paging.Page - 1)
-         OF frame
+     (number RANGE (16 * MiB) / Paging.page_size'enum_rep ..
+        (128 * GiB) / Paging.page_size'enum_rep - 1) OF frame
    WITH
       Pack => true;
 

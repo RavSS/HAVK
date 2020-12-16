@@ -21,8 +21,8 @@ IS
       IF
          Sender NOT IN task_limit'range   OR ELSE
          Receiver NOT IN task_limit'range OR ELSE
-         Tasks(Sender) = NULL             OR ELSE
-         Tasks(Receiver) = NULL
+         NOT Tasks(Sender).Alive          OR ELSE
+         NOT Tasks(Receiver).Alive
       THEN
          Error_Status := index_error;
          RETURN;
@@ -54,8 +54,8 @@ IS
       IF
          Sender NOT IN task_limit'range   OR ELSE
          Receiver NOT IN task_limit'range OR ELSE
-         Tasks(Sender) = NULL             OR ELSE
-         Tasks(Receiver) = NULL
+         NOT Tasks(Sender).Alive          OR ELSE
+         NOT Tasks(Receiver).Alive
       THEN
          Header    := number'first;
          Subheader := number'first;

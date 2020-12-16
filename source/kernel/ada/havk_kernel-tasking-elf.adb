@@ -221,12 +221,12 @@ IS
          END;
       END LOOP;
 
-      ELF_Memory_Size := Memory.Align(ELF_Memory_Size, Paging.Page,
-         Round_Up => true);
+      ELF_Memory_Size := Memory.Align(ELF_Memory_Size,
+         Paging.page_size'enum_rep, Round_Up => true);
 
-      IF
+      IF -- The range is the current limit for task code spaces.
          Paging.Size_To_Pages(ELF_Memory_Size) NOT IN
-            1 .. (2 * GiB) / Paging.Page -- Current limit for task code spaces.
+            1 .. (2 * GiB) / Paging.page_size'enum_rep
       THEN
          Log("The ELF file contains no executable code.", Tag => ELF_Tag,
             Warn => true);
@@ -250,7 +250,7 @@ IS
       IF -- TODO: This should not be necessary. Rework the "Tasking" package.
          Error_Check /= no_error            OR ELSE
          Task_Index NOT IN task_limit'range OR ELSE
-         Tasks(Task_Index) = NULL
+         NOT Tasks(Task_Index).Present
       THEN
          Log("A task was created, but its index could not be found.",
             Tag => ELF_Tag, Warn => true);
@@ -267,7 +267,6 @@ IS
       FOR
          Index IN 0 .. ELF_Header.Program_Header_Entry_Count - 1
       LOOP
-         PRAGMA Loop_Invariant(Tasks(Task_Index) /= NULL);
          DECLARE
             ELF_Segment : CONSTANT program_header_entry
             WITH
@@ -354,10 +353,10 @@ IS
                     (ELF_Segment.Virtual_Address - ELF_Virtual_Base),
                   ELF_Segment.Memory_Size,
                   User_Access  => true,
-                  Write_Access => (ELF_Segment.Permission_Flag =
-                     readable_and_writeable_segment),
-                  No_Execution => (ELF_Segment.Permission_Flag /=
-                     readable_and_executable_segment));
+                  Write_Access => ELF_Segment.Permission_Flag =
+                     readable_and_writeable_segment,
+                  No_Execution => ELF_Segment.Permission_Flag /=
+                     readable_and_executable_segment);
             END IF;
          END;
       END LOOP;
@@ -372,8 +371,9 @@ IS
       -- TODO: This check is for `gnatprove` and it isn't actually necessary.
       -- Improve the contracts in the tasking package and remove this.
       IF -- Pretend this is an assumption. The predicate should hold.
-         Tasks(Task_Index).Initial_Frames IN 1 .. (2 * GiB) / Paging.Page
-            AND THEN
+         Tasks(Task_Index).Present AND THEN
+         Tasks(Task_Index).Initial_Frames IN
+            1 .. (2 * GiB) / Paging.page_size'enum_rep AND THEN
          Tasks(Task_Index).Name /= (Tasks(Task_Index).Name'range => NUL)
             AND THEN
          Tasks(Task_Index).Exit_Code = 0
