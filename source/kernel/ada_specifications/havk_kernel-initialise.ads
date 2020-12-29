@@ -7,8 +7,8 @@
 
 WITH
    HAVK_Kernel.Descriptors,
-   HAVK_Kernel.System_Call,
-   HAVK_Kernel.System_Call.Handler,
+   HAVK_Kernel.Tasking.System_Call,
+   HAVK_Kernel.Tasking.System_Call.Handler,
    HAVK_Kernel.Memory,
    HAVK_Kernel.Memory.Frames;
 
@@ -43,7 +43,7 @@ IS
    -- Initialises the system call instruction's handler by preparing the MSRs.
    PROCEDURE System_Call_Instruction
    RENAMES
-      System_Call.Handler.Set_MSRs;
+      Tasking.System_Call.Handler.Set_MSRs;
 
    -- Retrieves the date and time in ISO 8601 format of when the current
    -- running version of the kernel was compiled and built. The format returned

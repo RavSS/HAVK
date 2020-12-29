@@ -95,7 +95,15 @@
 			CALL ada__interrupt_handler_\VECTOR
 		.ENDIF
 
-		M_SWITCH_TO_TASK_CR3
+		# Switch to the appropriate page layout if tasking demands it.
+		CMP BYTE PTR [RIP + ada__tasking_enabled], 0
+		JZ 1f
+		# Tasking is enabled if this is reached, so we obtain the
+		# register state to load the right CR3 value.
+		CALL ada__get_active_task_state
+		MOV RAX, [RAX + CR3_STATE]
+		MOV CR3, RAX
+		1:
 
 		M_LOAD_MMX_REGISTERS RSP
 		ADD RSP, 8 * 8
@@ -207,6 +215,3 @@ INTERRUPT_HANDLER_STUB 44 0 1
 INTERRUPT_HANDLER_STUB 45 0 1
 INTERRUPT_HANDLER_STUB 46 0 1
 INTERRUPT_HANDLER_STUB 47 0 1
-
-# For raising the context switch function.
-RAISE_INTERRUPT_FUNCTION 49

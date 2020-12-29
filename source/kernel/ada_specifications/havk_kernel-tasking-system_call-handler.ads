@@ -1,19 +1,18 @@
 -------------------------------------------------------------------------------
 -- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-system_call-handler.ads                    --
+-- Filename        -- havk_kernel-tasking-system_call-handler.ads            --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.Intrinsics,
-   HAVK_Kernel.Memory;
+   HAVK_Kernel.Intrinsics;
 USE TYPE
    HAVK_Kernel.Intrinsics.model_specific_register;
 
 -- This package houses a part of the system call handler that gets entered upon
 -- the `SYSCALL` instruction.
-PACKAGE HAVK_Kernel.System_Call.Handler
+PACKAGE HAVK_Kernel.Tasking.System_Call.Handler
 IS
    -- This sets the MSRs related to the `SYSCALL` address, notably for
    -- telling it where the system call entry address is and what the code
@@ -27,59 +26,11 @@ PRIVATE
       Convention    => Assembler,
       External_Name => "assembly__system_call_entry_address";
 
-   -- A pointer to this record is passed to the system call handler. That way
-   -- we can provide a return code without using functions in Ada. Passing the
-   -- values normally with the "IN OUT" mode means that each value needs to be
-   -- placed onto the stack anyway with a pointer to it. This ensures
-   -- consistency. Also make sure that this consistent with the push/pop
-   -- sequence macros defined in the "system_call.s" file.
-   TYPE arguments IS LIMITED RECORD
-      -- RCX is clobbered by `SYSCALL` and it puts the instruction's RIP into
-      -- the RCX register itself. Changing this will return the task to another
-      -- place in the user's code.
-      Call_Address   : Memory.canonical_address;
-      -- Similar to the RCX register, the R11 register is clobbered as well and
-      -- gets replaced with the value of RFLAGS before `SYSCALL` was executed.
-      -- There should be little reason to modify this.
-      Call_Flags     : Intrinsics.general_register;
-      -- Validate this before reading it.
-      Operation_Call : operation; -- RAX upon entry.
-      -- The arguments begin here according to the System V x86-64 ABI.
-      -- The RCX register is skipped.
-      -- TODO: Maybe add in R10 instead where RCX is in user tasks, which is
-      -- how the Linux kernel does it.
-      Argument_1     : Intrinsics.general_register; -- RDI.
-      Argument_2     : Intrinsics.general_register; -- RSI.
-      Argument_3     : Intrinsics.general_register; -- RDX.
-      Argument_4     : Intrinsics.general_register; -- R8.
-      Argument_5     : Intrinsics.general_register; -- R9.
-      -- Not passed by the user, but returned by us.
-      Error_Status   : Intrinsics.general_register; -- RAX when finished.
-      -- User data in all XMM registers.
-      XMM_State      : Intrinsics.XMM_registers;
-   END RECORD
-   WITH
-      Convention => Assembler;
-   FOR arguments USE RECORD
-      Call_Address   AT 00 RANGE 0 .. 63;
-      Call_Flags     AT 08 RANGE 0 .. 63;
-      Operation_Call AT 16 RANGE 0 .. 63;
-      Argument_1     AT 24 RANGE 0 .. 63;
-      Argument_2     AT 32 RANGE 0 .. 63;
-      Argument_3     AT 40 RANGE 0 .. 63;
-      Argument_4     AT 48 RANGE 0 .. 63;
-      Argument_5     AT 56 RANGE 0 .. 63;
-      Error_Status   AT 64 RANGE 0 .. 63;
-      XMM_State      AT 72 RANGE
-         0 .. (128 * Intrinsics.XMM_registers'length) - 1;
-   END RECORD;
-
    -- This procedure passes the arguments to an operation according to the
-   -- system call. It expects that the entry stub for the system call passes a
-   -- pointer/access to the record up above. They must match, or else trouble
-   -- will occur.
+   -- system call. The System V ABI method of passing arguments to a function
+   -- is similar to how this procedure passes said arguments to the actual
+   -- system call procedures.
    PROCEDURE System_Call_Handler
-     (Values : NOT NULL ACCESS arguments)
    WITH
       Export        => true,
       Convention    => Assembler,
@@ -129,4 +80,4 @@ PRIVATE
    -- itself. This can be useful for masking the interrupts enabled bit.
    -- Every bit set in the mask means every flag bit disabled upon entry.
    IA32_FMASK : CONSTANT Intrinsics.model_specific_register := 16#C0000084#;
-END HAVK_Kernel.System_Call.Handler;
+END HAVK_Kernel.Tasking.System_Call.Handler;

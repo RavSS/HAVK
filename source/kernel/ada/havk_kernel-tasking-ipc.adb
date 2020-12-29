@@ -17,6 +17,9 @@ IS
       Data         : IN message_data;
       Error_Status : OUT error)
    IS
+      Error_Check : error
+      WITH
+         Unreferenced => true;
    BEGIN
       IF
          Sender NOT IN task_limit'range   OR ELSE
@@ -29,6 +32,7 @@ IS
       ELSIF
          Messages(Receiver, Sender).Used
       THEN
+         Yield(Error_Check, Next_Task_Index => Receiver);
          Error_Status := attempt_error;
          RETURN;
       END IF;
@@ -39,6 +43,7 @@ IS
          Subheader => Subheader,
          Data      => Data);
 
+      Yield(Error_Check, Next_Task_Index => Receiver);
       Error_Status := no_error;
    END Send_Message;
 
@@ -50,6 +55,9 @@ IS
       Data         : OUT message_data;
       Error_Status : OUT error)
    IS
+      Error_Check : error
+      WITH
+         Unreferenced => true;
    BEGIN
       IF
          Sender NOT IN task_limit'range   OR ELSE
@@ -70,6 +78,7 @@ IS
          Subheader := number'first;
          Data      := (OTHERS => <>);
 
+         Yield(Error_Check, Next_Task_Index => Sender);
          Error_Status := attempt_error;
          RETURN;
       END IF;

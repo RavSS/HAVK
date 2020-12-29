@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
 -- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-system_call.adb                            --
+-- Filename        -- havk_kernel-tasking-system_call.adb                    --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
@@ -14,7 +14,7 @@ WITH
    HAVK_Kernel.Tasking.Buffer,
    HAVK_Kernel.Tasking.Memory;
 
-PACKAGE BODY HAVK_Kernel.System_Call
+PACKAGE BODY HAVK_Kernel.Tasking.System_Call
 IS
    PROCEDURE Null_Operation_Call
      (Argument_1   : IN Intrinsics.general_register;
@@ -44,8 +44,14 @@ IS
    PROCEDURE Exit_Task_Operation_Call
      (Argument_1 : IN Intrinsics.general_register)
    IS
+      Error_Check : error;
    BEGIN
-      Tasking.Kill_Active_Task(number(Argument_1));
+      Kill_Active_Task(number(Argument_1));
+      Yield(Error_Check);
+
+      LOOP
+         Intrinsics.Spinlock_Pause;
+      END LOOP;
    END Exit_Task_Operation_Call;
 
    PROCEDURE Receive_Message_Operation_Call
@@ -159,9 +165,10 @@ IS
    PROCEDURE Yield_Operation_Call
      (Error_Status : OUT Intrinsics.general_register)
    IS
+      Error_Check : error;
    BEGIN
-      Tasking.Yield;
-      Error_Status := no_error'enum_rep;
+      Tasking.Yield(Error_Check);
+      Error_Status := Error_Check'enum_rep;
    END Yield_Operation_Call;
 
    PROCEDURE Log_Operation_Call
@@ -262,4 +269,4 @@ IS
       Error_Status := no_error'enum_rep;
    END Framebuffer_Access_Operation_Call;
 
-END HAVK_Kernel.System_Call;
+END HAVK_Kernel.Tasking.System_Call;

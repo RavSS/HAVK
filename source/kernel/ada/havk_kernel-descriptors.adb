@@ -134,7 +134,7 @@ IS
 
          GDTR.Base_Address := GDT'address;
          IDTR.Base_Address := IDT'address;
-         TSS.RSP_Ring_0    := Entry_Stack_Address;
+         TSS.IST_7         := Entry_Stack_Address;
       END Set_Addresses;
    BEGIN
       Intrinsics.Disable_Interrupts;
@@ -149,21 +149,23 @@ IS
    END Load;
 
    FUNCTION Interrupt_Entry
-     (ISR_Entry : IN address;
-      Gate      : IN interrupt_descriptor_table_gate_type := interrupt_gate;
-      Ring_3    : IN boolean := false;
-      IST       : IN number  := 0)
+     (ISR_Entry       : IN address;
+      Gate            : IN interrupt_descriptor_table_gate_type :=
+         interrupt_gate;
+      Ring_3_Access   : IN boolean := false;
+      Ring_3_Selector : IN boolean := false;
+      IST             : IN number  := 0)
       RETURN interrupt_descriptor_table_gate
    IS
    (
       ISR_Address_Low    => ISR_Entry AND 2**16 - 1,
-      CS_Selector        => (IF Ring_3 THEN 16#28# ELSE CS_Ring_0),
+      CS_Selector        => (IF Ring_3_Selector THEN 16#28# ELSE CS_Ring_0),
       IST_Offset         => IST,
       Type_Attributes    =>
       (
          Gate            => Gate,
          Storage_Segment => false,
-         DPL             => (IF Ring_3 THEN 3 ELSE 0),
+         DPL             => (IF Ring_3_Access THEN 3 ELSE 0),
          Present         => true
       ),
       ISR_Address_Middle => Shift_Right(ISR_Entry, 16) AND 2**16 - 1,

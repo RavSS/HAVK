@@ -1,6 +1,6 @@
 -------------------------------------------------------------------------------
 -- Program         -- HAVK                                                   --
--- Filename        -- havk_kernel-system_call.ads                            --
+-- Filename        -- havk_kernel-tasking-system_call.ads                    --
 -- License         -- GNU General Public License version 3.0                 --
 -- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
 -------------------------------------------------------------------------------
@@ -10,7 +10,6 @@ WITH
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Memory;
 USE TYPE
-   HAVK_Kernel.Intrinsics.general_register,
    HAVK_Kernel.Intrinsics.XMM_registers;
 
 -- In this package, there is an API to interact with the kernel from ring 3.
@@ -21,10 +20,15 @@ USE TYPE
 -- user tasks should be "calling" the subprograms in here, not kernel code
 -- elsewhere in other packages.
 -- TODO: Document the system calls more carefully.
-PACKAGE HAVK_Kernel.System_Call
+PACKAGE HAVK_Kernel.Tasking.System_Call
 IS
 PRIVATE
    System_Call_Tag : CONSTANT string := "SYSCALL";
+
+   -- The "HAVK_Kernel.Memory" package's name conflicts with the
+   -- "HAVK_Kernel.Tasking.Memory" package's name by default. We need the
+   -- former most of the time.
+   PACKAGE Memory RENAMES HAVK_Kernel.Memory;
 
    -- The system calls that HAVK supports. The indicated call should always be
    -- in the RDI register, with the following function argument registers for
@@ -44,7 +48,8 @@ PRIVATE
       buffer_operation,
       framebuffer_access_operation)
    WITH
-      Convention => C;
+      Object_Size => 64, -- C enumeration type padded to 64 bits.
+      Convention  => C;
 
    -- This system call does nothing and only logs the arguments passed.
    PROCEDURE Null_Operation_Call
@@ -64,7 +69,9 @@ PRIVATE
    -- error. This perhaps should be expanded.
    -- @param Argument_1 Exit code returned by the task.
    PROCEDURE Exit_Task_Operation_Call
-     (Argument_1 : IN Intrinsics.general_register);
+     (Argument_1 : IN Intrinsics.general_register)
+   WITH
+      No_Return => true;
 
    -- Receives a message from a particular task.
    -- @param Argument_1 The sending task's index/identity which the task wishes
@@ -116,6 +123,8 @@ PRIVATE
       Error_Status : OUT Intrinsics.general_register);
 
    -- This system call simply ends the time slice for the operation caller.
+   -- TODO: Does not yet support switching to another preferred task index.
+   -- Need to use IPC for that.
    PROCEDURE Yield_Operation_Call
      (Error_Status : OUT Intrinsics.general_register);
 
@@ -185,4 +194,4 @@ PRIVATE
    PRAGMA Annotate(GNATprove, False_Positive, "type with constraints *",
       "It's just an array with each element being a byte.");
 
-END HAVK_Kernel.System_Call;
+END HAVK_Kernel.Tasking.System_Call;

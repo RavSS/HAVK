@@ -178,10 +178,9 @@ IS
       Zeroed                 AT 12 RANGE 0 .. 31;
    END RECORD;
 
-   -- Reused as the (ring 0) interrupt stack in the TSS. Tasks don't need their
-   -- own stack for interrupts, as no data is saved to them. The interrupt
-   -- frame is recreated every time manually. The one placed by the CPU is not
-   -- kept and used for exiting the interrupt handler.
+   -- Reused as the IST 7 stack in the TSS. Not currently reused in actuality,
+   -- but the index may be used in certain IDT entries for handling faults in
+   -- the future etc.
    Entry_Stack_Address : CONSTANT Memory.canonical_address
    WITH
       Import        => true,
@@ -352,12 +351,17 @@ IS
    -- It is over 100 elements, so it would not be done statically anyway.
    PROCEDURE Reset_Interrupt_Descriptor_Table;
 
-   -- Returns a value that acts as an entry for the IDT.
+   -- Returns a value that acts as an entry for the IDT. The access parameter
+   -- decides whether or not users can manually call the interrupt i.e. `INT
+   -- 0x80`, where as the selector parameter decides if the CS selector to
+   -- enter the interrupt handler with will be the ring 3 one.
    FUNCTION Interrupt_Entry
-     (ISR_Entry : IN address;
-      Gate      : IN interrupt_descriptor_table_gate_type := interrupt_gate;
-      Ring_3    : IN boolean := false;
-      IST       : IN number  := 0)
+     (ISR_Entry       : IN address;
+      Gate            : IN interrupt_descriptor_table_gate_type :=
+         interrupt_gate;
+      Ring_3_Access   : IN boolean := false;
+      Ring_3_Selector : IN boolean := false;
+      IST             : IN number  := 0)
       RETURN interrupt_descriptor_table_gate
    WITH
       Pre => IST <= 2**3 - 1;

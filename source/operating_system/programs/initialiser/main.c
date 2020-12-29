@@ -137,10 +137,6 @@ MACRO_END
 int main(void)
 {
 	log_string("Starting initialisation from user space.");
-
-	// TODO: The `fread()` function is very slow right now, so I'll only
-	// load one example task.
-	log_string("TODO: This will take a while...");
 	LOADER(FRAMEBUFFER_TESTER_NAME, FRAMEBUFFER_TESTER_PATH);
 
 	/* Disabled tasks.
