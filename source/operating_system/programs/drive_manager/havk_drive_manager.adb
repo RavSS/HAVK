@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System Drive Manager                    --
 -- Filename        -- havk_drive_manager.adb                                 --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2021                --
 -------------------------------------------------------------------------------
 
 WITH
@@ -49,12 +49,11 @@ IS
             Write_Request   => false,
             OTHERS          => <>);
 
+         Call_Arguments := (send_message_operation, ATA_Task, OTHERS => <>);
+
          LOOP
-            Call_Arguments := (send_message_operation, ATA_Task, OTHERS => <>);
             EXIT WHEN
                System_Call(Call_Arguments, Request_Data'access) = no_error;
-            Call_Arguments := (yield_operation, OTHERS => <>);
-            System_Call(Call_Arguments);
          END LOOP;
 
          Call_Arguments := (receive_message_operation, ATA_Task, OTHERS => <>);

@@ -2,7 +2,7 @@
 -- Program         -- HAVK                                                   --
 -- Filename        -- havk_kernel-tasking-system_call.ads                    --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 WITH
@@ -75,12 +75,13 @@ PRIVATE
 
    -- Receives a message from a particular task.
    -- @param Argument_1 The sending task's index/identity which the task wishes
-   -- to receive a message from.
+   -- to receive a message from. Zero can also be specified to get the first
+   -- message where the message box is full.
    -- @param Argument_2 A 64-bit "header" field. Can be anything.
    -- @param Argument_3 A 64-bit "subheader" field. Can be anything.
    -- @param Argument_4 A buffer of data which fits inside all XMM registers.
    PROCEDURE Receive_Message_Operation_Call
-     (Argument_1   : IN Intrinsics.general_register;
+     (Argument_1   : IN OUT Intrinsics.general_register;
       Argument_2   : OUT Intrinsics.general_register;
       Argument_3   : OUT Intrinsics.general_register;
       Argument_4   : OUT Intrinsics.XMM_registers;

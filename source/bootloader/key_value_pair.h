@@ -2,7 +2,7 @@
 /* Program         -- Key-Value Pair Parser                                  */
 /* Filename        -- key_value_pair.h                                       */
 /* License         -- GNU General Public License version 3.0                 */
-/* Original Author -- Ravjot Singh Samra, Copyright 2020                     */
+/* Original Author -- Ravjot Singh Samra, Copyright 2020-2021                */
 /*****************************************************************************/
 
 /* This is a small library I made to parse a string into key-value pair

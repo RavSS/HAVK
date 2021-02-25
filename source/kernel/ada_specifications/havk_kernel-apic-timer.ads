@@ -2,7 +2,7 @@
 -- Program         -- HAVK                                                   --
 -- Filename        -- havk_kernel-apic-timer.ads                             --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2021                --
 -------------------------------------------------------------------------------
 
 -- This package is for controlling the local APIC timer.

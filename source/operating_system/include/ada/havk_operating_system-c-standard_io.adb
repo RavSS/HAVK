@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System                                  --
 -- Filename        -- havk_operating_system-c-standard_io.adb                --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 WITH
@@ -64,12 +64,12 @@ IS
          RETURN NULL;
       END IF;
 
-      LOOP -- TODO: Need much better message handling than this...
-         Call_Arguments :=
-           (Operation_Call => receive_message_operation,
-            Argument_1     => Storage_Task,
-            OTHERS         => <>);
+      Call_Arguments :=
+        (Operation_Call => receive_message_operation,
+         Argument_1     => Storage_Task,
+         OTHERS         => <>);
 
+      LOOP -- TODO: Need much better message handling than this...
          IF
             System_Call(Call_Arguments, New_File) = no_error
          THEN
@@ -81,9 +81,6 @@ IS
                RETURN New_File;
             END IF;
          END IF;
-
-         Call_Arguments.Operation_Call := yield_operation;
-         System_Call(Call_Arguments);
       END LOOP;
    END File_Open;
 
@@ -134,24 +131,21 @@ IS
          RETURN 0;
       END IF;
 
-      Buffer_Copying : LOOP
-         Receive_Block : LOOP -- TODO: Need better message handling than this.
-            Call_Arguments :=
-              (Operation_Call => receive_message_operation,
-               Argument_1     => Storage_Task,
-               OTHERS         => <>);
+      Call_Arguments :=
+        (Operation_Call => receive_message_operation,
+         Argument_1     => Storage_Task,
+         OTHERS         => <>);
 
+      Buffer_Copying : WHILE
+         Buffer_Offset < Open_File.Buffer_Size
+      LOOP
+         Receive_Block : LOOP -- TODO: Need better message handling than this.
             IF
                System_Call(Call_Arguments, Buffer_Data) = no_error
             THEN
                EXIT Receive_Block WHEN Call_Arguments.Argument_2 = 0;
                RETURN Buffer_Offset / Element_Size; -- TODO: Store error.
             END IF;
-
-            Call_Arguments :=
-              (Operation_Call => yield_operation,
-               OTHERS         => <>);
-            System_Call(Call_Arguments);
          END LOOP Receive_Block;
 
          FOR

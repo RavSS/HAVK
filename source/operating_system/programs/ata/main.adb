@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System ATA Driver                       --
 -- Filename        -- main.adb                                               --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 WITH
@@ -32,42 +32,33 @@ IS
       Size => 2048 * 2; -- Effectively packed together.
 BEGIN
    LOOP
-      FOR
-         Task_Index IN general_register RANGE 1 .. 256
-      LOOP
-         Call_Arguments.Operation_Call := receive_message_operation;
-         Call_Arguments.Argument_1 := Task_Index;
+      Call_Arguments.Operation_Call := receive_message_operation;
+      Call_Arguments.Argument_1 := 0;
 
+      IF
+         System_Call(Call_Arguments, Request_Data'access) = no_error
+      THEN
          IF
-            System_Call(Call_Arguments, Request_Data'access) = no_error
+            Request_Data.Sector_Base IN logical_block_address'range
          THEN
-            IF
-               Request_Data.Sector_Base IN logical_block_address'range
+            IF -- TODO: Only read support for now.
+               NOT Request_Data.Write_Request
             THEN
-               IF -- TODO: Only read support for now.
-                  NOT Request_Data.Write_Request
-               THEN
-                  PIO_Read(Request_Data.Sector_Base, 1, Sector_Part(1)'address,
-                     Request_Data.Secondary_Bus, Request_Data.Secondary_Drive);
+               PIO_Read(Request_Data.Sector_Base, 1, Sector_Part(1)'address,
+                  Request_Data.Secondary_Bus, Request_Data.Secondary_Drive);
+               Call_Arguments.Operation_Call := send_message_operation;
 
-                  LOOP
-                     Call_Arguments.Operation_Call := send_message_operation;
-                     EXIT WHEN
-                        System_Call(Call_Arguments, Sector_Part(1)) = no_error;
-                     Call_Arguments.Operation_Call := yield_operation;
-                     System_Call(Call_Arguments);
-                  END LOOP;
+               LOOP
+                  EXIT WHEN
+                     System_Call(Call_Arguments, Sector_Part(1)) = no_error;
+               END LOOP;
 
-                  LOOP
-                     Call_Arguments.Operation_Call := send_message_operation;
-                     EXIT WHEN
-                        System_Call(Call_Arguments, Sector_Part(2)) = no_error;
-                     Call_Arguments.Operation_Call := yield_operation;
-                     System_Call(Call_Arguments);
-                  END LOOP;
-               END IF;
+               LOOP
+                  EXIT WHEN
+                     System_Call(Call_Arguments, Sector_Part(2)) = no_error;
+               END LOOP;
             END IF;
          END IF;
-      END LOOP;
+      END IF;
    END LOOP;
 END Main;

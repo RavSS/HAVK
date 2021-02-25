@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System                                  --
 -- Filename        -- havk_operating_system-global.ads                       --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 -- This package contains child packages which have data formats (type

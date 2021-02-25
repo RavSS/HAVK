@@ -2,7 +2,7 @@
 // Program         -- HAVK Operating System                                  //
 // Filename        -- debug.h                                                //
 // License         -- GNU General Public License version 3.0                 //
-// Original Author -- Ravjot Singh Samra, Copyright 2020                     //
+// Original Author -- Ravjot Singh Samra, Copyright 2020-2021                //
 ///////////////////////////////////////////////////////////////////////////////
 
 #ifndef HAVK_DEBUG_H

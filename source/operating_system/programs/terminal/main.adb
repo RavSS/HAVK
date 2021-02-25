@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System Terminal                         --
 -- Filename        -- main.adb                                               --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 WITH
@@ -33,13 +33,13 @@ IS
 
    -- The program will exit erroneously after feeding this many characters to
    -- the textbox state.
-   Death_Countdown  : number := 150;
+   Death_Countdown  : number := 1000;
 
-   -- Receive terminal data on port 404 for now, just for a showcase.
+   -- Receive terminal data on port (subheader value) 404 for now, just for a
+   -- showcase.
    Text_Data        : arguments  := (receive_message_operation, OTHERS => 0);
    Text_Data_String : XMM_string := (OTHERS => NUL);
    Text_Data_Port   : CONSTANT   := 404;
-   Yield_Data       : arguments  := (yield_operation, OTHERS => 0);
    Error_Check      : error;
 BEGIN
    Draw_Fill(0, Framebuffer_Elements, 0);
@@ -51,6 +51,8 @@ BEGIN
    Draw_Terminal(Terminal);
 
    LOOP
+      Text_Data.Argument_1 := 0;
+
       -- Make it into a volatile function later, use a holding variable for
       -- the error value now.
       Error_Check := System_Call(Text_Data, Text_Data_String);
@@ -92,8 +94,6 @@ BEGIN
          RAISE Program_Error
          WITH
             "Example bug triggered. Now dying.";
-      ELSE
-         System_Call(Yield_Data);
       END IF;
    END LOOP;
 END Main;

@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System PS/2 Driver                      --
 -- Filename        -- HAVK_PS2.gpr                                           --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 PROJECT HAVK_PS2

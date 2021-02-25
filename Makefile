@@ -453,7 +453,7 @@ stats:
 	@echo -e " / $(shell du -sh "$(ESP_PARTITION)" \
 		| awk -F '\t' '{print $$1}')\n"
 
-	@cd "$(HAVK_SOURCE_PATH)" && gnatmetric -P $(NAME).gpr \
+	@cd "$(KERNEL_SOURCE_PATH)" && gnatmetric -P $(NAME)_Kernel.gpr \
 		$(GPR_VARIABLES) -U -eL
 
 ################################## Cleaning ###################################

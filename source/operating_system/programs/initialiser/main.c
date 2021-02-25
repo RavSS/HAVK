@@ -2,7 +2,7 @@
 // Program         -- HAVK Operating System Initialiser                      //
 // Filename        -- main.c                                                 //
 // License         -- GNU General Public License version 3.0                 //
-// Original Author -- Ravjot Singh Samra, Copyright 2020                     //
+// Original Author -- Ravjot Singh Samra, Copyright 2020-2021                //
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <stdlib.h>
@@ -137,13 +137,14 @@ MACRO_END
 int main(void)
 {
 	log_string("Starting initialisation from user space.");
-	LOADER(FRAMEBUFFER_TESTER_NAME, FRAMEBUFFER_TESTER_PATH);
+
+	LOADER(PS2_NAME, PS2_PATH);
+	LOADER(TERMINAL_NAME, TERMINAL_PATH);
 
 	/* Disabled tasks.
+	LOADER(FRAMEBUFFER_TESTER_NAME, FRAMEBUFFER_TESTER_PATH);
 	LOADER(IPC_TESTER_NAME, IPC_TESTER_PATH);
 	LOADER(THREAD_TESTER_NAME, THREAD_TESTER_PATH);
-	LOADER(TERMINAL_NAME, TERMINAL_PATH);
-	LOADER(PS2_NAME, PS2_PATH);
 	*/
 
 	return EXIT_SUCCESS;

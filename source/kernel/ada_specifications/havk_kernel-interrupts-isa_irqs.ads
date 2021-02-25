@@ -2,7 +2,7 @@
 -- Program         -- HAVK                                                   --
 -- Filename        -- havk_kernel-interrupts-isa_irqs.ads                    --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2021                --
 -------------------------------------------------------------------------------
 
 -- This package handles the legacy system IRQs. It presumes that the (LA)PIC

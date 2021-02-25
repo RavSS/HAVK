@@ -2,7 +2,7 @@
 -- Program         -- HAVK Kernel Ada Runtime                                --
 -- Filename        -- HAVK_Kernel_Runtime.gpr                                --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2021                --
 -------------------------------------------------------------------------------
 
 -- Before compiling the runtime, make sure you have copied over the files

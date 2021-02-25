@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System Drive Manager                    --
 -- Filename        -- main.adb                                               --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 WITH
@@ -51,61 +51,46 @@ BEGIN
    END IF;
 
    LOOP
-      FOR
-         Task_Index IN general_register RANGE 1 .. 256
-      LOOP
-         Call_Arguments :=
-           (receive_message_operation, Task_Index, OTHERS => <>);
+      Call_Arguments.Operation_Call := receive_message_operation;
+      Call_Arguments.Argument_1 := 0;
 
-         IF
-            System_Call(Call_Arguments, Request_Data'access) = no_error
+      IF
+         System_Call(Call_Arguments, Request_Data'access) = no_error
+      THEN
+         IF -- TODO: Add in some form of authentication or something.
+            NOT Request_Data.Partition_Data.Present
          THEN
-            IF -- TODO: Add in some form of authentication or something.
-               NOT Request_Data.Partition_Data.Present
+            Request_Data :=
+              (Partition_Data => EFI_System_Partition, OTHERS => <>);
+            Call_Arguments.Operation_Call := send_message_operation;
+
+            LOOP
+               EXIT WHEN System_Call
+                 (Call_Arguments, Request_Data'access) = no_error;
+            END LOOP;
+         ELSIF
+            EFI_System_Partition = Request_Data.Partition_Data AND THEN
+            Request_Data.Sector_Base IN
+               EFI_System_Partition.LBA_First .. EFI_System_Partition.LBA_Last
+         THEN
+            IF -- TODO: Only read support for now.
+               NOT Request_Data.Write_Request
             THEN
-               Request_Data :=
-                 (Partition_Data => EFI_System_Partition, OTHERS => <>);
+               PIO_Read(Request_Data.Sector_Base, 1, Sector_Part(1)'address,
+                  Request_Data.Secondary_Bus, Request_Data.Secondary_Drive);
+               Call_Arguments.Operation_Call := send_message_operation;
 
                LOOP
-                  Call_Arguments :=
-                    (send_message_operation, Task_Index, OTHERS => <>);
-
-                  EXIT WHEN System_Call
-                    (Call_Arguments, Request_Data'access) = no_error;
-
-                  Call_Arguments := (yield_operation, OTHERS => <>);
-                  System_Call(Call_Arguments);
+                  EXIT WHEN
+                     System_Call(Call_Arguments, Sector_Part(1)) = no_error;
                END LOOP;
-            ELSIF
-               EFI_System_Partition = Request_Data.Partition_Data AND THEN
-               Request_Data.Sector_Base IN
-                  EFI_System_Partition.LBA_First ..
-                     EFI_System_Partition.LBA_Last
-            THEN
-               IF -- TODO: Only read support for now.
-                  NOT Request_Data.Write_Request
-               THEN
-                  PIO_Read(Request_Data.Sector_Base, 1, Sector_Part(1)'address,
-                     Request_Data.Secondary_Bus, Request_Data.Secondary_Drive);
 
-                  LOOP
-                     Call_Arguments.Operation_Call := send_message_operation;
-                     EXIT WHEN
-                        System_Call(Call_Arguments, Sector_Part(1)) = no_error;
-                     Call_Arguments.Operation_Call := yield_operation;
-                     System_Call(Call_Arguments);
-                  END LOOP;
-
-                  LOOP
-                     Call_Arguments.Operation_Call := send_message_operation;
-                     EXIT WHEN
-                        System_Call(Call_Arguments, Sector_Part(2)) = no_error;
-                     Call_Arguments.Operation_Call := yield_operation;
-                     System_Call(Call_Arguments);
-                  END LOOP;
-               END IF;
+               LOOP
+                  EXIT WHEN
+                     System_Call(Call_Arguments, Sector_Part(2)) = no_error;
+               END LOOP;
             END IF;
          END IF;
-      END LOOP;
+      END IF;
    END LOOP;
 END Main;

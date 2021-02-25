@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System PS/2 Driver                      --
 -- Filename        -- havk_ps2-user_input.ads                                --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2021                --
 -------------------------------------------------------------------------------
 
 -- This package controls the state of input, regardless of origin.

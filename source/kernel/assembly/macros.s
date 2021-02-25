@@ -2,7 +2,7 @@
 ## Program         -- HAVK                                                   ##
 ## Filename        -- macros.s                                               ##
 ## License         -- GNU General Public License version 3.0                 ##
-## Original Author -- Ravjot Singh Samra, Copyright 2020                     ##
+## Original Author -- Ravjot Singh Samra, Copyright 2020-2021                ##
 ###############################################################################
 
 # This is a special file that is to be included via the `.INCLUDE` directive

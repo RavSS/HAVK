@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System                                  --
 -- Filename        -- HAVK_Operating_System_Program.gpr                      --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 -- An abstract project to be imported/extended by other projects.

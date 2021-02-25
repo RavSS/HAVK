@@ -2,7 +2,7 @@
 -- Program         -- HAVK                                                   --
 -- Filename        -- havk_kernel-tasking-system_call.adb                    --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 WITH
@@ -49,13 +49,13 @@ IS
       Kill_Active_Task(number(Argument_1));
       Yield(Error_Check);
 
-      LOOP
+      LOOP -- Will not be reached.
          Intrinsics.Spinlock_Pause;
       END LOOP;
    END Exit_Task_Operation_Call;
 
    PROCEDURE Receive_Message_Operation_Call
-     (Argument_1   : IN Intrinsics.general_register;
+     (Argument_1   : IN OUT Intrinsics.general_register;
       Argument_2   : OUT Intrinsics.general_register;
       Argument_3   : OUT Intrinsics.general_register;
       Argument_4   : OUT Intrinsics.XMM_registers;
@@ -63,15 +63,17 @@ IS
    IS
       Active_Task  : CONSTANT number := Tasking.Get_Active_Task_Index;
       Message_Data : Tasking.IPC.message_data;
+      Sender       : number := number(Argument_1);
       Error_Check  : error;
    BEGIN
       Tasking.IPC.Receive_Message
-        (number(Argument_1),
+        (Sender,
          Active_Task,
          number(Argument_2),
          number(Argument_3),
          Message_Data,
          Error_Check);
+      Argument_1 := Intrinsics.general_register(Sender);
       Argument_4 := Message_Data.XMM;
       Error_Status := Error_Check'enum_rep;
    END Receive_Message_Operation_Call;

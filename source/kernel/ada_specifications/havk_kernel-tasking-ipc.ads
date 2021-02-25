@@ -2,7 +2,7 @@
 -- Program         -- HAVK                                                   --
 -- Filename        -- havk_kernel-tasking-ipc.ads                            --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 WITH
@@ -38,9 +38,10 @@ IS
    WITH
       Post => Error_Status IN no_error | index_error | attempt_error;
 
-   -- Retrieve a message from a specific sender.
+   -- Retrieve a message from a specific sender. If the sender index is zero,
+   -- then the first used message box of the receiver will be selected.
    PROCEDURE Receive_Message
-     (Sender       : IN number;
+     (Sender       : IN OUT number;
       Receiver     : IN number;
       Header       : OUT number;
       Subheader    : OUT number;

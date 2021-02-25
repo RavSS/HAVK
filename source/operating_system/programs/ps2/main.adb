@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System PS/2 Driver                      --
 -- Filename        -- main.adb                                               --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 WITH
@@ -115,7 +115,13 @@ BEGIN
          Break_State
       THEN
          Text_Data_String(1) := User_Input.Get_Key;
-         Error_Check := System_Call(Text_Data, Text_Data_String);
+
+         FOR
+            Attempt IN 1 .. 25
+         LOOP
+            Error_Check := System_Call(Text_Data, Text_Data_String);
+            EXIT WHEN Error_Check = no_error;
+         END LOOP;
 
          IF
             Error_Check /= no_error
@@ -146,5 +152,4 @@ BEGIN
          END IF;
       END LOOP;
    END LOOP;
-
 END Main;

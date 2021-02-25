@@ -2,7 +2,7 @@
 -- Program         -- HAVK Kernel                                            --
 -- Filename        -- havk_kernel_runtime.adc                                --
 -- License         -- GNU General Public License Version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2021                --
 -------------------------------------------------------------------------------
 
 PRAGMA License(GPL);

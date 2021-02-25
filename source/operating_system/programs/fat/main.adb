@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System ATA PIO Driver                   --
 -- Filename        -- main.adb                                               --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 WITH
@@ -44,7 +44,6 @@ IS
    Drive_Manager_Task : CONSTANT general_register := 3;
    Call_Arguments     : arguments;
 
-   -- Main_Partition     : partition;
    Main_FAT           : file_system;
    Task_File          : ALIASED Standard_IO.FILE;
    FAT_File           : HAVK_FAT.file;
@@ -60,26 +59,20 @@ BEGIN
    -- drive that contains it. This will most certainly change in the future
    -- once work on the security model begins to finally start.
 
-   LOOP -- Send the blank message for wanting some partition information.
-      Call_Arguments := (send_message_operation, Drive_Manager_Task,
-         OTHERS => <>);
-
+   -- Send the blank message for wanting some partition information.
+   Call_Arguments := (send_message_operation, Drive_Manager_Task,
+      OTHERS => <>);
+   LOOP
       EXIT WHEN
          System_Call(Call_Arguments, Partition_Request'access) = no_error;
-
-      Call_Arguments := (yield_operation, OTHERS => <>);
-      System_Call(Call_Arguments);
    END LOOP;
 
-   LOOP -- Now receive the partition information.
-      Call_Arguments := (receive_message_operation, Drive_Manager_Task,
-         OTHERS => <>);
-
+   -- Now receive the partition information.
+   Call_Arguments := (receive_message_operation, Drive_Manager_Task,
+      OTHERS => <>);
+   LOOP
       EXIT WHEN
          System_Call(Call_Arguments, Partition_Request'access) = no_error;
-
-      Call_Arguments := (yield_operation, OTHERS => <>);
-      System_Call(Call_Arguments);
    END LOOP;
 
    IF
@@ -106,114 +99,115 @@ BEGIN
       Tag => Main_Tag);
 
    LOOP
-      FOR
-         Task_Index IN general_register RANGE 1 .. 256
-      LOOP
-         Call_Arguments := (receive_message_operation, Task_Index,
-            OTHERS => <>);
+      Call_Arguments.Operation_Call := receive_message_operation;
+      Call_Arguments.Argument_1 := 0;
 
-         IF
-            System_Call(Call_Arguments, Task_File'access) = no_error
+      IF
+         System_Call(Call_Arguments, Task_File'access) = no_error
+      THEN
+         File_Name := (OTHERS => NUL);
+
+         FOR -- Convert it to a standard string object.
+            ASCII_Index IN Task_File.File_Path'range
+         LOOP
+            File_Name(positive(ASCII_Index + 1)) :=
+               character'val(Task_File.File_Path(ASCII_Index));
+         END LOOP;
+
+         IF -- They're requesting file information.
+            Task_File.File_Size = 0 OR ELSE
+            Task_File.Buffer_Size = 0
          THEN
-            File_Name := (OTHERS => NUL);
+            Check_File(Main_FAT, File_Name, Error_Check, FAT_File);
 
-            FOR -- Convert it to a standard string object.
-               ASCII_Index IN Task_File.File_Path'range
-            LOOP
-               File_Name(positive(ASCII_Index + 1)) :=
-                  character'val(Task_File.File_Path(ASCII_Index));
-            END LOOP;
-
-            IF -- They're requesting file information.
-               Task_File.File_Size = 0 OR ELSE
-               Task_File.Buffer_Size = 0
+            IF
+               Error_Check = no_error
             THEN
-               Check_File(Main_FAT, File_Name, Error_Check, FAT_File);
+               Task_File.File_Size := size_t(FAT_File.Size);
+            END IF;
+
+            Call_Arguments :=
+              (send_message_operation,
+               Call_Arguments.Argument_1,
+               Error_Check'enum_rep,
+               OTHERS => <>);
+            System_Call(Call_Arguments, Task_File'access);
+         ELSIF -- They're requesting file data. Sanity check the offsets.
+            Task_File.File_Offset < Task_File.File_Size AND THEN
+            Task_File.File_Offset + (Task_File.Buffer_Size - 1) <
+               Task_File.File_Size
+         THEN
+            IF -- TODO: Write requests not yet supported.
+               NOT Task_File.Write_Request
+            THEN
+               Buffer_Space := NEW bytes(1 .. number(Task_File.Buffer_Size));
+
+               Read_File(Main_FAT, File_Name,
+                  Buffer_Space.ALL(1)'address, Error_Check,
+                  Base_Byte => number(Task_File.File_Offset) + 1,
+                  Byte_Size => number(Task_File.Buffer_Size));
 
                IF
                   Error_Check = no_error
                THEN
-                  Task_File.File_Size := size_t(FAT_File.Size);
-               END IF;
+                  Buffer_Offset := Buffer_Space'first;
 
-               Call_Arguments := (send_message_operation, Task_Index,
-                  Error_Check'enum_rep, OTHERS => <>);
-               System_Call(Call_Arguments, Task_File'access);
-            ELSIF -- They're requesting file data. Sanity check the offsets.
-               Task_File.File_Offset < Task_File.File_Size AND THEN
-               Task_File.File_Offset + (Task_File.Buffer_Size - 1) <
-                  Task_File.File_Size
-            THEN
-               IF -- TODO: Write requests not yet supported.
-                  NOT Task_File.Write_Request
-               THEN
-                  Buffer_Space :=
-                     NEW bytes(1 .. number(Task_File.Buffer_Size));
-
-                  Read_File(Main_FAT, File_Name,
-                     Buffer_Space.ALL(1)'address, Error_Check,
-                     Base_Byte => number(Task_File.File_Offset) + 1,
-                     Byte_Size => number(Task_File.Buffer_Size));
-
-                  IF
-                     Error_Check = no_error
-                  THEN
-                     Buffer_Offset := Buffer_Space'first;
-
-                     WHILE
-                        Buffer_Offset /= number(Task_File.File_Offset +
-                          (Task_File.Buffer_Size - 1))
+                  WHILE
+                     Buffer_Offset /= number(Task_File.File_Offset +
+                       (Task_File.Buffer_Size - 1))
+                  LOOP
+                     FOR
+                        Data_Block OF XMM_State
                      LOOP
                         FOR
-                           Data_Block OF XMM_State
+                           Byte_Index IN Data_Block.XMM_Bytes'range
                         LOOP
-                           FOR
-                              Byte_Index IN Data_Block.XMM_Bytes'range
-                           LOOP
-                              IF
-                                 Buffer_Offset /=
-                                    number(Task_File.File_Offset +
-                                      (Task_File.Buffer_Size - 1))
-                              THEN
-                                 Data_Block.XMM_Bytes(Byte_Index) :=
-                                    Buffer_Space(Buffer_Offset);
+                           IF
+                              Buffer_Offset /= number(Task_File.File_Offset +
+                                (Task_File.Buffer_Size - 1))
+                           THEN
+                              Data_Block.XMM_Bytes(Byte_Index) :=
+                                 Buffer_Space(Buffer_Offset);
 
-                                 Buffer_Offset := Buffer_Offset + 1;
-                              ELSE
-                                 Data_Block.XMM_Bytes(Byte_Index) := 0;
-                              END IF;
-                           END LOOP;
-                        END LOOP;
-
-                        LOOP
-                           Call_Arguments := (send_message_operation,
-                              Task_Index, OTHERS => <>);
-
-                           EXIT WHEN System_Call
-                             (Call_Arguments, XMM_State) = no_error;
-
-                           Call_Arguments := (yield_operation, OTHERS => <>);
-                           System_Call(Call_Arguments);
+                              Buffer_Offset := Buffer_Offset + 1;
+                           ELSE
+                              Data_Block.XMM_Bytes(Byte_Index) := 0;
+                           END IF;
                         END LOOP;
                      END LOOP;
-                  ELSE
-                     Call_Arguments := (send_message_operation, Task_Index,
-                        Error_Check'enum_rep, OTHERS => <>);
-                     System_Call(Call_Arguments, Task_File'access);
-                  END IF;
 
-                  Free(Buffer_Space);
+                     Call_Arguments.Operation_Call := send_message_operation;
+                     LOOP
+                        EXIT WHEN
+                           System_Call(Call_Arguments, XMM_State) = no_error;
+                     END LOOP;
+                  END LOOP;
                ELSE
-                  Call_Arguments := (send_message_operation, Task_Index,
-                     permission_error'enum_rep, OTHERS => <>);
+                  Call_Arguments :=
+                    (send_message_operation,
+                     Call_Arguments.Argument_1,
+                     Error_Check'enum_rep,
+                     OTHERS => <>);
                   System_Call(Call_Arguments, Task_File'access);
                END IF;
-            ELSE -- Bad values were detected.
-               Call_Arguments := (send_message_operation, Task_Index,
-                  index_error'enum_rep, OTHERS => <>);
+
+               Free(Buffer_Space);
+            ELSE
+               Call_Arguments :=
+                 (send_message_operation,
+                  Call_Arguments.Argument_1,
+                  permission_error'enum_rep,
+                  OTHERS => <>);
                System_Call(Call_Arguments, Task_File'access);
             END IF;
+         ELSE -- Bad values were detected.
+            Call_Arguments :=
+              (send_message_operation,
+               Call_Arguments.Argument_1,
+               index_error'enum_rep,
+               OTHERS => <>);
+            System_Call(Call_Arguments, Task_File'access);
          END IF;
-      END LOOP;
+      END IF;
    END LOOP;
 END Main;

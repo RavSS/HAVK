@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System Framebuffer Tester               --
 -- Filename        -- HAVK_Framebuffer_Tester.gpr                            --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2020                     --
+-- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
 PROJECT HAVK_Framebuffer_Tester

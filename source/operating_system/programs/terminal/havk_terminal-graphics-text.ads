@@ -2,7 +2,7 @@
 -- Program         -- HAVK Operating System Terminal                         --
 -- Filename        -- havk_terminal-graphics-text.ads                        --
 -- License         -- GNU General Public License version 3.0                 --
--- Original Author -- Ravjot Singh Samra, Copyright 2019-2020                --
+-- Original Author -- Ravjot Singh Samra, Copyright 2019-2021                --
 -------------------------------------------------------------------------------
 
 -- This package handles graphical text. The main state that gets passed around
