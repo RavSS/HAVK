@@ -59,7 +59,7 @@ IS
       Divisor_Latch_Access : boolean;
    END RECORD
    WITH
-      Object_Size => number'size;
+      Object_Size => byte'size;
    FOR line_control_register USE RECORD
       Data_Size            AT 0 RANGE 0 .. 1;
       Extra_Stop           AT 0 RANGE 2 .. 2;
@@ -89,14 +89,10 @@ IS
       -- If the controller is using as little power as it can. Again, this
       -- may not exist in every serial transmission chip.
       Low_Power_Mode          : boolean;
-      -- TODO: Does a boolean always represent true as a single bit no
-      -- matter what? Or does the compiler do whatever it wants freely with
-      -- the rest of the extra bits? I'd like to make this into a boolean.
-      -- There's two reserved bits, but I've combined them into one variable.
-      Zeroed                  : number RANGE 0 .. 0;
+      Zeroed                  : number RANGE 0 .. 2**2 - 1;
    END RECORD
    WITH
-      Object_Size => number'size;
+      Object_Size => byte'size;
    FOR interrupt_enable_register USE RECORD
       Data_Received               AT 0 RANGE 0 .. 0;
       Output_Finished             AT 0 RANGE 1 .. 1;
@@ -145,7 +141,7 @@ IS
       Data_Error       : boolean;
    END RECORD
    WITH
-      Object_Size => number'size;
+      Object_Size => byte'size;
    FOR line_status_register USE RECORD
       Data_Ready       AT 0 RANGE 0 .. 0;
       Data_Lost        AT 0 RANGE 1 .. 1;

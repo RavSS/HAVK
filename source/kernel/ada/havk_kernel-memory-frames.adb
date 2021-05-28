@@ -65,13 +65,10 @@ IS
                Undesirable_Attributes(Region)
             THEN
                RETURN true;
-            ELSE
-               Missing_Frame := false;
             END IF;
+
+            Missing_Frame := false;
          END IF;
-         PRAGMA Annotate(GNATprove, False_Positive,
-            "null exclusion check might fail",
-            "The region access won't become null during this subprogram.");
       END LOOP;
 
       RETURN Missing_Frame;
@@ -82,45 +79,75 @@ IS
       Frame_Owner        : IN number;
       Frame_Count        : IN frame_limit := 1)
    WITH
-      Refined_Post => (IF Frame_Base_Address /= Null_Frame_Address THEN
-                          number(Frame_Base_Address)  IN
-                             Paging.page_size'enum_rep *
-                                Physical_Frames'first ..
-                                   Paging.page_size'enum_rep *
-                                      Physical_Frames'last AND THEN
-                          number(Frame_Base_Address +
-                             page_address(Paging.page_size'enum_rep *
-                               (Frame_Count - 1))) IN
-                                   Paging.page_size'enum_rep *
-                                      Physical_Frames'first ..
-                                         Paging.page_size'enum_rep *
-                                            Physical_Frames'last)
+      Refined_Post => Frame_Base_Address = Null_Frame_Address          OR ELSE
+                     (Frame_Base_Address IN valid_frame_address'range AND THEN
+                      Frame_Base_Address + page_address
+                        (Paging.page_size'enum_rep * (Frame_Count - 1)) IN
+                            valid_frame_address'range)
    IS
-      End_Frame : number;
+      Base_Frame, New_Base : number RANGE Physical_Frames'range :=
+         Physical_Frames'first;
+      Valid_Range          : boolean;
    BEGIN
-      FOR -- TODO: This is extremely inefficient and stupid slow. Fix it later.
-         Base_Frame IN Physical_Frames'range
+      Frame_Check : WHILE
+         Base_Frame + (Frame_Count - 1) IN Physical_Frames'range
       LOOP
-         End_Frame := Base_Frame + (Frame_Count - 1);
+         Valid_Range := true;
 
-         IF -- TODO: This looks up every single frame in the memory map.
-           (FOR ALL Frame_Index IN Base_Frame .. End_Frame =>
-               Frame_Index IN Physical_Frames'range  AND THEN
-               NOT Physical_Frames(Frame_Index).Used AND THEN
-               NOT Frame_Is_Reserved(Frame_Index))
+         FOR -- Check whether the range is marked as used first.
+            Frame_Index IN Base_Frame .. Base_Frame + (Frame_Count - 1)
+         LOOP
+            IF
+               Physical_Frames(Frame_Index).Used
+            THEN
+               EXIT Frame_Check WHEN
+                  Frame_Index + 1 NOT IN Physical_Frames'range;
+
+               New_Base := Frame_Index + 1;
+               Valid_Range := false;
+            END IF;
+         END LOOP;
+
+         -- Check the reservedness last, as it should be more expensive to
+         -- perform a region check than just seeing if a bit is set or not.
+         IF
+            Valid_Range
          THEN
             FOR
-               Frame_Index IN Base_Frame .. End_Frame
+               Frame_Index IN Base_Frame .. Base_Frame + (Frame_Count - 1)
             LOOP
-               Physical_Frames(Frame_Index).Owner := Frame_Owner;
-               Physical_Frames(Frame_Index).Used  := true;
+               IF
+                  Frame_Is_Reserved(Frame_Index)
+               THEN
+                  EXIT Frame_Check WHEN
+                     Frame_Index + 1 NOT IN Physical_Frames'range;
+
+                  New_Base := Frame_Index + 1;
+                  Valid_Range := false;
+               END IF;
             END LOOP;
 
-            Frame_Base_Address :=
-               page_address(Base_Frame * Paging.page_size'enum_rep);
-            RETURN;
+            IF
+               Valid_Range
+            THEN
+               FOR
+                  Frame_Index IN Base_Frame .. Base_Frame + (Frame_Count - 1)
+               LOOP
+                  Physical_Frames(Frame_Index) :=
+                    (Owner => Frame_Owner,
+                     Used  => true);
+               END LOOP;
+
+               Frame_Base_Address :=
+                  page_address(Base_Frame * Paging.page_size'enum_rep);
+               RETURN;
+            END IF;
+
+            Base_Frame := New_Base;
+         ELSE
+            Base_Frame := New_Base;
          END IF;
-      END LOOP;
+      END LOOP Frame_Check;
 
       -- We have run out of valid free frames or we can't provide the number of
       -- page frames in a consecutive manner.

@@ -8,8 +8,8 @@
 PRAGMA License(GPL);
 PRAGMA SPARK_Mode(on);
 PRAGMA Normalize_Scalars;
-PRAGMA Assertion_Policy(CHECK);
-PRAGMA Overflow_Mode(MINIMIZED, MINIMIZED);
+PRAGMA Assertion_Policy(Check);
+PRAGMA Overflow_Mode(Minimized, Minimized);
 
 PRAGMA Warnings(GNATprove, off,
    "attribute ""Position"" has an implementation-defined value",
@@ -23,9 +23,9 @@ PRAGMA Warnings(GNATprove, off, -- Be careful of using it to prove a range.
    "attribute ""Size"" has an implementation-defined value",
    Reason => "It returns the size in bits for the type or variable.");
 
-PRAGMA Warnings(off,
-   "types for unchecked conversion have different sizes",
-   Reason => "GNATprove gives a better error if object sizes don't match.");
+PRAGMA Warnings(GNATprove, off, -- Reason doesn't apply for e.g. MMIO objects.
+   "indirect writes to * through a potential alias are ignored",
+   Reason => "Nothing should be writing to imports from elsewhere.");
 
 PRAGMA Restrictions(No_Access_Parameter_Allocators);
 PRAGMA Restrictions(No_Anonymous_Allocators);

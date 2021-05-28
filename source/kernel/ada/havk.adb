@@ -45,7 +45,10 @@ BEGIN
    -- Check the memory map and log any information.
    Initialise.Memory_Map_Info;
 
-   -- Verify the ACPI implementation and set up the APICs if we can.
+   -- Check the ACPI implementation of the system and parse as necessary.
+   Initialise.ACPI_Check;
+
+   -- Set up the APICs if we can.
    Initialise.Interrupt_Controllers;
 
    -- Now we can receive interrupts, prepare the timers properly.

@@ -16,16 +16,16 @@ then
 	fi
 
 	GNAT_SRC=https://community.download.adacore.com/v1/
-	GNAT_SHA1=966801764ae160828c97d2c33000e9feb08d4cce
+	GNAT_SHA1=797dbae8bdb8a3f661dad78dd73d8e40218a68d8
 	GNAT_FILE=gnat-community.exe
-	GNAT_DIR=com/gnat_gpl_windows
+	GNAT_DIR=compilers/gnat_gpl_windows
 elif [ "$1" = "linux" ]
 then
 	echo "Obtaining GNAT for Linux."
 	GNAT_SRC=https://community.download.adacore.com/v1/
-	GNAT_SHA1=4d99b7b2f212c8efdab2ba8ede474bb9fa15888d
+	GNAT_SHA1=f3a99d283f7b3d07293b2e1d07de00e31e332325
 	GNAT_FILE=gnat-community.bin
-	GNAT_DIR=com/gnat_gpl_linux
+	GNAT_DIR=compilers/gnat_gpl_linux
 else
 	echo "Usage: $0 <linux/windows>"
 	exit 1

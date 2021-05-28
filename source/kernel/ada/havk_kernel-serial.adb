@@ -16,16 +16,10 @@ IS
      (Context : IN connection)
    IS
       FUNCTION Convert IS NEW Ada.Unchecked_Conversion
-        (source => interrupt_enable_register, target => number);
-      PRAGMA Annotate(GNATprove, False_Positive,
-         "type with constraints on bit representation *",
-         "Getting the numeric representation of it should be safe.");
+        (source => interrupt_enable_register, target => byte);
 
       FUNCTION Convert IS NEW Ada.Unchecked_Conversion
-        (source => line_control_register,     target => number);
-      PRAGMA Annotate(GNATprove, False_Positive,
-         "type with constraints on bit representation *",
-         "Getting the numeric representation of it should be safe.");
+        (source => line_control_register,     target => byte);
 
       -- Only a baud rate between 50 to 115200 is supported.
       Divisor_Latch_Value : CONSTANT number RANGE 1 .. 2304 :=
@@ -33,7 +27,7 @@ IS
    BEGIN
       -- Disable interrupt handling of the connection.
       Output_Byte(Context.Port + 1,
-         Convert(Context.Interrupt_Settings) AND 16#FF#);
+         number(Convert(Context.Interrupt_Settings)));
 
       -- Set the divisor latch access bit to true for the purposes of setting
       -- the baud rate. Offsets +0 and +1 are now used for setting the divisor.
@@ -46,7 +40,7 @@ IS
         (Context.Port + 1, Shift_Right(Divisor_Latch_Value, 8) AND 16#FF#);
 
       -- Apply the line control settings.
-      Output_Byte(Context.Port + 3, Convert(Context.Line_Settings) AND 16#FF#);
+      Output_Byte(Context.Port + 3, number(Convert(Context.Line_Settings)));
 
       -- TODO: Make records for these.
       Output_Byte(Context.Port + 2, 2#11000111#); --  FIFO control register.
@@ -90,12 +84,9 @@ IS
       RETURN line_status_register
    IS
       FUNCTION Convert IS NEW Ada.Unchecked_Conversion
-        (source => number, target => line_status_register);
-      PRAGMA Annotate(GNATprove, False_Positive,
-         "type with constraints on bit representation *",
-         "The value is straight from the CPU itself, so it must be valid.");
+        (source => byte, target => line_status_register);
 
-      Data : CONSTANT number := Input_Byte(Context.Port + 5);
+      Data : CONSTANT byte := byte(Input_Byte(Context.Port + 5));
    BEGIN
       RETURN Convert(Data);
    END Get_Status;

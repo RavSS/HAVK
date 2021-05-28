@@ -12,11 +12,11 @@ USE TYPE
 
 -- This package manages physical frames of 4 KiB each. It currently uses a very
 -- naive and simple way of allocating/deallocating them.
--- TODO: This entire package needs to be reworked, as its design is
--- embarassingly inefficient.
+-- TODO: Relying on the bootloader to create the array for keeping track of
+-- physical frames may be a better idea than having a static range that might
+-- be extremely wasteful.
 PACKAGE HAVK_Kernel.Memory.Frames
 WITH
-   Preelaborate   => true,
    Abstract_State => (Frame_Allocator_State)
 IS
    SUBTYPE frame_limit IS number
@@ -97,6 +97,11 @@ PRIVATE
         (128 * GiB) / Paging.page_size'enum_rep - 1) OF frame
    WITH
       Pack => true;
+
+   -- A subtype just for the sake of typing convenience.
+   SUBTYPE valid_frame_address IS address RANGE
+      address(frame_collection'first * Paging.page_size'enum_rep) ..
+         address(frame_collection'last * Paging.page_size'enum_rep);
 
    -- Simply compares the frame (transformed to an address) against the memory
    -- map that the UEFI firmware provided to us. Returns true if it's reserved.

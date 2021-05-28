@@ -6,7 +6,6 @@
 -------------------------------------------------------------------------------
 
 WITH
-   Ada.Unchecked_Conversion,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Memory;
 USE TYPE
@@ -34,22 +33,19 @@ PRIVATE
    -- in the RDI register, with the following function argument registers for
    -- the x86-64 System V ABI being utilised for the call-specific arguments.
    -- TODO: Implement more of them once we have a functioning user space.
-   TYPE operation IS
-     (null_operation,
-      exit_task_operation,
-      receive_message_operation,
-      send_message_operation,
-      identify_task_operation,
-      load_elf_operation,
-      heap_increase_operation,
-      yield_operation,
-      log_operation,
-      irq_statistics_operation,
-      buffer_operation,
-      framebuffer_access_operation)
-   WITH
-      Object_Size => 64, -- C enumeration type padded to 64 bits.
-      Convention  => C;
+   TYPE operation IS NEW Intrinsics.general_register;
+   Null_Operation               : CONSTANT operation := 00;
+   Exit_Task_Operation          : CONSTANT operation := 01;
+   Receive_Message_Operation    : CONSTANT operation := 02;
+   Send_Message_Operation       : CONSTANT operation := 03;
+   Identify_Task_Operation      : CONSTANT operation := 04;
+   Load_ELF_Operation           : CONSTANT operation := 05;
+   Heap_Increase_Operation      : CONSTANT operation := 06;
+   Yield_Operation              : CONSTANT operation := 07;
+   Log_Operation                : CONSTANT operation := 08;
+   IRQ_Statistics_Operation     : CONSTANT operation := 09;
+   Buffer_Operation             : CONSTANT operation := 10;
+   Framebuffer_Access_Operation : CONSTANT operation := 11;
 
    -- This system call does nothing and only logs the arguments passed.
    PROCEDURE Null_Operation_Call
@@ -182,17 +178,5 @@ PRIVATE
       Argument_4   : OUT Intrinsics.general_register;
       Argument_5   : OUT Intrinsics.general_register;
       Error_Status : OUT Intrinsics.general_register);
-
-   -- A type to help with converting the data buffer to a string.
-   TYPE XMM_registers_characters IS ARRAY(1 .. 256) OF ALIASED character
-   WITH
-      Size        => 128 * Intrinsics.XMM_registers'length,
-      Object_Size => 128 * Intrinsics.XMM_registers'length;
-
-   FUNCTION To_Characters IS NEW Ada.Unchecked_Conversion
-     (source => Intrinsics.XMM_registers,
-      target => XMM_registers_characters);
-   PRAGMA Annotate(GNATprove, False_Positive, "type with constraints *",
-      "It's just an array with each element being a byte.");
 
 END HAVK_Kernel.Tasking.System_Call;

@@ -10,207 +10,215 @@ WITH
 
 PACKAGE BODY HAVK_Kernel.ACPI
 WITH
-   Refined_State => (ACPI_State => NULL)
+   Refined_State => (ACPI_State => System_Description_Table_Addresses)
 IS
-   FUNCTION Get_RSDP
-      RETURN root_system_description_pointer
+   FUNCTION Valid_Table
+     (Check_Table_Address : IN address;
+      Table_Length        : IN number)
+      RETURN boolean
    IS
-      USE TYPE
-         UEFI.access_arguments; -- So `gnatprove` knows it cannot be null.
-      PRAGMA Assume(UEFI.Bootloader_Arguments /= NULL, "Bug workaround.");
-
-      RSDP       : ALIASED CONSTANT root_system_description_pointer
-      WITH
-         Import   => true,
-         Address  => UEFI.Bootloader_Arguments.RSDP_Address;
-
-      RSDP_Bytes : ALIASED CONSTANT bytes(1 .. RSDP.Length)
-      WITH
-         Import   => true,
-         Address  => UEFI.Bootloader_Arguments.RSDP_Address,
-         Annotate => (GNATprove, False_Positive,
-                      "object with constraints on bit representation *",
-                      "The RSDP must be valid, even if other tables aren't.");
-
-      RSDP_Standard_Length : CONSTANT number :=
-         root_system_description_pointer'size / 8
-      WITH
-         Annotate => (GNATprove, False_Positive, "range check might fail",
-                      "It's just the expected byte size of the RSDP record.");
-      Total_Size           : number := 0;
-   BEGIN
-      IF
-         RSDP_Bytes'last /= RSDP_Standard_Length
-      THEN
-         RAISE Panic
-         WITH
-            Source_Location & " - The system's ACPI RSDP length is too large.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "The record type may be outdated if this happens.");
-      END IF;
-
-      FOR
-         RSDP_Byte OF RSDP_Bytes
-      LOOP
-         EXIT WHEN Total_Size > number'last - (2**8 - 1); -- Overflow check.
-         Total_Size := Total_Size + number(RSDP_Byte);
-      END LOOP;
-
-      IF
-        (Total_Size AND 16#FF#) /= 0
-      THEN
-         RAISE Panic
-         WITH
-            Source_Location & " - The system's ACPI RSDP is corrupt.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "I'll panic if it's corrupt, as it's a sign of a bigger issue.");
-      END IF;
-
-      RETURN RSDP;
-   END Get_RSDP;
-
-   FUNCTION Get_XSDT
-      RETURN access_extended_system_description_table
-   IS
-      RSDP       : CONSTANT root_system_description_pointer := Get_RSDP;
-      XSDT       : ALIASED CONSTANT access_extended_system_description_table
+      Total_Size  : number := 0;
+      Table_Bytes : CONSTANT bytes(1 .. Table_Length)
       WITH
          Import  => true,
-         Address => RSDP.XSDT_Address'address; -- Pointer to a pointer.
-
-      Total_Size : number := 0;
+         Address => Check_Table_Address,
+         Annotate => (GNATprove, Intentional,
+                      "object is unsuitable for aliasing via address clause",
+                      "TODO: Check the length's validity as well.");
    BEGIN
-      IF -- The XSDT address shouldn't be zero, but check it anyway.
-         XSDT /= NULL
-      THEN
-         DECLARE
-            XSDT_Bytes : ALIASED CONSTANT bytes(1 .. XSDT.SDT.Length)
+      FOR
+         Table_Byte OF Table_Bytes
+      LOOP
+         EXIT WHEN Total_Size > number'last - (2**8 - 1); -- Overflow check.
+         Total_Size := Total_Size + number(Table_Byte);
+      END LOOP;
+
+      RETURN (Total_Size AND 16#FF#) = 0;
+   END Valid_Table;
+
+   PROCEDURE Parse_ACPI_Tables
+   IS
+      -- I've hardcoded in the byte size of the SDT or else `gnatprove`
+      -- complains.
+      Tables_Offset : CONSTANT := 36;
+
+      RSDP_Length   : number RANGE 0 .. 2**32 - 1;
+      XSDT_Length   : number RANGE 0 .. 2**32 - 1;
+      XSDT_Address  : address;
+   BEGIN
+      DECLARE
+         RSDP : CONSTANT root_system_description_pointer
+         WITH
+            Import  => true,
+            Address => UEFI.Bootloader_Arguments.RSDP_Address;
+      BEGIN
+         IF
+            RSDP.Signature /= "RSD PTR "
+         THEN
+            RAISE Panic
             WITH
-               Import   => true,
-               Address  => RSDP.XSDT_Address,
-               Annotate => (GNATprove, False_Positive,
-                           "object with constraints on bit representation *",
-                           "The check itself doesn't require a valid table.");
-         BEGIN
-            FOR
-               XSDT_Byte OF XSDT_Bytes
-            LOOP -- Overflow check below.
-               EXIT WHEN Total_Size > number'last - (2**8 - 1);
-               Total_Size := Total_Size + number(XSDT_Byte);
-            END LOOP;
-         END;
-      ELSE
-         Total_Size := 16#FF#; -- Make it fail the checksum verification.
-      END IF;
+               "The ACPI implementation's RSDP is corrupt.";
+            PRAGMA Annotate(GNATprove, Intentional,
+               "exception might be raised",
+               "Don't continue if the underlying system is damaged.");
+         ELSIF
+            RSDP.Revision /= 2
+         THEN
+            RAISE Panic
+            WITH
+               "The ACPI implementation's RSDP has an unknown revision.";
+            PRAGMA Annotate(GNATprove, Intentional,
+               "exception might be raised",
+               "Don't continue if the underlying system is incompatible.");
+         ELSIF
+            RSDP.Length /= ((33 * 8) + 23 + 1) / 8
+         THEN
+            RAISE Panic
+            WITH
+               "The ACPI implementation's RSDP has an unexpected length.";
+            PRAGMA Annotate(GNATprove, Intentional,
+               "exception might be raised",
+               "Don't continue if the underlying system is incompatible.");
+         END IF;
+
+         RSDP_Length := RSDP.Length;
+      END;
 
       IF
-        (Total_Size AND 16#FF#) /= 0
+         NOT Valid_Table(UEFI.Bootloader_Arguments.RSDP_Address, RSDP_Length)
       THEN
          RAISE Panic
          WITH
-            Source_Location & " - The system's ACPI XSDT is corrupt.";
-         PRAGMA Annotate(GNATprove, Intentional, "exception might be raised",
-            "I'll panic if it's corrupt, as it's a sign of a bigger issue.");
+            "The ACPI implementation's RSDP checksum is invalid.";
+         PRAGMA Annotate(GNATprove, Intentional,
+            "exception might be raised",
+            "Don't continue if the underlying system is damaged.");
       END IF;
 
-      RETURN XSDT;
-   END Get_XSDT;
+      DECLARE
+         RSDP : CONSTANT root_system_description_pointer
+         WITH
+            Import  => true,
+            Address => UEFI.Bootloader_Arguments.RSDP_Address;
+      BEGIN
+         IF
+            RSDP.XSDT_Address = 0
+         THEN
+            RAISE Panic
+            WITH
+               "The ACPI implementation's RSDP doesn't have an XSDT pointer.";
+            PRAGMA Annotate(GNATprove, Intentional,
+               "exception might be raised",
+               "Don't continue if the underlying system is incompatible.");
+         ELSIF
+            RSDP.XSDT_Address MOD byte_length'enum_rep /= 0
+         THEN
+            RAISE Panic
+            WITH
+               "The ACPI implementation's RSDP is not alignable to 8 bits.";
+            PRAGMA Annotate(GNATprove, Intentional,
+               "exception might be raised",
+               "Don't continue if the underlying system is damaged.");
+         END IF;
 
-   FUNCTION Get_XSDT_Tables
-      RETURN system_description_tables
-   WITH
-      SPARK_Mode => off -- Annotations can't cover all the unchecked errors.
-   IS
-      FUNCTION To_Pointer
-        (Table_Pointer : IN address)
-         RETURN access_system_description_table
-      WITH
-         Import     => true,
-         Convention => Intrinsic;
+         XSDT_Address := RSDP.XSDT_Address;
+      END;
 
-      XSDT            : CONSTANT access_extended_system_description_table :=
-         Get_XSDT;
+      DECLARE
+         XSDT : CONSTANT extended_system_description_table
+         WITH
+            Import  => true,
+            Address => XSDT_Address;
+      BEGIN
+         IF
+            XSDT.SDT.Signature /= "XSDT"
+         THEN
+            RAISE Panic
+            WITH
+               "The ACPI implementation's XSDT is corrupt.";
+            PRAGMA Annotate(GNATprove, Intentional,
+               "exception might be raised",
+               "Don't continue if the underlying system is damaged.");
+         END IF;
 
-      -- I've hardcoded in the byte size of the SDT or else `gnatprove`
-      -- complains.
-      Tables_Offset   : CONSTANT := 36;
+         XSDT_Length := XSDT.SDT.Length;
 
-      -- The XSDT must be valid before this is ever called. Each QWORD here is
-      -- a pointer to a table.
-      Table_Addresses : addresses(1 .. (XSDT.SDT.Length - Tables_Offset) / 8)
-      WITH
-         Import   => true,
-         Address  => XSDT.Table_Pointers'address;
+         IF -- Minimum of one pointer after the SDT.
+            XSDT_Length <= Tables_Offset + 8
+         THEN
+            RAISE Panic
+            WITH
+               "The ACPI implementation's XSDT is too small.";
+            PRAGMA Annotate(GNATprove, Intentional,
+               "exception might be raised",
+               "Don't continue if the underlying system is damaged.");
+         END IF;
+      END;
 
-      -- This is what we must return. It's of a fixed size that is hopefully
-      -- enough to contain the present tables.
-      Tables          : system_description_tables := (OTHERS => NULL);
-   BEGIN
+      IF
+         NOT Valid_Table(XSDT_Address, XSDT_Length)
+      THEN
+         RAISE Panic
+         WITH
+            "The ACPI implementation's XSDT checksum is invalid.";
+         PRAGMA Annotate(GNATprove, Intentional,
+            "exception might be raised",
+            "Don't continue if the underlying system is damaged.");
+      END IF;
+
       FOR
-         Address_Index IN Table_Addresses'range
+         Pointer_Index IN 0 .. (XSDT_Length - Tables_Offset) - 1
       LOOP
-         EXIT WHEN Address_Index NOT IN Tables'range;
-         Tables(Address_Index) := To_Pointer(Table_Addresses(Address_Index));
+         DECLARE
+            Table_Pointer : CONSTANT address
+            WITH
+               Import  => true,
+               Address => (XSDT_Address + Tables_Offset) +
+                           address(Pointer_Index * 8);
+         BEGIN
+            IF
+               Pointer_Index + 1 NOT IN
+                  System_Description_Table_Addresses'range
+            THEN
+               Log("ACPI implementation contains more tables " &
+                  "than we can handle.", Tag => ACPI_Tag, Warn => true);
+               EXIT;
+            END IF;
+
+            System_Description_Table_Addresses(Pointer_Index + 1) :=
+               Table_Pointer;
+         END;
       END LOOP;
 
-      RETURN Tables;
-   END Get_XSDT_Tables;
+      Log("ACPI RSDP and XSDT parsed successfully.", Tag => ACPI_Tag);
+   END Parse_ACPI_Tables;
 
-   FUNCTION Table_Address
+   FUNCTION Get_Table_Address
      (Signature : IN string)
       RETURN address
    IS
-      FUNCTION To_Address
-        (Table  : ALIASED NOT NULL ACCESS CONSTANT system_description_table)
-         RETURN address
+      FUNCTION To_Pointer
+        (Table_Address : IN address)
+         RETURN NOT NULL ACCESS CONSTANT system_description_table
       WITH
          Import     => true,
          Convention => Intrinsic;
-
-      Tables : CONSTANT system_description_tables := Get_XSDT_Tables
-      WITH
-         Annotate => (GNATprove, False_Positive,
-                      "memory leak might occur at end of scope",
-                      "Nothing is allocated.");
    BEGIN
       FOR
-         Table OF Tables
+         Table_Address OF System_Description_Table_Addresses
       LOOP
          IF
-            Table /= NULL AND THEN
-            Table.Signature = Signature
+            Table_Address /= 0                              AND THEN
+            To_Pointer(Table_Address).Signature = Signature AND THEN
+            To_Pointer(Table_Address).Length > 0            AND THEN
+            Valid_Table(Table_Address, To_Pointer(Table_Address).Length)
          THEN
-            DECLARE
-               Table_Bytes : ALIASED CONSTANT bytes(1 .. Table.Length)
-               WITH
-                  Import  => true,
-                  Address => To_Address(Table),
-                  Annotate => (GNATprove, False_Positive,
-                               "object with constraints on bit *",
-                               "We manually check it for validity.");
-
-               Total_Size : number := 0;
-            BEGIN
-               FOR
-                  Table_Byte OF Table_Bytes
-               LOOP -- Overflow check below.
-                  EXIT WHEN Total_Size > number'last - (2**8 - 1);
-                  Total_Size := Total_Size + number(Table_Byte);
-               END LOOP;
-
-               IF
-                 (Total_Size AND 16#FF#) = 0
-               THEN
-                  RETURN To_Address(Table);
-               ELSE
-                  RETURN 0; -- Table is corrupt. I won't panic here.
-               END IF;
-            END;
+            RETURN Table_Address;
          END IF;
       END LOOP;
 
       RETURN 0; -- Table does not exist.
-   END Table_Address;
+   END Get_Table_Address;
 
    FUNCTION Get_APICs
      (MADT_Address : IN address)

@@ -32,7 +32,7 @@ There are a few mandatory software requirements:
 1. GNAT Community. GCC can compile Ada and the package contains the GNAT
    Project Manager tools, along with GNATprove for SPARK. There's a script
    inside the "tools" folder which you can utilise to obtain GNAT Community
-   2020. You can also modify the Makefile.
+   2021. You can also modify the Makefile.
 2. GNU Make. This is pretty obvious.
 3. GNU-EFI. The bootloader I created uses UEFI to boot HAVK, not BIOS.
 4. GNU Mtools & GNU Parted. Used for creating a hard drive image.

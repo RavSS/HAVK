@@ -1,20 +1,19 @@
 # Tasklist for the HAVK operating system and kernel
-### Last Updated: 2020-12-30
+### Last Updated: 2021-05-28
 #### High priority
 - The kernel crashes on AMD systems (but not Intel systems) during
   some point in which my descriptor tables are prepared and loaded, which
   points to the idea that they're not completely free of formatting errors.
   Note that this crash has only been observed on a AMD Ryzen 7 1700X processor.
-- Implement a high-priority task queue which lets tasks switch context to a
-  registered task "service". This will alleviate the shortcomings of the
-  round robin scheduler.
 - Create a package for better concurrency support e.g. mutexes.
 - Implement user-space signal handling so user tasks can handle interrupts.
-  Currently needed for better PS/2 operability. Could work as a part of the
-  high-priority task queue.
+  Currently needed for better PS/2 operability. Either store interrupt data in
+  a kernel structure or clobber the MMX registers and store it there.
 - Start thinking of a way to do memory-mapped I/O for user space drivers, as
   tasks will need to interact with hardware. PCI(e) enumeration and access may
   be done inside the kernel.
+- Implement or port over some sort of shell/interpreter. I may create my own
+  scripting language.
 
 #### Low priority
 - Set the LAPIC timer to one-shot mode whenever a task is switched. This

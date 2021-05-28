@@ -155,7 +155,7 @@ PRIVATE
       Selected_Channel    : channel;
    END RECORD
    WITH
-      Object_Size => number'size;
+      Object_Size => byte'size;
    FOR command USE RECORD
       BCD_Mode            AT 0 RANGE 0 .. 0;
       Selected_Timer_Mode AT 0 RANGE 1 .. 3;

@@ -167,6 +167,10 @@ IS
    END RECORD;
 
    -- The array of configuration options the bootloader hands over.
+   -- TODO: Retrieve the size of the configuration option structure/record from
+   -- the bootloader for the sake of version compatibility, as that will let us
+   -- ignore fields of the structure/record that this version of the kernel is
+   -- unaware of.
    TYPE configuration_options IS ARRAY(number RANGE <>) OF
       ALIASED configuration_option
    WITH

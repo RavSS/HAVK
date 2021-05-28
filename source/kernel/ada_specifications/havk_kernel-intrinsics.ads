@@ -5,6 +5,9 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2019-2021                --
 -------------------------------------------------------------------------------
 
+WITH
+   Ada.Unchecked_Conversion;
+
 -- This package contains x86(-64) procedures and functions that are imported
 -- from external sources or are small and universal enough to do a variety of
 -- goals. See the "intrinsics.s" file in the assembly folder. The reason for
@@ -188,38 +191,20 @@ IS
    PRAGMA Provide_Shift_Operators(general_register);
 
    -- Describes one of the XMM registers that come with SSE support. x86-64 at
-   -- a minimum supports SSE and SSE2.
-   TYPE XMM_register
-     (Data_Length : addressable_length := quadword_length)
-   IS RECORD
-      CASE
-         Data_Length
-      IS
-         WHEN byte_length       => XMM_Bytes       :       bytes(1 .. 16);
-         WHEN word_length       => XMM_Words       :       words(1 .. 08);
-         WHEN doubleword_length => XMM_Doublewords : doublewords(1 .. 04);
-         WHEN quadword_length   => XMM_Quadwords   :   quadwords(1 .. 02);
-      END CASE;
-   END RECORD
+   -- a minimum supports SSE and SSE2. I've avoided an unchecked union with
+   -- different addressable length sizes, as `gnatprove` seems to think that
+   -- the dummy discriminant matters, even when it does not and is not even
+   -- accessible.
+   SUBTYPE XMM_registers IS bytes(1 .. 256)
    WITH
-      Unchecked_Union => true,
-      Object_Size     => 128,
-      Convention      => Assembler;
-   FOR XMM_register USE RECORD
-      XMM_Bytes       AT 0 RANGE 0 .. 127;
-      XMM_Words       AT 0 RANGE 0 .. 127;
-      XMM_Doublewords AT 0 RANGE 0 .. 127;
-      XMM_Quadwords   AT 0 RANGE 0 .. 127;
-   END RECORD;
+      Object_Size => 128 * 16;
 
-   -- This array type can hold the total data stored in the XMM registers.
-   -- The array index is identical to the register name's index.
-   TYPE XMM_registers IS ARRAY(number RANGE 0 .. 15) OF ALIASED XMM_register
+   -- For quickly converting the XMM registers array to a 256-byte string.
+   SUBTYPE XMM_string IS string(1 .. 256)
    WITH
-      Size           => 128 * 16,
-      Object_Size    => 128 * 16,
-      Component_Size => 128,
-      Convention     => Assembler;
+      Object_Size => 128 * 16;
+   FUNCTION To_String IS NEW Ada.Unchecked_Conversion
+     (source => Intrinsics.XMM_registers, target => XMM_string);
 
    -- MMX registers are also just 64-bit registers. The upper 12 bits used in
    -- the ST{0,7} x87 registers go unused.

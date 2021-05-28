@@ -6,7 +6,10 @@
 -------------------------------------------------------------------------------
 
 WITH
-   HAVK_Kernel.UEFI;
+   HAVK_Kernel.UEFI,
+   HAVK_Kernel.Intrinsics,
+   HAVK_Kernel.Debug,
+   HAVK_Kernel.Serial;
 
 -- This package contains ACPI-related records for ACPI 2.0+ tables.
 -- As of now, I've decided against integrating ACPICA, as it's not written
@@ -25,6 +28,12 @@ WITH
                       Effective_Reads, Effective_Writes)
    )
 IS
+   PROCEDURE Parse_ACPI_Tables
+   WITH
+      Global => (In_Out => (ACPI_State, Serial.UART_State,
+                            Intrinsics.CPU_Port_State, Logging_State),
+                 Input  => (UEFI.Bootloader_Arguments, Debug.Debugging_State));
+
    -- The type of interrupt controller in the HPET table. Note that a lot of
    -- these are irrelevant to x86-64, particularly the GIC (General Interrupt
    -- Controller) which is found on ARM systems and the SAPIC which is for
@@ -193,15 +202,18 @@ IS
    -- Checks if a system table exists in the XSDT's pointer section and then
    -- returns an address to the start of a table if it exists and is valid.
    -- Returns zero if it's not found or if it's corrupt.
-   FUNCTION Table_Address
+   FUNCTION Get_Table_Address
      (Signature : IN string)
       RETURN address
    WITH
       Volatile_Function => true,
       Global            => (Input => ACPI_State),
-      Pre               => Signature'length = 4;
+      Pre               => Signature'first = 1 AND THEN
+                           Signature'last = 4;
 
 PRIVATE
+   ACPI_Tag : CONSTANT string := "ACPI";
+
    -- This type (the SDT) is effectively a header that is included in other
    -- tables e.g. the XSDT. It is then "extended" after its inclusion.
    -- READ: ACPI Specification Version 6.3, Page 119 - 5.2.6.
@@ -234,9 +246,8 @@ PRIVATE
       Maker_Revision : number RANGE 0 .. 2**32 - 1;
    END RECORD
    WITH
-      Dynamic_Predicate => Length > 36, -- The SDT won't be alone in a table.
-      Convention        => C,
-      Object_Size       => (32 * 8) + 31 + 1;
+      Convention  => C,
+      Object_Size => (32 * 8) + 31 + 1;
    FOR system_description_table USE RECORD
       Signature         AT 00 RANGE 0 .. 31;
       Length            AT 04 RANGE 0 .. 31;
@@ -248,18 +259,6 @@ PRIVATE
       Maker             AT 28 RANGE 0 .. 31;
       Maker_Revision    AT 32 RANGE 0 .. 31;
    END RECORD;
-
-   -- These make up the XSDT after its SDT.
-   TYPE access_system_description_table IS
-      ACCESS system_description_table;
-
-   -- The XSDT contains an array of pointers to other tables. This is used
-   -- to retrieve the SDT header of the tables. 128 should be enough, even if
-   -- all possible ACPI tables are present. Anymore tables will be ignored.
-   TYPE system_description_tables IS ARRAY(number RANGE 1 .. 128) OF
-      ALIASED access_system_description_table
-   WITH
-      Pack => true;
 
    -- The XSDT. It contains pointers to all of the other SDTs and it must
    -- be valid before attempting to parse any of the other SDTs.
@@ -274,24 +273,18 @@ PRIVATE
       -- then the value must be subtracted by eight due to 64-bit pointers.
       -- That will compute the value of the total tables in the XSDT from one.
       -- Be sure not to use this in an address clause when the XSDT is copied.
-      Table_Pointers : ALIASED void;
+      Table_Pointers : ALIASED byte;
       -- The table does not truly end here. Due to a limitation of Ada
       -- (or at least to my knowledge), I cannot make the record use an
       -- internal field to alter the record itself during type declaration.
    END RECORD
    WITH
-      Dynamic_Predicate => SDT.Length >= 36 + 8, -- Minimum of one pointer.
-      Convention        => C,
-      Object_Size       => (36 * 8) + 7 + 1;
+      Convention  => C,
+      Object_Size => (36 * 8) + 7 + 1;
    FOR extended_system_description_table USE RECORD
-      SDT                   AT 00 RANGE 0 .. 287;
-      Table_Pointers        AT 36 RANGE 0 .. 007;
+      SDT            AT 00 RANGE 0 .. 287;
+      Table_Pointers AT 36 RANGE 0 .. 007;
    END RECORD;
-
-   -- We need the actual address of "Table_Pointers" (the first 8 bytes of the
-   -- area), so we can't pass around copied versions of the table.
-   TYPE access_extended_system_description_table IS
-      ACCESS extended_system_description_table;
 
    -- The RSDP. This is the record passed to us by the bootloader.
    -- It has an SDT-like header, but it varies slightly.
@@ -307,7 +300,7 @@ PRIVATE
       OEM_Identity       :        string(1 .. 6);
       -- Table revision number. This should be 2.
       Revision           : number  RANGE 0 .. 2**08 - 1;
-      -- The address for the RSDT. This is not used anymore and should be
+      -- The address for the RSDT. This is not used any more and should be
       -- avoided, as the XSDT (for 64-bit systems) has superseded it.
       RSDT_Address       : address RANGE 0 .. 2**32 - 1;
       -- Length of the entire table in bytes.
@@ -967,32 +960,24 @@ PRIVATE
       Page_Protection      AT 55 RANGE 0 .. 007;
    END RECORD;
 
-   -- Parses the bootloader arguments and returns the first table. Will raise
-   -- a panic if it's corrupt.
-   FUNCTION Get_RSDP
-      RETURN root_system_description_pointer
+   -- The XSDT contains an array of pointers to other tables. This is used
+   -- to retrieve the SDT header of the tables. 128 should be enough, even if
+   -- all possible ACPI tables are present. Any more tables will be ignored.
+   System_Description_Table_Addresses : addresses(1 .. 128)
    WITH
-      Volatile_Function => true,
-      Global            => (Input    => ACPI_State,
-                            Proof_In => UEFI.Bootloader_Arguments);
+      Part_Of => ACPI_State;
 
-   -- Does the same as `Get_RSDP()`, but for the XSDT's SDT. The array of other
-   -- tables must be aliased from the original XSDT address plus the SDT
-   -- length. Will raise a panic if it's corrupt.
-   FUNCTION Get_XSDT
-      RETURN access_extended_system_description_table
+   -- This function checks for validity.
+   -- TODO: It makes no attempt to validate that the fields are correct or that
+   -- the table address and length are valid (independently or together).
+   -- Consider removing the dynamic predicates on the tables and making
+   -- function this more paranoid by also letting it take in a signature.
+   FUNCTION Valid_Table
+     (Check_Table_Address : IN address;
+      Table_Length        : IN number)
+      RETURN boolean
    WITH
-      Volatile_Function => true,
-      Global            => (Input    => ACPI_State,
-                            Proof_In => UEFI.Bootloader_Arguments),
-      Post              => Get_XSDT'result /= NULL;
-
-   -- Returns accesses to the tables in the XSDT. They only point to the SDT of
-   -- each table, but they can be imported into different record types.
-   FUNCTION Get_XSDT_Tables
-      RETURN system_description_tables
-   WITH
-      Volatile_Function => true,
-      Global            => (Input => ACPI_State);
+      Pre => Check_Table_Address /= 0 AND THEN
+             Table_Length /= 0;
 
 END HAVK_Kernel.ACPI;

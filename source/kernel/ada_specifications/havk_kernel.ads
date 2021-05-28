@@ -229,7 +229,7 @@ PRIVATE
       Last_Log : log_entry_limit := log_entry_limit'first;
    END RECORD;
 
-   -- A wrapper for `Log()` that does not take in an unconstrained array.
+   -- A wrapper for `Log()` that does not take in an Ada array.
    -- Instead, it takes in null-terminated strings. This is for external use.
    PROCEDURE External_Log
      (Log_Pointer : IN address;

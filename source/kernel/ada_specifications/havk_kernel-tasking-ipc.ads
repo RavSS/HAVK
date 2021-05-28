@@ -24,7 +24,7 @@ IS
       XMM : Intrinsics.XMM_registers;
    END RECORD;
    FOR message_data USE RECORD
-      XMM AT 0 RANGE 0 .. (128 * Intrinsics.XMM_registers'length) - 1;
+      XMM AT 0 RANGE 0 .. 2047;
    END RECORD;
 
    -- Place a message in a specific task's message box.

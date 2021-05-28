@@ -381,16 +381,19 @@ IS
                      THEN
                         -- Free the page table.
                         Free(Current_L1);
+                        PRAGMA Assert(Current_L1 = NULL);
                      END IF;
                   END LOOP;
 
                   -- Free the directory table.
                   Free(Current_L2);
+                  PRAGMA Assert(Current_L2 = NULL);
                END IF;
             END LOOP;
 
             -- Free the directory pointer table.
             Free(Current_L3);
+            PRAGMA Assert(Current_L3 = NULL);
          END IF;
       END LOOP;
 
@@ -443,7 +446,7 @@ IS
    BEGIN
       IF -- Canonical address check. See the "HAVK_Kernel.Memory" package.
          Virtual_Address <= 2**47 - 1 OR ELSE
-         Virtual_Address >= -(2**47)
+         Virtual_Address >= address'(-(2**47))
       THEN
          RETURN address'first;
       END IF;

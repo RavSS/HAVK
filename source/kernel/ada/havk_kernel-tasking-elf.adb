@@ -24,16 +24,13 @@ IS
       Header.File_Identity.Magic_Byte = 16#7F#              AND THEN
       Header.File_Identity.Magic_Name = "ELF"               AND THEN
       -- Check for the correct bit size and endianness.
-      Header.File_Identity.Class'valid                      AND THEN
-      Header.File_Identity.Class = long_mode                AND THEN
-      Header.File_Identity.Endianness'valid                 AND THEN
-      Header.File_Identity.Endianness = little_endian       AND THEN
+      Header.File_Identity.Class = Long_Mode                AND THEN
+      Header.File_Identity.Endianness = Little_Endian       AND THEN
       -- Make sure the version numbers are expected. Ignore the ABI version.
       Header.File_Identity.Version = 1                      AND THEN
       Header.File_Identity.ABI = 0                          AND THEN
       -- Now verify if the ELF object itself is an executable ELF.
-      Header.File_Type'valid                                AND THEN
-      Header.File_Type = executable_object_file             AND THEN
+      Header.File_Type = Executable_Object_File             AND THEN
       -- Check if it's for x86-64/AMD64/IA-32e and check the version.
       Header.Instruction_Set = 16#3E#                       AND THEN
       Header.Version = 1                                    AND THEN
@@ -68,14 +65,11 @@ IS
       RETURN boolean
    IS
    (
-      -- Make sure the segment type enumeration is indeed valid.
-      Header.Segment_Type'valid                                       AND THEN
       -- Check the memory access/permission/protection flags. I've disallowed a
       -- few of them on purpose, as we must only respect W^X or read-only
       -- permissions.
-      Header.Permission_Flag'valid                                    AND THEN
       Header.Permission_Flag IN
-         readable_segment .. readable_and_writeable_segment           AND THEN
+         Readable_Segment .. Readable_And_Writeable_Segment           AND THEN
       -- The virtual address and physical address seem to match up for the
       -- small code model, so I'll enforce the check.
       Header.Virtual_Address = Header.Physical_Address                AND THEN
@@ -85,7 +79,7 @@ IS
         (Header.Alignment AND (Header.Alignment - 1)) = 0 AND THEN
          Header.Virtual_Address MOD address(Header.Alignment) = 0)    AND THEN
       -- A check to see if the segment is inside the file (the buffer) itself.
-     (IF Header.Segment_Type = loadable_segment THEN
+     (IF Header.Segment_Type = Loadable_Segment THEN
          Header.File_Size < number(Memory.invalid_address'first) AND THEN
          Header.File_Size < File_Size                            AND THEN
          File_Address + Header.File_Offset IN
@@ -106,11 +100,8 @@ IS
    IS
       ELF_Header          : CONSTANT file_header
       WITH
-         Import   => true,
-         Address  => File_Address,
-         Annotate => (GNATprove, False_Positive,
-                      "object with constraints on bit representation *",
-                      "It will be checked for validity later.");
+         Import  => true,
+         Address => File_Address;
 
       ELF_Segment_Address : address;
 
@@ -183,11 +174,8 @@ IS
          DECLARE
             ELF_Segment : CONSTANT program_header_entry
             WITH
-               Import   => true,
-               Address  => ELF_Segment_Address,
-               Annotate => (GNATprove, False_Positive,
-                            "object with constraints on bit representation *",
-                            "It will be checked for validity manually.");
+               Import  => true,
+               Address => ELF_Segment_Address;
          BEGIN
             IF
                NOT Valid_Program_Header_Entry
@@ -198,7 +186,7 @@ IS
                Error_Status := format_error;
                RETURN;
             ELSIF
-               ELF_Segment.Segment_Type = loadable_segment
+               ELF_Segment.Segment_Type = Loadable_Segment
             THEN
                IF -- Just a wrap-around check.
                   quadword(ELF_Memory_Size) +
@@ -270,16 +258,13 @@ IS
          DECLARE
             ELF_Segment : CONSTANT program_header_entry
             WITH
-               Import   => true,
-               Address  => (File_Address + ELF_Header.Program_Header_Offset) +
-                            address(ELF_Header.Program_Header_Entry_Size *
-                            Index), -- This calculation has been checked.
-               Annotate => (GNATprove, False_Positive,
-                            "object with constraints on bit representation *",
-                            "It will be checked for validity manually.");
+               Import  => true,
+               Address => (File_Address + ELF_Header.Program_Header_Offset) +
+                           address(ELF_Header.Program_Header_Entry_Size *
+                           Index); -- This calculation has been checked.
          BEGIN
             IF
-               ELF_Segment.Segment_Type = loadable_segment
+               ELF_Segment.Segment_Type = Loadable_Segment
             THEN
                IF -- Make sure we calculate the addresses correctly.
                   -- This first check is a repeat of the validity function to
@@ -354,9 +339,9 @@ IS
                   ELF_Segment.Memory_Size,
                   User_Access  => true,
                   Write_Access => ELF_Segment.Permission_Flag =
-                     readable_and_writeable_segment,
+                     Readable_And_Writeable_Segment,
                   No_Execution => ELF_Segment.Permission_Flag /=
-                     readable_and_executable_segment);
+                     Readable_And_Executable_Segment);
             END IF;
          END;
       END LOOP;

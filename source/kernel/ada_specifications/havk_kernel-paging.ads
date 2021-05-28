@@ -13,7 +13,6 @@ WITH
 -- made on the kernel's heap for now.
 PACKAGE HAVK_Kernel.Paging
 WITH
-   Preelaborate   => true,
    Abstract_State =>
    (
      (MMU_State

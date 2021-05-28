@@ -28,11 +28,13 @@ IS
          RETURN Value - (Value AND (Alignment - 1));
       END IF;
 
+      -- `gnatprove` appears to differentiate "MOD" from "REM" on modular
+      -- (unsigned) types.
       IF
          Value < number'last - Alignment -- First of the two overflow checks.
       THEN -- Rounding up uses a modulus to avoid a bit flip (overflow check).
          Temporary := -- It alone isn't enough for the postcondition to hold.
-            Value + ((Alignment - (Value MOD Alignment)) MOD Alignment);
+            Value + ((Alignment - (Value REM Alignment)) REM Alignment);
          RETURN Temporary - (Temporary AND (Alignment - 1));
       ELSE
          RETURN Value - (Value AND (Alignment - 1)); -- Can't round up.

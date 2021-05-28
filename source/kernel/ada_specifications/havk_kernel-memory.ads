@@ -14,7 +14,6 @@ WITH
 -- and physical memory.
 PACKAGE HAVK_Kernel.Memory
 WITH
-   Preelaborate   => true,
    Abstract_State =>
    (
       Memory_State
@@ -54,10 +53,10 @@ IS
    SUBTYPE canonical_address IS address
    WITH
       Dynamic_Predicate => canonical_address IN address'first ..
-                              2**47 - 1 | -(2**47) .. address'last;
+                              2**47 - 1 | address'(-(2**47)) .. address'last;
 
    -- The opposite of a canonical address.
-   SUBTYPE invalid_address IS address RANGE 2**47 .. -(2**47) - 1;
+   SUBTYPE invalid_address IS address RANGE 2**47 .. address'(-(2**47)) - 1;
 
    -- An address guaranteed/proven to be 4 KiB aligned.
    SUBTYPE page_address IS address
@@ -66,7 +65,7 @@ IS
       Dynamic_Predicate => page_address MOD Paging.page_size'enum_rep = 0
                               AND THEN
                            page_address IN address'first .. 2**47 - 1 |
-                              -(2**47) .. address'last -
+                              address'(-(2**47)) .. address'last -
                                 (Paging.page_size'enum_rep - 1);
 
    -- Just a simple `memcpy()`. Use with high amounts of caution. Keep its use

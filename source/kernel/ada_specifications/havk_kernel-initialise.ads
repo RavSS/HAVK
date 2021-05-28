@@ -7,6 +7,7 @@
 
 WITH
    HAVK_Kernel.Descriptors,
+   HAVK_Kernel.ACPI,
    HAVK_Kernel.Tasking.System_Call,
    HAVK_Kernel.Tasking.System_Call.Handler,
    HAVK_Kernel.Memory,
@@ -44,6 +45,11 @@ IS
    PROCEDURE System_Call_Instruction
    RENAMES
       Tasking.System_Call.Handler.Set_MSRs;
+
+   -- Initialises the ACPI state that the ACPI package keeps track of.
+   PROCEDURE ACPI_Check
+   RENAMES
+      ACPI.Parse_ACPI_Tables;
 
    -- Retrieves the date and time in ISO 8601 format of when the current
    -- running version of the kernel was compiled and built. The format returned

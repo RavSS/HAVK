@@ -22,7 +22,6 @@ IS
                                     Active_Task_Ring_3_Context,
                                     Descriptors.TSS, Countdown,
                                     Paging.Kernel_Page_Layout_State,
-                                    SPARK.Heap.Dynamic_Memory,
                                     Memory.Frames.Frame_Allocator_State),
                          Input  => (Enabled, Memory.Kernel_Virtual_Base,
                                     Memory.Kernel_Isolated_Text_Base,
@@ -628,9 +627,10 @@ IS
       END IF;
 
       RETURN
-        (Index => Task_Index,
-         Alive => Tasks(Task_Index).Alive,
-         Name  => Tasks(Task_Index).Name);
+        (Index  => Task_Index,
+         Alive  => Tasks(Task_Index).Alive,
+         Name   => Tasks(Task_Index).Name,
+         OTHERS => <>);
    END Get_Task_Status;
 
    FUNCTION Get_Active_Task_Index

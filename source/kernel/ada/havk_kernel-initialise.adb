@@ -296,15 +296,18 @@ IS
          Convention => C,
          Address    => UEFI.Bootloader_Arguments.Configuration_String_Address,
          Annotate   => (GNATprove, False_Positive,
-                        "object with constraints on bit representation *",
-                        "It is just a big char array.");
+                        "object is unsuitable for aliasing via address clause",
+                        "We can only trust the bootloader and the length.");
 
       Configuration_Options : CONSTANT UEFI.configuration_options
         (1 .. UEFI.Bootloader_Arguments.Configuration_Options_Count)
       WITH
          Import     => true,
          Convention => C,
-         Address    => UEFI.Bootloader_Arguments.Configuration_Options_Address;
+         Address    => UEFI.Bootloader_Arguments.Configuration_Options_Address,
+         Annotate   => (GNATprove, False_Positive,
+                        "object is unsuitable for aliasing via address clause",
+                        "We can only trust the bootloader and the count.");
 
       Boot_File_Key_Prefix            : CONSTANT string := "BOOT_FILE.";
       Boot_File_Key_Name_Suffix       : CONSTANT string := ".NAME";

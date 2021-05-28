@@ -14,26 +14,19 @@ IS
    PROCEDURE Send
      (Data : IN generic_data)
    IS
-      FUNCTION To_Word IS NEW Ada.Unchecked_Conversion
-        (source => port, target => number);
-      PRAGMA Annotate(GNATprove, False_Positive,
-         "type with constraints on bit representation *",
-         "This is an alternative to the ""enum_rep"" attribute.");
-
       FUNCTION To_Byte IS NEW Ada.Unchecked_Conversion
-        (source => generic_data, target => number);
-      PRAGMA Annotate(GNATprove, False_Positive,
-         "type with constraints on bit representation *",
-         "The format is manually checked (see the representation for it).");
+        (source => generic_data, target => byte);
+      -- PRAGMA Annotate(GNATprove, False_Positive,
+      --    "type with constraints on bit representation *",
+      --    "The format is manually checked (see the representation for it).");
    BEGIN
-      Intrinsics.Output_Byte
-        (To_Word(Channel_Port) AND 16#FFFF#, To_Byte(Data) AND 16#FF#);
+      Intrinsics.Output_Byte(Channel_Port'enum_rep, number(To_Byte(Data)));
    END Send;
 
    PROCEDURE Setup
    IS
       PROCEDURE Send_Divisor_Byte IS NEW Send
-        (generic_data => number, Channel_Port => channel_0_port);
+        (generic_data => byte, Channel_Port => channel_0_port);
 
       PROCEDURE Send_Command IS NEW Send
         (generic_data => command, Channel_Port => command_register_port);
@@ -48,8 +41,8 @@ IS
       Intrinsics.Disable_Interrupts;
 
       Send_Command(Timer_Setting);
-      Send_Divisor_Byte(Divisor AND 2**8 - 1);
-      Send_Divisor_Byte(Shift_Right(Divisor, 8) AND 2**8 - 1);
+      Send_Divisor_Byte(byte(Divisor AND 16#FF#));
+      Send_Divisor_Byte(byte(Shift_Right(Divisor, 8) AND 16#FF#));
 
       Intrinsics.Enable_Interrupts;
       Log("The PIT has been configured.", Tag => PIT_Tag);

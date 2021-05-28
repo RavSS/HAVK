@@ -6,7 +6,6 @@
 -------------------------------------------------------------------------------
 
 WITH
-   SPARK.Heap,
    HAVK_Kernel.ACPI,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Paging;
@@ -30,8 +29,8 @@ IS
    WITH
       Global => (In_Out => (Interrupt_Controller_State,
                             Paging.Kernel_Page_Layout_State),
-                 Input  => (SPARK.Heap.Dynamic_Memory, ACPI.ACPI_State),
-                 Output =>  CPU_Cores),
+                 Input  => ACPI.ACPI_State,
+                 Output => CPU_Cores),
       Post   => CPU_Cores /= 0;
 
    -- This remaps the two 8248 PICs and it can optionally disable the emulation
@@ -69,7 +68,7 @@ PRIVATE
       -- Indicates whether the LAPIC belongs to a BSP or an AP. Read only.
       BSP_APIC    : boolean;
       -- Used for nothing. Read only.
-      Reserved_2  : void;
+      Reserved_2  : number RANGE 0 .. 2**01 - 1;
       -- The bit that enables x2APIC mode and disables xAPIC. MMIO access
       -- is replaced with MSR access of the APIC.
       x2APIC_Mode : boolean;
@@ -98,23 +97,23 @@ PRIVATE
 
    -- The record for the value that can be read and written to the local APIC's
    -- spurious interrupt vector register. It is used for enabling the APIC
-   -- itself and chosing which interrupt vector spurious interrupts go to.
+   -- itself and choosing which interrupt vector spurious interrupts go to.
    TYPE spurious_interrupt_vector_register_format IS RECORD
       -- The interrupt vector to which spurious interrupts are delivered to.
       -- The lower four bits are hard-set to one.
-      Interrupt_Vector : number RANGE 15 .. 255;
+      Interrupt_Vector : number RANGE 0 .. 2**08 - 1;
       -- This is what we're here for. It simply enables the APIC if true.
       Enabled_APIC     : boolean;
       -- In xAPIC mode, the bit for CPU focus checking is here, but it seems
       -- to be missing in x2APIC mode.
-      Reserved_1       : number RANGE 00 .. 007;
+      Reserved_1       : number RANGE 0 .. 2**03 - 1;
       -- When true, EOI messages are not sent to the I/O APICs. This is an
       -- exclusive x2APIC feature.
       No_EOI_Broadcast : boolean;
       -- While the register itself is only 32 bits, MSRs have a maximum value
       -- of 64 bits, so this is just empty padding that is handled by the
       -- `WRMSR` instruction.
-      Reserved_2       : number RANGE 00 .. 000;
+      Reserved_2       : number RANGE 0 .. 2**51 - 1;
    END RECORD
    WITH
       Object_Size => number'size;
@@ -186,7 +185,7 @@ PRIVATE
       Reserved_2 : number RANGE 00 .. 2**04 - 1;
    END RECORD
    WITH
-      Object_Size => number'size;
+      Object_Size => doubleword'size;
    FOR IO_APIC_identity_register USE RECORD
       Reserved_1     AT 0 RANGE 00 .. 23;
       Identity       AT 0 RANGE 24 .. 27;
@@ -207,8 +206,7 @@ PRIVATE
       Reserved_2        : number RANGE 00 .. 2**8 - 1;
    END RECORD
    WITH
-      Dynamic_Predicate => Maximum_Redirects <= 239,
-      Object_Size       => number'size;
+      Object_Size => doubleword'size;
    FOR IO_APIC_version_register USE RECORD
       Version               AT 0 RANGE 00 .. 07;
       Reserved_1            AT 0 RANGE 08 .. 15;
@@ -226,7 +224,7 @@ PRIVATE
       Reserved_2        : number RANGE 00 .. 2**04 - 1;
    END RECORD
    WITH
-      Object_Size => number'size;
+      Object_Size => doubleword'size;
    FOR IO_APIC_arbitration_register USE RECORD
       Reserved_1            AT 0 RANGE 00 .. 23;
       Arbitration_Value     AT 0 RANGE 24 .. 27;
@@ -274,7 +272,7 @@ PRIVATE
       Reserved          : number RANGE 00 .. 2**15 - 1 := 0;
    END RECORD
    WITH
-      Object_Size => number'size;
+      Object_Size => doubleword'size;
    FOR IO_APIC_redirection_table_register_low USE RECORD
       Interrupt_Vector      AT 0 RANGE 00 .. 07;
       Delivery_Mode         AT 0 RANGE 08 .. 10;
@@ -303,7 +301,7 @@ PRIVATE
       Destination : number RANGE 00 .. 2**08 - 1;
    END RECORD
    WITH
-      Object_Size => number'size;
+      Object_Size => doubleword'size;
    FOR IO_APIC_redirection_table_register_high USE RECORD
       Reserved        AT 0 RANGE 00 .. 23;
       Destination     AT 0 RANGE 24 .. 31;
@@ -319,6 +317,10 @@ PRIVATE
    -- Each register must be read on a 4-byte address or the above will happen.
    -- See the below (likely outdated) resource for register formats.
    -- READ: https://pdos.csail.mit.edu/6.828/2018/readings/ia32/ioapic.pdf
+   -- TODO: Now that I've discovered "Volatile_Full_Access", it might be worth
+   -- retrying the unchecked union method (or even a variant record by storing
+   -- the discriminant in the index's offset) so I can remove the unchecked
+   -- conversion and generic wrappers mess.
    TYPE IO_APIC_MMIO IS RECORD
       -- The register type needs to be set here in its numerical form or else
       -- you will get unexpected results. See the I/O APIC register type for
@@ -327,7 +329,7 @@ PRIVATE
       Register_Index  : number RANGE 0 .. 2**32 - 1;
       Padding_1       : number;
       Padding_2       : number RANGE 0 .. 2**32 - 1;
-      Register_Window : number RANGE 0 .. 2**32 - 1;
+      Register_Window : doubleword;
    END RECORD
    WITH -- The "Atomic" aspect doesn't work, but "Volatile" is sort of similar.
       Volatile => true; -- Essentially "volatile" in C. Good enough.
@@ -383,7 +385,7 @@ PRIVATE
 
    -- The base address for the ISA IRQs. I've just set this to the regular
    -- remap base that we programmed to the PICs.
-   IRQ_Base    : CONSTANT number := 32;
+   IRQ_Base    : CONSTANT := 32;
 
    -- The MSRs for retrieving the current CPU core's (local) APIC.
    -- This is not complete, but the other registers seem to not be of any
@@ -464,7 +466,7 @@ PRIVATE
                 IF Register IN IOREDTBL_low | IOREDTBL_high THEN
                    GSI <= Mapped_IO_APIC.GSI_Last - Mapped_IO_APIC.GSI_Base
              ),
-      Post => Mapped_IO_APIC.MMIO        /= NULL                    AND THEN
+      Post => Mapped_IO_APIC.MMIO /= NULL                           AND THEN
               Mapped_IO_APIC.GSI_Base'old = Mapped_IO_APIC.GSI_Base AND THEN
               Mapped_IO_APIC.GSI_Last'old = Mapped_IO_APIC.GSI_Last;
 
@@ -484,8 +486,8 @@ PRIVATE
      (Mapped_IO_APIC : IN OUT IO_APIC;
       Register_Data  : IN generic_register)
    WITH
-      Pre  => Mapped_IO_APIC.MMIO        /= NULL,
-      Post => Mapped_IO_APIC.MMIO        /= NULL                    AND THEN
+      Pre  => Mapped_IO_APIC.MMIO /= NULL,
+      Post => Mapped_IO_APIC.MMIO /= NULL                           AND THEN
               Mapped_IO_APIC.GSI_Base'old = Mapped_IO_APIC.GSI_Base AND THEN
               Mapped_IO_APIC.GSI_Last'old = Mapped_IO_APIC.GSI_Last;
 

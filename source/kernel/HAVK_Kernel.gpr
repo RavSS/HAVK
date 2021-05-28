@@ -49,6 +49,8 @@ IS
          "--assumptions",
          -- Strict interpretation of Ada to the standard.
          "--pedantic",
+         -- Generate counterexamples so it's easier to tell what can go wrong.
+         "--counterexamples=on",
          -- Useful CWE identifiers for various issues and vulnerabilities.
          "--cwe",
          -- Highest/most powerful proof level. It's not too much slower.

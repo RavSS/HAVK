@@ -6,6 +6,7 @@
 -------------------------------------------------------------------------------
 
 WITH
+   Ada.Unchecked_Conversion,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.Interrupts,
    HAVK_Kernel.Tasking,
@@ -104,25 +105,22 @@ IS
       Argument_2   : OUT Intrinsics.XMM_registers;
       Error_Status : OUT Intrinsics.general_register)
    IS
-      TYPE padded_task_status IS RECORD
-         Data   : Tasking.task_status;
-         Zeroed : bytes(1 .. 176);
-      END RECORD
-      WITH
-         Size        => 2048,
-         Object_Size => 2048;
-
-      FUNCTION To_XMM IS NEW Ada.Unchecked_Conversion
-        (source => padded_task_status, target => Intrinsics.XMM_registers);
-      PRAGMA Annotate(GNATprove, False_Positive, "type with constraints *",
-         "The task status's size fits inside all of the Argument_ registers.");
-
       Active_Task_Index : CONSTANT number := Tasking.Get_Active_Task_Index;
       Status            : CONSTANT Tasking.task_status :=
          Tasking.Get_Task_Status
            (IF Argument_1 = 0 THEN Active_Task_Index ELSE number(Argument_1));
+
+      SUBTYPE status_bytes IS bytes
+        (1 .. ((9 * 8) + (task_name_string'length * 8)) / 8)
+      WITH
+         Object_Size => (9 * 8) + (task_name_string'length * 8);
+
+      FUNCTION To_Bytes IS NEW Ada.Unchecked_Conversion
+        (source => task_status, target => status_bytes);
    BEGIN
-      Argument_2 := To_XMM((Data => Status, Zeroed => (OTHERS => 0)));
+      Argument_2 := (OTHERS => <>);
+      Argument_2(To_Bytes(Status)'range) := To_Bytes(Status);
+
       Error_Status := (IF Status.Index = 0 THEN
          index_error'enum_rep ELSE no_error'enum_rep);
    END Identify_Task_Operation_Call;
@@ -147,7 +145,7 @@ IS
       END IF;
 
       Tasking.ELF.Load(ELF_Address, ELF_Size,
-         string(To_Characters(Argument_1)(Tasking.task_name_string'range)),
+         Intrinsics.To_String(Argument_1)(Tasking.task_name_string'range),
          Error_Check);
       Error_Status := Error_Check'enum_rep;
    END Load_ELF_Operation_Call;
@@ -182,7 +180,7 @@ IS
          Tasking.Get_Task_Status(Active_Task_Index);
    BEGIN
       Log("Log from task """ & Active_Task_Status.Name & """: || " &
-         string(To_Characters(Argument_1)) & " ||", Tag => System_Call_Tag);
+         Intrinsics.To_String(Argument_1) & " ||", Tag => System_Call_Tag);
       Error_Status := no_error'enum_rep;
    END Log_Operation_Call;
 

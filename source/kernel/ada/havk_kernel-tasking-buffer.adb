@@ -65,11 +65,11 @@ IS
       Buffer_Offset : IN number;
       Buffer_Data   : OUT Intrinsics.XMM_registers;
       Error_Status  : OUT error)
-   WITH
-      SPARK_Mode => off -- The buffer-to-XMM loop crashes `gnatprove`.
    IS
-      Offset_Count : number := Buffer_Offset;
+      Offset_Count  : number;
    BEGIN
+      Buffer_Data := (OTHERS => <>); -- Clear it out first.
+
       IF -- Check if it's a valid task identity.
          Task_Identity NOT IN task_limit'range
       THEN
@@ -87,22 +87,17 @@ IS
          RETURN;
       END IF;
 
-      Buffer_Data := (OTHERS => <>); -- Clear it out first.
+      Offset_Count := Buffer_Offset;
 
-      -- TODO: The below crashes `gnatprove`. It does compile correctly.
-      Buffer_Copy : FOR
-         Register_Block OF Buffer_Data
+      FOR
+         Byte_Index IN Buffer_Data'range
       LOOP
-         FOR
-            Byte_Index IN Register_Block.XMM_Bytes'range
-         LOOP
-            Register_Block.XMM_Bytes(Byte_Index) :=
-               Buffers(Task_Identity).Data(Offset_Count);
-            Offset_Count := Offset_Count + 1;
-            EXIT Buffer_Copy WHEN
-               Offset_Count NOT IN Buffers(Task_Identity).Data'range;
-         END LOOP;
-      END LOOP Buffer_Copy;
+         PRAGMA Loop_Invariant
+           (Offset_Count IN Buffers(Task_Identity).Data'range);
+         Buffer_Data(Byte_Index) := Buffers(Task_Identity).Data(Offset_Count);
+         Offset_Count := Offset_Count + 1;
+         EXIT WHEN Offset_Count NOT IN Buffers(Task_Identity).Data'range;
+      END LOOP;
 
       Error_Status := no_error;
    END Read;
@@ -112,10 +107,8 @@ IS
       Buffer_Offset : IN number;
       Buffer_Data   : IN Intrinsics.XMM_registers;
       Error_Status  : OUT error)
-   WITH
-      SPARK_Mode => off -- The XMM-to-buffer loop crashes `gnatprove`.
    IS
-      Offset_Count  : number := Buffer_Offset;
+      Offset_Count  : number;
    BEGIN
       IF -- Check if it's a valid task identity.
          Task_Identity NOT IN task_limit'range
@@ -134,19 +127,17 @@ IS
          RETURN;
       END IF;
 
-      -- TODO: The below crashes `gnatprove`. It does compile correctly.
-      Block_Copy : FOR
-         Register_Block OF Buffer_Data
+      Offset_Count := Buffer_Offset;
+
+      FOR
+         Byte_Index IN Buffer_Data'range
       LOOP
-         FOR
-            Byte_Part OF Register_Block.XMM_Bytes
-         LOOP
-            Buffers(Task_Identity).Data(Offset_Count) := Byte_Part;
-            Offset_Count := Offset_Count + 1;
-            EXIT Block_Copy WHEN
-               Offset_Count NOT IN Buffers(Task_Identity).Data'range;
-         END LOOP;
-      END LOOP Block_Copy;
+         PRAGMA Loop_Invariant
+           (Offset_Count IN Buffers(Task_Identity).Data'range);
+         Buffers(Task_Identity).Data(Offset_Count) := Buffer_Data(Byte_Index);
+         Offset_Count := Offset_Count + 1;
+         EXIT WHEN Offset_Count NOT IN Buffers(Task_Identity).Data'range;
+      END LOOP;
 
       Error_Status := no_error;
    END Write;

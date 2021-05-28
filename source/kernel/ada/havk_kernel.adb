@@ -63,7 +63,7 @@ IS
             Logs.Log_List(Logs.Last_Log).Information'length >= 3
          THEN
             Logs.Log_List(Logs.Last_Log).Information :=
-               ('C', 'U', 'T', OTHERS => character'val(0));
+              ('C', 'U', 'T', OTHERS => character'val(0));
 
             Logs.Log_List(Logs.Last_Log).Warned := true;
          END IF;
@@ -92,56 +92,87 @@ IS
       Warn        : IN character;
       Critical    : IN character)
    IS
-      FUNCTION Length
-        (Pointer  : IN address;
-         Limit    : IN positive)
-         RETURN natural
-      WITH
-         Global        => NULL,
-         Import        => true,
-         Convention    => Assembler,
-         External_Name => "assembly__string_length",
-         Pre           => Pointer /= 0,
-         Post          => Length'result <= Limit;
-
       -- To be used if there was no log or tag supplied.
       Null_Log      : CONSTANT string :=
          "A null or incorrect external log was passed.";
       External_Tag  : CONSTANT string := "EXTERNAL";
 
-      -- Remember that the standard string type in Ada only supports a positive
-      -- index (one-based or higher), so a length of zero needs to be
-      -- interpreted as a length of one.
-      Log_C_Length  : CONSTANT natural := (IF Log_Pointer /= 0 THEN
-         Length(Log_Pointer, log_string_limit'last) ELSE 0);
-      Tag_C_Length  : CONSTANT natural := (IF Tag_Pointer /= 0 THEN
-         Length(Tag_Pointer, log_tag_limit'last) ELSE 0);
-
-      Log_C_String  : CONSTANT string
-        (1 .. (IF Log_C_Length /= 0 THEN Log_C_Length ELSE 1))
-      WITH
-         Import     => true,
-         Convention => C,
-         Address    => Log_Pointer,
-         Annotate   => (GNATprove, False_Positive,
-                        "object with constraints on bit representation *",
-                        "It's just an array of bytes, no inner alignment.");
-
-      Tag_C_String  : CONSTANT string
-        (1 .. (IF Tag_C_Length /= 0 THEN Tag_C_Length ELSE 1))
-      WITH
-         Import     => true,
-         Convention => C,
-         Address    => Tag_Pointer;
+      -- Copy the characters byte-by-byte. An element size value passed by the
+      -- foreign caller seems unnecessary.
+      Address_Offset  : address RANGE 1 .. address'last; -- Anything but null.
+      Log_Information : string(log_string_limit'range) := (OTHERS => NUL);
+      Log_Tag         : string(log_tag_limit'range) := (OTHERS => NUL);
 
       -- Convert the 8-bit characters to Ada booleans.
-      Warn_Bool     : CONSTANT boolean := character'pos(Warn) /= 0 OR ELSE
-         Log_C_Length = 0; -- Warn if the log information itself is missing.
+      Warn_Bool     : CONSTANT boolean := character'pos(Warn) /= 0;
       Critical_Bool : CONSTANT boolean := character'pos(Critical) /= 0;
    BEGIN
-      Log((IF Log_C_Length /= 0 THEN Log_C_String ELSE Null_Log),
-         Tag => (IF Tag_C_Length /= 0 THEN Tag_C_String ELSE External_Tag),
-         Warn => Warn_Bool, Critical => Critical_Bool);
+      IF
+         Log_Pointer = 0
+      THEN -- Warn if the log information itself is missing.
+         Log(Null_Log, External_Tag, Warn => true,
+            Critical => Critical_Bool);
+         RETURN;
+      END IF;
+
+      Address_Offset := Log_Pointer;
+
+      FOR
+         Log_Index IN Log_Information'range
+      LOOP
+         DECLARE
+            Character_Byte : ALIASED CONSTANT byte
+            WITH
+               Import     => true,
+               Convention => C,
+               Address    => Address_Offset;
+         BEGIN
+            EXIT WHEN Character_Byte = 0;
+            Log_Information(Log_Index) := character'val(Character_Byte);
+         END;
+
+         EXIT WHEN Address_Offset = address'last;
+         Address_Offset := Address_Offset + 1;
+      END LOOP;
+
+      IF
+         Tag_Pointer /= 0
+      THEN
+         Address_Offset := Tag_Pointer;
+
+         FOR
+            Tag_Index IN Log_Tag'range
+         LOOP
+            DECLARE
+               Character_Byte : ALIASED CONSTANT byte
+               WITH
+                  Import     => true,
+                  Convention => C,
+                  Address    => Address_Offset;
+            BEGIN
+               EXIT WHEN Character_Byte = 0;
+               Log_Tag(Tag_Index) := character'val(Character_Byte);
+            END;
+
+            EXIT WHEN Address_Offset = address'last;
+            Address_Offset := Address_Offset + 1;
+         END LOOP;
+      END IF;
+
+      IF
+         Log_Information(Log_Information'first) = NUL
+      THEN
+         Log(Null_Log, External_Tag, Warn => Warn_Bool,
+            Critical => Critical_Bool);
+      ELSIF
+         Log_Tag(Log_Tag'first) = NUL
+      THEN
+         Log(Log_Information, External_Tag, Warn => Warn_Bool,
+            Critical => Critical_Bool);
+      ELSE
+         Log(Log_Information, Log_Tag, Warn => Warn_Bool,
+            Critical => Critical_Bool);
+      END IF;
    END External_Log;
 
    FUNCTION Image
@@ -150,7 +181,7 @@ IS
       Padding : IN positive := 01)
       RETURN image_string
    IS
-      Base_16   : CONSTANT ARRAY(number RANGE 16#0# .. 16#0F#) OF character :=
+      Base_16   : CONSTANT ARRAY(number RANGE 16#0# .. 16#F#) OF character :=
         ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
          'A', 'B', 'C', 'D', 'E', 'F');
       Imaged    : image_string := (OTHERS => NUL);

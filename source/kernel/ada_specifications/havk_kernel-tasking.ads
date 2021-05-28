@@ -6,7 +6,6 @@
 -------------------------------------------------------------------------------
 
 WITH
-   SPARK.Heap,
    HAVK_Kernel.UEFI,
    HAVK_Kernel.Intrinsics,
    HAVK_Kernel.Descriptors,
@@ -48,17 +47,20 @@ IS
       -- Indicates whether the task is alive or not. The task can exist yet
       -- also be dead.
       Alive   : boolean := false;
+      Padding : number RANGE 0 .. 2**7 - 1 := 0;
       -- The name the task was created with.
       Name    : task_name_string := (OTHERS => NUL);
    END RECORD
    WITH
       Dynamic_Predicate => (IF Index = 0 THEN
                                NOT Alive AND THEN
-                              (FOR ALL ASCII OF Name => ASCII = NUL));
+                               Name = task_name_string'(OTHERS => NUL)),
+      Object_Size       => (9 * 8) + (task_name_string'length * 8);
    FOR task_status USE RECORD
       Index   AT 00 RANGE 0 .. 63;
-      Alive   AT 08 RANGE 0 .. 07;
-      Name    AT 09 RANGE 0 .. (8 * task_name_string'length) - 1;
+      Alive   AT 08 RANGE 0 .. 00;
+      Padding AT 08 RANGE 1 .. 07;
+      Name    AT 09 RANGE 0 .. (task_name_string'length * 8) - 1;
    END RECORD;
 
    -- Creates a new task. Interrupts are disabled during its call until return.
@@ -68,8 +70,8 @@ IS
       Initial_Frames : IN number;
       Error_Status   : OUT error)
    WITH
-      Global => (In_Out => (Tasking_State, Paging.Kernel_Page_Layout_State,
-                            SPARK.Heap.Dynamic_Memory, Descriptors.TSS,
+      Global => (In_Out => (Tasking_State, Descriptors.TSS,
+                            Paging.Kernel_Page_Layout_State,
                             Memory.Frames.Frame_Allocator_State),
                  Input  => (Memory.Kernel_Virtual_Base,
                             Memory.Kernel_Isolated_Text_Base,
@@ -89,8 +91,7 @@ IS
      (Task_Index   : IN number;
       Error_Status : OUT error)
    WITH
-      Global => (In_Out => (Tasking_State, SPARK.Heap.Dynamic_Memory,
-                            Paging.Kernel_Page_Layout_State,
+      Global => (In_Out => (Tasking_State, Paging.Kernel_Page_Layout_State,
                             Memory.Frames.Frame_Allocator_State)),
       Post   => Error_Status IN no_error | index_error | attempt_error;
 
@@ -402,7 +403,6 @@ PRIVATE
       Global => (In_Out => (Tasks, Paging.Kernel_Page_Layout_State,
                             Memory.Frames.Frame_Allocator_State),
                  Input  => (UEFI.Memory_Map, UEFI.Bootloader_Arguments,
-                            SPARK.Heap.Dynamic_Memory,
                             Memory.Kernel_Virtual_Base)),
       Pre    => Tasks(Task_Index).Present,
       Post   => Tasks(Task_Index).Present AND THEN
@@ -411,8 +411,7 @@ PRIVATE
    -- This cleans up dead tasks and dead task threads.
    PROCEDURE Task_Cleaner
    WITH
-      Global => (In_Out => (Tasks, SPARK.Heap.Dynamic_Memory,
-                            Paging.Kernel_Page_Layout_State,
+      Global => (In_Out => (Tasks, Paging.Kernel_Page_Layout_State,
                             Memory.Frames.Frame_Allocator_State),
                  Input  => Active_Task);
 

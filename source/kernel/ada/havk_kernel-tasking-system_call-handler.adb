@@ -5,28 +5,16 @@
 -- Original Author -- Ravjot Singh Samra, Copyright 2020-2021                --
 -------------------------------------------------------------------------------
 
-WITH
-   Ada.Unchecked_Conversion;
-
 PACKAGE BODY HAVK_Kernel.Tasking.System_Call.Handler
 IS
    PROCEDURE System_Call_Handler
    IS
-      FUNCTION To_Operation IS NEW Ada.Unchecked_Conversion
-        (source => Intrinsics.general_register, target => operation);
-      PRAGMA Annotate(GNATprove, Intentional,
-         "type with constraints on bit representation",
-         "Values can be erroneous, but we do validity checks on conversions.");
-
       Caller_Index    : CONSTANT task_limit := Active_Task;
       -- TODO: This register state copy is needed due to SPARK aliasing rules.
       -- Perhaps it could be removed in the future if I rework the base tasking
       -- package itself.
       Arguments_State : register_state := Tasks(Caller_Index).Ring_3_State;
    BEGIN
-      PRAGMA Warnings(GNATprove, off,
-         "attribute Valid is assumed to return True",
-         Reason => "Need the validity check. Make sure invalids are handled.");
       IF
          NOT Tasks(Active_Task).Alive
       THEN
@@ -34,19 +22,12 @@ IS
             """ attempted to do a system call after death.",
             Tag => System_Call_Tag, Warn => true);
          RETURN;
-      ELSIF
-         NOT To_Operation(Tasks(Active_Task).Ring_3_State.RAX)'valid
-      THEN
-         Log("Task """ & Tasks(Active_Task).Name &
-            """ called a non-existent system operation.",
-            Tag => System_Call_Tag, Warn => true);
-         RETURN;
       END IF;
 
       CASE
-         To_Operation(Tasks(Active_Task).Ring_3_State.RAX)
+         operation(Tasks(Active_Task).Ring_3_State.RAX)
       IS
-         WHEN null_operation               => Null_Operation_Call
+         WHEN Null_Operation               => Null_Operation_Call
            (Arguments_State.RDI,
             Arguments_State.RSI,
             Arguments_State.RDX,
@@ -55,61 +36,67 @@ IS
             Arguments_State.RIP,
             Arguments_State.RAX);
 
-         WHEN exit_task_operation          => Exit_Task_Operation_Call
+         WHEN Exit_Task_Operation          => Exit_Task_Operation_Call
            (Arguments_State.RDI);
 
-         WHEN receive_message_operation    => Receive_Message_Operation_Call
+         WHEN Receive_Message_Operation    => Receive_Message_Operation_Call
            (Arguments_State.RDI,
             Arguments_State.RSI,
             Arguments_State.RDX,
             Arguments_State.XMM,
             Arguments_State.RAX);
 
-         WHEN send_message_operation       => Send_Message_Operation_Call
+         WHEN Send_Message_Operation       => Send_Message_Operation_Call
            (Arguments_State.RDI,
             Arguments_State.RSI,
             Arguments_State.RDX,
             Arguments_State.XMM,
             Arguments_State.RAX);
 
-         WHEN identify_task_operation      => Identify_Task_Operation_Call
+         WHEN Identify_Task_Operation      => Identify_Task_Operation_Call
            (Arguments_State.RDI,
             Arguments_State.XMM,
             Arguments_State.RAX);
 
-         WHEN load_elf_operation           => Load_ELF_Operation_Call
+         WHEN Load_ELF_Operation           => Load_ELF_Operation_Call
            (Arguments_State.XMM,
             Arguments_State.RAX);
 
-         WHEN heap_increase_operation      => Heap_Increase_Operation_Call
+         WHEN Heap_Increase_Operation      => Heap_Increase_Operation_Call
            (Arguments_State.RDI,
             Arguments_State.RAX);
 
-         WHEN yield_operation              => Yield_Operation_Call
+         WHEN Yield_Operation              => Yield_Operation_Call
            (Arguments_State.RAX);
 
-         WHEN log_operation                => Log_Operation_Call
+         WHEN Log_Operation                => Log_Operation_Call
            (Arguments_State.XMM,
             Arguments_State.RAX);
 
-         WHEN irq_statistics_operation     => IRQ_Statistics_Operation_Call
+         WHEN IRQ_Statistics_Operation     => IRQ_Statistics_Operation_Call
            (Arguments_State.RDI,
             Arguments_State.RSI,
             Arguments_State.RAX);
 
-         WHEN buffer_operation             => Buffer_Operation_Call
+         WHEN Buffer_Operation             => Buffer_Operation_Call
            (Arguments_State.RDI,
             Arguments_State.RSI,
             Arguments_State.XMM,
             Arguments_State.RAX);
 
-         WHEN framebuffer_access_operation => Framebuffer_Access_Operation_Call
+         WHEN Framebuffer_Access_Operation => Framebuffer_Access_Operation_Call
            (Arguments_State.RDI,
             Arguments_State.RSI,
             Arguments_State.RDX,
             Arguments_State.R8,
             Arguments_State.R9,
             Arguments_State.RAX);
+
+         WHEN OTHERS =>
+            Log("Task """ & Tasks(Active_Task).Name &
+               """ called a non-existent or unimplemented system operation.",
+               Tag => System_Call_Tag, Warn => true);
+            Arguments_State.RAX := index_error'enum_rep;
       END CASE;
 
       Tasks(Caller_Index).Ring_3_State := Arguments_State;

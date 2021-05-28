@@ -323,8 +323,7 @@ IS
    TYPE interrupt_descriptor_table IS ARRAY(number RANGE 0 .. 255)
       OF interrupt_descriptor_table_gate
    WITH
-      Component_Size => 128,
-      Pack           => true;
+      Pack => true;
 
    -- The default IDT. Other packages can easily hook a new interrupt gate by
    -- assigning an interrupt entry to a specific vector/index.
